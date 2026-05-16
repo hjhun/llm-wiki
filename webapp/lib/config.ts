@@ -31,14 +31,73 @@ export const ConfigSchema = z.object({
       .default({}),
   }),
   chunking: z.object({
-    /** 한 청크에 들어갈 최대 파일 수 */
+    /** Soft cap on the number of files in a single chunk. */
     maxFiles: z.number().int().min(1).default(8),
-    /** 한 청크 총 바이트 상한 */
+    /** Soft cap on the total bytes in a single chunk. */
     maxBytes: z.number().int().min(1024).default(256 * 1024),
+    /**
+     * Hard cap on how many files a single LLM invocation may keep in working
+     * memory at once. Also the size of a sub-chunk inside a leaf.
+     */
+    maxFilesPerInvocation: z.number().int().min(1).default(4),
+    /**
+     * When a single file exceeds this size, the skill is instructed to read
+     * head + tail only instead of the whole body.
+     */
+    maxBytesPerFile: z.number().int().min(1024).default(128 * 1024),
+    /**
+     * Unit of work per LLM invocation. "one_subchunk" is the default — after a
+     * sub-chunk finishes, the call exits and the next sub-chunk runs in a
+     * fresh invocation.
+     */
+    unitPerCall: z
+      .enum(["one_subchunk", "one_leaf", "one_file"])
+      .default("one_subchunk"),
   }),
   graph: z.object({
     minCommunitySize: z.number().int().min(1).default(3),
     autoUpdateOnIngest: z.boolean().default(true),
+  }),
+  chat: z.object({
+    /**
+     * Number of recent turns re-injected into the prompt for stateless CLI
+     * calls. Avoids joining the entire history so prompt size does not grow
+     * linearly with turn count.
+     */
+    contextTurns: z.number().int().min(1).default(6),
+    /**
+     * When true, a short reference to wiki/.progress/ingest/DASHBOARD.md is
+     * prepended to the prompt if the dashboard exists.
+     */
+    includeProgressDashboard: z.boolean().default(true),
+  }),
+  cli: z.object({
+    /**
+     * Upper bound on how many characters of child stdout runCli buffers in
+     * memory. When exceeded, content is dropped from the head, keeping the
+     * tail, and a truncate marker is recorded.
+     */
+    maxStdoutBytes: z
+      .number()
+      .int()
+      .min(64 * 1024)
+      .default(1024 * 1024),
+    /** Same policy for stderr — keeps RSS bounded even with verbose logs. */
+    maxStderrBytes: z
+      .number()
+      .int()
+      .min(16 * 1024)
+      .default(256 * 1024),
+    /**
+     * When the argv-passed prompt is larger than this, runCli emits a warning
+     * on stderr. It does not truncate — slim prompt building is the caller's
+     * responsibility.
+     */
+    promptWarnBytes: z
+      .number()
+      .int()
+      .min(8 * 1024)
+      .default(128 * 1024),
   }),
   ui: z.object({
     language: z.enum(["ko", "en"]).default("ko"),
@@ -63,6 +122,8 @@ const DEFAULT_CONFIG: Config = ConfigSchema.parse({
   agent: {},
   chunking: {},
   graph: {},
+  chat: {},
+  cli: {},
   ui: {},
   auth: {},
 });

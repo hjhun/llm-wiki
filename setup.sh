@@ -340,6 +340,7 @@ ensure_initial_files() {
     "${WIKI_DIR}/lint" \
     "${WIKI_DIR}/archive" \
     "${WIKI_DIR}/graph/parts" \
+    "${WIKI_DIR}/.progress/ingest/leaves" \
     "${SESSIONS_DIR}" \
     "${RUN_DIR}" \
     "${TOOLS_DIR}" \
@@ -362,11 +363,23 @@ ensure_initial_files() {
   },
   "chunking": {
     "maxFiles": 8,
-    "maxBytes": 262144
+    "maxBytes": 262144,
+    "maxFilesPerInvocation": 4,
+    "maxBytesPerFile": 131072,
+    "unitPerCall": "one_subchunk"
   },
   "graph": {
     "minCommunitySize": 3,
     "autoUpdateOnIngest": true
+  },
+  "chat": {
+    "contextTurns": 6,
+    "includeProgressDashboard": true
+  },
+  "cli": {
+    "maxStdoutBytes": 1048576,
+    "maxStderrBytes": 262144,
+    "promptWarnBytes": 131072
   },
   "ui": {
     "language": "ko",

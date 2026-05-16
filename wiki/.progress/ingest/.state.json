@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "updated_at": null,
+  "config_snapshot": null,
+  "leaves": {},
+  "merge_pass": {
+    "status": "idle",
+    "last_run_at": null,
+    "pending_parents": []
+  }
+}

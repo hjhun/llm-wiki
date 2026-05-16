@@ -1,19 +1,45 @@
-import { NextResponse } from "next/server";
+import fs from "node:fs/promises";
+import path from "node:path";
 import { z } from "zod";
 import { requireSession, errorMessage, jsonError } from "@/lib/api";
 import { loadConfig } from "@/lib/config";
 import { CLI_NAMES, runCli, type CliName } from "@/lib/cli";
+import { PROJECT_ROOT } from "@/lib/paths";
 import {
   appendMessage,
   newSession,
-  readSession,
+  readSessionTail,
 } from "@/lib/sessions";
 
 const Body = z.object({
   sessionPath: z.string().min(1).optional(),
   message: z.string().min(1).max(20000),
   agent: z.enum(["codex", "claude", "gemini", "cline"]).nullable().optional(),
+  /**
+   * "full" re-injects the entire session history into the prompt. The default
+   * "slim" mode injects only the most recent config.chat.contextTurns turns
+   * plus a one-line progress dashboard reference, which keeps prompt size
+   * bounded so long ingest jobs do not OOM the host CLI.
+   */
+  context: z.enum(["slim", "full"]).optional(),
 });
+
+const PROGRESS_DASHBOARD_PATH = "wiki/.progress/ingest/DASHBOARD.md";
+
+async function buildProgressReference(): Promise<string | null> {
+  try {
+    const abs = path.join(PROJECT_ROOT, PROGRESS_DASHBOARD_PATH);
+    const head = await fs.readFile(abs, "utf8");
+    // Excerpt the first ~4 lines (header + progress counts) only; the table
+    // body is left on disk for the LLM to open on demand.
+    const lines = head.split(/\r?\n/).slice(0, 4).join("\n").trim();
+    if (!lines) return null;
+    return `Progress reference (${PROGRESS_DASHBOARD_PATH}):\n${lines}`;
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") return null;
+    return null;
+  }
+}
 
 const TIMEOUT_MS = 5 * 60 * 1000; // 5분
 const encoder = new TextEncoder();
@@ -64,19 +90,30 @@ export async function POST(req: Request) {
     sessionPath = ref.path;
   }
 
-  // 사용자 메시지 append
+  // Append the user message to the session.
   try {
     await appendMessage(sessionPath, "user", parsed.data.message);
   } catch (err) {
     return jsonError(errorMessage(err), 400);
   }
 
-  // 컨텍스트 = 세션 md 전체를 다시 읽어 CLI에 그대로 전달 (stateless 호환).
-  // CLI는 cwd를 PROJECT_ROOT로 받으므로 CLAUDE.md/AGENTS.md/.agents/skills를 직접 읽을 수 있다.
+  // Slim prompt builder — keeps prompt size from growing linearly with turn
+  // count on stateless CLI calls by injecting only the most recent
+  // chat.contextTurns turns. Joining the whole session happens only when the
+  // caller explicitly asks for context=full.
+  const wantFull = parsed.data.context === "full";
+  const contextTurns = Math.max(1, cfg.chat.contextTurns);
   let promptBody: string;
+  let totalMessages = 0;
+  let injectedMessages = 0;
   try {
-    const session = await readSession(sessionPath);
-    const lines = session.messages.map((m) => {
+    const tail = await readSessionTail(
+      sessionPath,
+      wantFull ? Number.MAX_SAFE_INTEGER : contextTurns,
+    );
+    totalMessages = tail.total;
+    injectedMessages = tail.messages.length;
+    const lines = tail.messages.map((m) => {
       const tag =
         m.role === "user"
           ? "User"
@@ -90,17 +127,31 @@ export async function POST(req: Request) {
     return jsonError(errorMessage(err), 500);
   }
 
-  const prompt = [
+  const elidedNote =
+    !wantFull && totalMessages > injectedMessages
+      ? `(Showing the last ${injectedMessages} of ${totalMessages} messages. Older turns live in sessions/${sessionPath}; re-read that file only if you truly need them.)`
+      : null;
+
+  const progressRef = cfg.chat.includeProgressDashboard
+    ? await buildProgressReference()
+    : null;
+
+  const promptLines: string[] = [
     "You are operating an LLM Wiki repository.",
     "Read CLAUDE.md/AGENTS.md in this repository and follow the .agents/skills/ that match the user's intent.",
     `Active session log: sessions/${sessionPath}`,
+  ];
+  if (progressRef) promptLines.push(progressRef);
+  if (elidedNote) promptLines.push(elidedNote);
+  promptLines.push(
     "Below is the running conversation. Continue it by writing the assistant's next reply only — no preamble, no markdown frontmatter.",
     "",
     "===== CONVERSATION =====",
     promptBody,
     "",
     "Respond now as the assistant.",
-  ].join("\n");
+  );
+  const prompt = promptLines.join("\n");
 
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {

@@ -26,6 +26,11 @@ tools/graphify/
 wiki/graph/parts/
 wiki/graph/.state.json
 
+# Ingest progress: DASHBOARD.md, .state.json, and leaves/ are committed so the
+# work can resume on another machine. Only the lock file and tmp/ are ignored.
+wiki/.progress/ingest/.lock
+wiki/.progress/ingest/tmp/
+
 # ── 채팅 세션 / CLI 로그 ───────────────────────────────────────
 # 개인 기록이라 기본은 추적하지 않음. 필요 시 주석 처리하면 백업 가능.
 sessions/

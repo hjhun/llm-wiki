@@ -96,7 +96,12 @@ export async function PUT(req: Request) {
             paths: normalizePaths(parsed.data.agent.paths),
           }
         : undefined,
-      chunking: parsed.data.chunking,
+      // The existing Settings UI only sends maxFiles and maxBytes. Preserve
+      // the newer ingest-protection keys (maxFilesPerInvocation and friends)
+      // from the current config instead of dropping them.
+      chunking: parsed.data.chunking
+        ? { ...current.chunking, ...parsed.data.chunking }
+        : undefined,
       graph: parsed.data.graph,
       ui: parsed.data.ui,
       auth: parsed.data.auth

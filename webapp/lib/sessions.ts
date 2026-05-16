@@ -262,6 +262,23 @@ export async function readSession(rel: string): Promise<{
   return { meta, messages };
 }
 
+/**
+ * Returns only the last n messages from a session markdown file. Re-injecting
+ * the full history into the prompt on every stateless CLI call makes prompt
+ * size grow linearly with turn count and risks OOM, so the slim prompt builder
+ * uses this helper. The implementation delegates to readSession — the file
+ * itself is usually small (tens of KB), so the memory cost is negligible, and
+ * full parsing keeps message-aligned slicing deterministic.
+ */
+export async function readSessionTail(
+  rel: string,
+  n: number,
+): Promise<{ meta: SessionMeta; messages: ChatMessage[]; total: number }> {
+  const { meta, messages } = await readSession(rel);
+  const tail = n >= messages.length ? messages : messages.slice(-n);
+  return { meta, messages: tail, total: messages.length };
+}
+
 export async function appendMessage(
   rel: string,
   role: ChatRole,
