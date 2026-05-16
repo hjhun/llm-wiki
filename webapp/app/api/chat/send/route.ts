@@ -22,6 +22,13 @@ const Body = z.object({
    * bounded so long ingest jobs do not OOM the host CLI.
    */
   context: z.enum(["slim", "full"]).optional(),
+  /**
+   * Operation hint that selects the timeout bucket in config.cli.timeouts.
+   * Defaults to "chat" if omitted; the client sets "ingest"/"query"/"lint"
+   * when it detects a slash command so long-running ingest jobs are not
+   * SIGTERM-ed at the 5-minute chat cap.
+   */
+  kind: z.enum(["chat", "ingest", "query", "lint"]).optional(),
 });
 
 const PROGRESS_DASHBOARD_PATH = "wiki/.progress/ingest/DASHBOARD.md";
@@ -41,7 +48,6 @@ async function buildProgressReference(): Promise<string | null> {
   }
 }
 
-const TIMEOUT_MS = 5 * 60 * 1000; // 5분
 const encoder = new TextEncoder();
 const ANSI_RE =
   // eslint-disable-next-line no-control-regex
@@ -168,10 +174,15 @@ export async function POST(req: Request) {
 
       send({ type: "start", sessionPath });
 
+      const kind = parsed.data.kind ?? "chat";
+      const kindTimeout = cfg.cli.timeouts[kind];
       try {
         const result = await runCli(agent, prompt, {
           safeMode: cfg.agent.safeMode,
-          timeoutMs: TIMEOUT_MS,
+          // null in config means "no timeout for this operation kind" —
+          // pass undefined so runCli does not register a setTimeout that
+          // would SIGTERM the child mid-summary.
+          timeoutMs: kindTimeout ?? undefined,
           signal: req.signal,
           onStdout: (chunk) => {
             const text = displayChunk(chunk);

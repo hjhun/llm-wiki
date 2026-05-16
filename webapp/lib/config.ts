@@ -98,6 +98,26 @@ export const ConfigSchema = z.object({
       .int()
       .min(8 * 1024)
       .default(128 * 1024),
+    /**
+     * Per-operation timeouts (ms) applied to the host coding-agent CLI run.
+     * `null` disables the timeout entirely for that kind. `ingest` defaults to
+     * null because a single ingest pass can legitimately run for tens of
+     * minutes per leaf chunk and SIGTERM-ing the child mid-summary corrupts
+     * partial progress. `chat` keeps the historical 5-minute cap.
+     */
+    timeouts: z
+      .object({
+        chat: z.number().int().min(1000).nullable().default(5 * 60 * 1000),
+        ingest: z.number().int().min(1000).nullable().default(null),
+        query: z.number().int().min(1000).nullable().default(30 * 60 * 1000),
+        lint: z.number().int().min(1000).nullable().default(30 * 60 * 1000),
+      })
+      .default({
+        chat: 5 * 60 * 1000,
+        ingest: null,
+        query: 30 * 60 * 1000,
+        lint: 30 * 60 * 1000,
+      }),
   }),
   ui: z.object({
     language: z.enum(["ko", "en"]).default("ko"),

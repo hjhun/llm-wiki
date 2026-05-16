@@ -30,6 +30,16 @@ async function asError(res: Response): Promise<Error> {
   return new Error(j?.error ?? `request failed (${res.status})`);
 }
 
+type ChatKind = "chat" | "ingest" | "query" | "lint";
+
+function detectKind(message: string): ChatKind {
+  const head = message.trimStart().toLowerCase();
+  if (head.startsWith("/ingest")) return "ingest";
+  if (head.startsWith("/query")) return "query";
+  if (head.startsWith("/lint")) return "lint";
+  return "chat";
+}
+
 export default function Chat() {
   const { t } = useLanguage();
   const [sessions, setSessions] = useState<SessionRef[]>([]);
@@ -243,6 +253,7 @@ export default function Chat() {
         body: JSON.stringify({
           sessionPath,
           message,
+          kind: detectKind(message),
         }),
       });
       if (!res.ok) throw await asError(res);

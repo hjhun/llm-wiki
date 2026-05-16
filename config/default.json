@@ -26,7 +26,13 @@
   "cli": {
     "maxStdoutBytes": 1048576,
     "maxStderrBytes": 262144,
-    "promptWarnBytes": 131072
+    "promptWarnBytes": 131072,
+    "timeouts": {
+      "chat": 300000,
+      "ingest": null,
+      "query": 1800000,
+      "lint": 1800000
+    }
   },
   "ui": {
     "language": "ko",
