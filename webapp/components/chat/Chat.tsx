@@ -50,13 +50,14 @@ async function asError(res: Response): Promise<Error> {
   return new Error(j?.error ?? `request failed (${res.status})`);
 }
 
-type ChatKind = "chat" | "ingest" | "query" | "lint";
+type ChatKind = "chat" | "ingest" | "query" | "lint" | "graph";
 
 function detectKind(message: string): ChatKind {
   const head = message.trimStart().toLowerCase();
   if (head.startsWith("/ingest")) return "ingest";
   if (head.startsWith("/query")) return "query";
   if (head.startsWith("/lint")) return "lint";
+  if (head.startsWith("wiki-graphify ")) return "graph";
   return "chat";
 }
 

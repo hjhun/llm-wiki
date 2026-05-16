@@ -31,6 +31,47 @@ async function runVersion(absPath: string): Promise<string | null> {
   });
 }
 
+async function graphifyPython(absPath: string): Promise<string> {
+  try {
+    const firstLine = (await fs.readFile(absPath, "utf8")).split(/\r?\n/)[0];
+    const candidate = firstLine.replace(/^#!/, "");
+    if (candidate.includes("python")) {
+      try {
+        const st = await fs.stat(candidate);
+        if (st.isFile()) return candidate;
+      } catch {
+        // fall through to python3
+      }
+    }
+  } catch {
+    // fall through to python3
+  }
+  return "python3";
+}
+
+async function runGraphifyVersion(absPath: string): Promise<string | null> {
+  const python = await graphifyPython(absPath);
+  return new Promise((resolve) => {
+    const child = spawn(
+      python,
+      [
+        "-c",
+        "from importlib.metadata import version; print(version('graphifyy'))",
+      ],
+      {
+        stdio: ["ignore", "pipe", "pipe"],
+        timeout: 4000,
+      },
+    );
+    let buf = "";
+    child.stdout?.on("data", (d) => (buf += d.toString()));
+    child.on("error", () => resolve(null));
+    child.on("close", () => {
+      resolve(buf.trim().split(/\r?\n/)[0]?.slice(0, 80) || null);
+    });
+  });
+}
+
 async function whichBin(bin: string): Promise<string | null> {
   const PATH = process.env.PATH ?? "";
   const dirs = [
@@ -61,7 +102,7 @@ async function detectGraphify(): Promise<ToolStatus> {
       name: "graphify",
       status: "ready",
       path: global,
-      version: await runVersion(global),
+      version: await runGraphifyVersion(global),
       note: "PATH의 글로벌 graphify를 사용합니다.",
     };
   }

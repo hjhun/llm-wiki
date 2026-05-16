@@ -4,6 +4,7 @@ import { z } from "zod";
 import { requireSession, errorMessage, jsonError } from "@/lib/api";
 import { loadConfig } from "@/lib/config";
 import { CLI_NAMES, runCli, type CliName } from "@/lib/cli";
+import { buildGraphifyPrompt } from "@/lib/graph";
 import { PROJECT_ROOT } from "@/lib/paths";
 import {
   appendMessage,
@@ -28,7 +29,7 @@ const Body = z.object({
    * when it detects a slash command so long-running ingest jobs are not
    * SIGTERM-ed at the 5-minute chat cap.
    */
-  kind: z.enum(["chat", "ingest", "query", "lint"]).optional(),
+  kind: z.enum(["chat", "ingest", "query", "lint", "graph"]).optional(),
 });
 
 const PROGRESS_DASHBOARD_PATH = "wiki/.progress/ingest/DASHBOARD.md";
@@ -60,6 +61,21 @@ type StateSummary = {
   active_leaf: string | null;
   active_subchunk: { id: string; status: string } | null;
 };
+
+async function ingestMergePassDone(): Promise<boolean> {
+  try {
+    const raw = await fs.readFile(
+      path.join(PROJECT_ROOT, PROGRESS_STATE_PATH),
+      "utf8",
+    );
+    const parsed = JSON.parse(raw) as {
+      merge_pass?: { status?: unknown };
+    };
+    return parsed.merge_pass?.status === "done";
+  } catch {
+    return false;
+  }
+}
 
 function summarizeIngestState(raw: string): StateSummary | null {
   let parsed: unknown;
@@ -398,9 +414,58 @@ export async function POST(req: Request) {
             }
           },
         });
-        const reply =
+        let reply =
           (result.stdout.trim() || result.stderr.trim()) ||
           `(에이전트가 빈 응답을 반환했습니다. exitCode=${result.exitCode})`;
+
+        if (
+          kind === "ingest" &&
+          result.exitCode === 0 &&
+          cfg.graph.autoUpdateOnIngest &&
+          (await ingestMergePassDone())
+        ) {
+          const graphCommand = "wiki-graphify update";
+          await appendMessage(
+            sessionPath,
+            "system",
+            `ingest merge pass complete; auto-running ${graphCommand}`,
+          );
+          const graphPrompt = buildGraphifyPrompt("update", sessionPath);
+          const note =
+            "\n\n---\n\n[auto graph] ingest merge pass가 완료되어 `wiki-graphify update`를 별도 CLI 호출로 실행합니다.\n";
+          reply += note;
+          send({ type: "chunk", stream: "stdout", text: note });
+
+          const graphTimeout = cfg.cli.timeouts.graph;
+          try {
+            const graphResult = await runCli(agent, graphPrompt, {
+              safeMode: cfg.agent.safeMode,
+              timeoutMs: graphTimeout ?? undefined,
+              signal: req.signal,
+              killOnAbort: graphTimeout != null,
+              onStdout: (chunk) => {
+                const text = displayChunk(chunk);
+                if (text) {
+                  send({ type: "chunk", stream: "stdout", text });
+                }
+              },
+            });
+            const graphReply =
+              (graphResult.stdout.trim() || graphResult.stderr.trim()) ||
+              `(그래프 업데이트가 빈 응답을 반환했습니다. exitCode=${graphResult.exitCode})`;
+            reply += `\n\n---\n\n[auto graph result]\n${graphReply}`;
+          } catch (err) {
+            const graphError = errorMessage(err);
+            reply +=
+              `\n\n---\n\n[auto graph blocker]\n` +
+              `ingest는 완료됐지만 자동 그래프 업데이트 호출이 실패했습니다: ${graphError}`;
+            await appendMessage(
+              sessionPath,
+              "system",
+              `❌ 자동 그래프 업데이트 실패: ${graphError}`,
+            ).catch(() => undefined);
+          }
+        }
 
         const assistantMsg = await appendMessage(
           sessionPath,

@@ -57,6 +57,23 @@ export type GraphState = {
 
 export type GraphRunAction = "build" | "update";
 
+export function buildGraphifyPrompt(
+  action: GraphRunAction,
+  sessionPath: string,
+): string {
+  const command = `wiki-graphify ${action}`;
+  return [
+    "You are operating an LLM Wiki repository.",
+    "Read CLAUDE.md/AGENTS.md and use .agents/skills/wiki-graphify/SKILL.md.",
+    `Active session log: sessions/${sessionPath}`,
+    `Run exactly this graph operation: ${command}`,
+    "Follow the repository rule: use the global graphify command from PATH; if only the package is available, python3 -m graphify is acceptable.",
+    "Do not call a non-existent `graphify build` subcommand. For graphifyy 0.4.x, use the installed graphify package modules and the skill workflow to create wiki/graph/graph.json and GRAPH_REPORT.md.",
+    "Do not ask for a graphify-specific API key. If authentication is missing, report that the selected coding agent CLI must be logged in or have its own credentials available to the webapp process.",
+    "After the operation, reply with a concise Korean summary, changed files, and any blocker.",
+  ].join("\n");
+}
+
 function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v);
 }
@@ -235,18 +252,11 @@ export async function runGraphify(action: GraphRunAction): Promise<{
   const command = `wiki-graphify ${action}`;
   await appendMessage(session.path, "user", command);
 
-  const prompt = [
-    "You are operating an LLM Wiki repository.",
-    "Read CLAUDE.md/AGENTS.md and use .agents/skills/wiki-graphify/SKILL.md.",
-    `Active session log: sessions/${session.path}`,
-    `Run exactly this graph operation: ${command}`,
-    "Follow the repository rule: use the global graphify command from PATH; if only the package is available, python3 -m graphify is acceptable.",
-    "After the operation, reply with a concise Korean summary, changed files, and any blocker.",
-  ].join("\n");
+  const prompt = buildGraphifyPrompt(action, session.path);
 
   const result = await runCli(agent, prompt, {
     safeMode: cfg.agent.safeMode,
-    timeoutMs: 10 * 60 * 1000,
+    timeoutMs: cfg.cli.timeouts.graph ?? undefined,
   });
   const reply =
     result.stdout.trim() ||

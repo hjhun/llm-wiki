@@ -298,28 +298,78 @@ log_graphify_status() {
   local graphify_bin=""
   graphify_bin="$(find_graphify_bin || true)"
   if [[ -n "${graphify_bin}" ]]; then
-    log "global graphify available: ${graphify_bin}"
+    local version=""
+    version="$(graphify_package_version "${graphify_bin}")"
+    if [[ -n "${version}" ]]; then
+      log "global graphify available: ${graphify_bin} (graphifyy ${version})"
+    else
+      log "global graphify available: ${graphify_bin} (version unknown)"
+    fi
   else
     warn "global graphify was not found; Graph Build/Update will need graphify installed"
   fi
 }
 
-install_graphify_global_if_missing() {
+graphify_python() {
+  local graphify_bin="$1"
+  local first_line=""
+  local python_bin=""
+  first_line="$(head -n 1 "${graphify_bin}" 2>/dev/null || true)"
+  python_bin="${first_line#\#!}"
+  if [[ "${python_bin}" == *python* && -x "${python_bin}" ]]; then
+    printf '%s\n' "${python_bin}"
+    return 0
+  fi
+  printf 'python3\n'
+}
+
+graphify_package_version() {
+  local graphify_bin="$1"
+  local python_bin=""
+  python_bin="$(graphify_python "${graphify_bin}")"
+  "${python_bin}" - <<'PY' 2>/dev/null || true
+from importlib.metadata import PackageNotFoundError, version
+try:
+    print(version("graphifyy"))
+except PackageNotFoundError:
+    pass
+PY
+}
+
+run_graphify_install() {
   local graphify_bin=""
   graphify_bin="$(find_graphify_bin || true)"
-  if [[ -n "${graphify_bin}" ]]; then
-    log "graphify already installed globally: ${graphify_bin}"
+  if [[ -z "${graphify_bin}" ]]; then
+    warn "graphify command is not on PATH. Add your Python user bin directory to PATH, or run: python3 -m graphify install"
     return 0
   fi
 
+  log "installing graphify assistant integration"
+  "${graphify_bin}" install || warn "graphify install failed; run it manually if the Graph workflow needs it"
+}
+
+install_or_upgrade_graphify_global() {
+  local graphify_bin=""
+  local before_version=""
+  graphify_bin="$(find_graphify_bin || true)"
+  if [[ -n "${graphify_bin}" ]]; then
+    before_version="$(graphify_package_version "${graphify_bin}")"
+    log "graphify before upgrade: ${graphify_bin} (graphifyy ${before_version:-unknown})"
+  fi
+
   require_command python3
-  log "installing graphify globally via official package graphifyy"
+  log "installing/upgrading graphify globally via latest official graphifyy package"
   if command -v pipx >/dev/null 2>&1; then
-    log "using pipx: pipx install graphifyy"
-    pipx install graphifyy || pipx upgrade graphifyy || warn "pipx graphifyy install failed; try: pipx install graphifyy && graphify install"
+    log "using pipx first: pipx upgrade/install graphifyy"
+    if pipx upgrade graphifyy || pipx install graphifyy; then
+      :
+    else
+      warn "pipx graphifyy install/upgrade failed; falling back to python3 -m pip --user"
+      python3 -m pip install --user --upgrade graphifyy || warn "pip graphifyy install/upgrade failed; try: pip install --upgrade graphifyy && graphify install"
+    fi
   else
     log "using pip: python3 -m pip install --user --upgrade graphifyy"
-    python3 -m pip install --user --upgrade graphifyy || warn "pip graphifyy install failed; try: pip install graphifyy && graphify install"
+    python3 -m pip install --user --upgrade graphifyy || warn "pip graphifyy install/upgrade failed; try: pip install --upgrade graphifyy && graphify install"
   fi
 
   graphify_bin="$(find_graphify_bin || true)"
@@ -328,8 +378,11 @@ install_graphify_global_if_missing() {
     return 0
   fi
 
-  log "installing graphify assistant integration"
-  "${graphify_bin}" install || warn "graphify install failed; run it manually if the Graph workflow needs it"
+  local after_version=""
+  after_version="$(graphify_package_version "${graphify_bin}")"
+  log "graphify after upgrade: ${graphify_bin} (graphifyy ${after_version:-unknown})"
+
+  run_graphify_install
 }
 
 ensure_initial_files() {
@@ -379,7 +432,14 @@ ensure_initial_files() {
   "cli": {
     "maxStdoutBytes": 1048576,
     "maxStderrBytes": 262144,
-    "promptWarnBytes": 131072
+    "promptWarnBytes": 131072,
+    "timeouts": {
+      "chat": 300000,
+      "ingest": null,
+      "query": 1800000,
+      "lint": 1800000,
+      "graph": 1800000
+    }
   },
   "ui": {
     "language": "ko",
@@ -682,7 +742,7 @@ main() {
   detect_cli_json
 
   if [[ "${SKIP_GRAPHIFY}" -eq 0 ]]; then
-    install_graphify_global_if_missing
+    install_or_upgrade_graphify_global
   else
     log "skipping graphify install; wiki-graphify will use global graphify from PATH if available"
     log_graphify_status

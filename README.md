@@ -90,6 +90,12 @@ wiki-graphify query "<question>"
 
 The web app does not execute `graphify` directly. It asks the selected coding agent to run the `wiki-graphify` skill, and that skill performs the leaf-first graph build/update flow.
 
+`graphify` itself should not require a separate API key in this integration.
+If a Graph Build/Update request asks for a key, it usually means the selected
+coding agent CLI is not logged in, or the webapp process was started without
+the CLI's normal `HOME`/environment. Start CLIO from the same shell where the
+CLI works, or configure the CLI credentials for the account running the webapp.
+
 For `/query`, CLIO keeps the LLM Wiki pattern wiki-first: the agent reads `wiki/index.md`, selects candidate pages, and answers from cited wiki/source pages. Optional helpers such as `qmd` and `wiki-graphify` can improve candidate search and relationship context, but they do not replace page reading.
 
 ---
@@ -130,7 +136,9 @@ Optional best-effort install:
 
 CLIO uses [safishamsi/graphify](https://github.com/safishamsi/graphify) for knowledge graph generation.
 
-`setup.sh` does not clone graphify into `tools/`. It uses the global `graphify` command. If `graphify` is missing, setup follows the graphify README installation flow:
+`setup.sh` does not clone graphify into `tools/`. It uses the global `graphify` command. During setup it checks the installed `graphifyy` package version, upgrades to the latest package available from PyPI, logs the before/after version, and runs `graphify install` for the assistant integration.
+
+If `graphify` is missing, setup follows the graphify README installation flow:
 
 ```bash
 pipx install graphifyy && graphify install
@@ -143,7 +151,7 @@ python3 -m pip install --user --upgrade graphifyy
 graphify install
 ```
 
-To skip graphify installation and use an already-installed global command:
+To skip graphify installation/upgrade and use an already-installed global command:
 
 ```bash
 ./setup.sh --skip-graphify

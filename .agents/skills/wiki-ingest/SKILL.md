@@ -145,9 +145,10 @@ Only run when **every** leaf in the input scope has `status === "done"` and `mer
    - Item format: `- [[Page Name]] — One-line summary`.
 5. Regenerate `DASHBOARD.md`. Release lock. Return.
 
-If `graph.autoUpdateOnIngest` is `true` and the final merge completed, the chat
-response should suggest calling `wiki-graphify update` (or call it directly via
-the `wiki-graphify` skill). Do not bundle the graph step into the merge call.
+If `graph.autoUpdateOnIngest` is `true` and the final merge completed, run
+`wiki-graphify update` as a **separate coding-agent CLI invocation** after the
+ingest invocation returns. Do not bundle the graph step into the same merge-pass
+LLM call; it must be a follow-up invocation that uses the `wiki-graphify` skill.
 
 ## Error Handling / Resume
 

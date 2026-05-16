@@ -11,7 +11,7 @@ This document walks a new user through running LLM Wiki for the first time and v
 Default behavior:
 
 - If `webapp/node_modules` already exists, `npm install` is skipped.
-- If `graphify` is missing, the official `graphifyy` package is installed globally and `graphify install` is run.
+- The official `graphifyy` package version is checked, upgraded to the latest available version globally, and `graphify install` is run. Use `--skip-graphify` to skip this.
 - Coding agent CLIs (`codex`, `claude`, `gemini`, `cline`) are detected and recorded in `config/cli-detected.json`.
 - The server is not started automatically.
 

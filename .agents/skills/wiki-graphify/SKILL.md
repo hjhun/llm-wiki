@@ -34,6 +34,16 @@ Execution path decision order:
 2. `python3 -m graphify`, when the package is installed but the script path is not on `PATH`.
 3. None -> stop.
 
+Important compatibility note for `graphifyy` 0.4.x: the installed CLI exposes
+commands such as `graphify update <path>`, `cluster-only`, `query`, `path`, and
+`explain`, but it does **not** expose a `graphify build` subcommand. Therefore
+`wiki-graphify build` is this repository's agent-level operation name, not a
+literal graphify CLI command. Use the installed `graphify` command only for the
+commands it actually supports, and use `python3 -m graphify` / package modules
+such as `graphify.detect`, `graphify.extract`, `graphify.build`,
+`graphify.cluster`, `graphify.report`, and `graphify.export` when assembling
+`wiki/graph/graph.json` and `wiki/graph/GRAPH_REPORT.md`.
+
 ## Triggers
 
 - Natural language: "build the graph", "update the knowledge graph", "show me the graph".
@@ -48,15 +58,21 @@ Execution path decision order:
 
 | Command | Input | Output |
 |---|---|---|
-| `build` | Optional: `--scope=wiki|raw|wiki+raw` (default `wiki+raw`) | Refresh full `graph.json`, `GRAPH_REPORT.md`, `parts/*`, `.state.json` |
-| `update` | Optional: `--since=<date>` or automatic change detection | Rebuild changed leaves only -> rerun merge pass |
+| `build` | Optional: `--scope=wiki|raw|wiki+raw` (default `wiki+raw`) | Agent-level full refresh of `graph.json`, `GRAPH_REPORT.md`, `parts/*`, `.state.json`; do not call a literal `graphify build` command |
+| `update` | Optional: `--since=<date>` or automatic change detection | Agent-level incremental rebuild of changed leaves -> rerun merge pass |
 | `query` | One natural-language question, optional `--k=<neighbor-count>` | Graph candidate/context notes, cited nodes, and optional Markdown answer when invoked directly |
 
 ## Preflight
 
 1. Confirm graphify execution path using the rules above.
 2. Create `wiki/graph/` if missing.
-3. If graph building requires API keys, for example when graphify calls an external LLM/embedding provider, read keys from `config/local.json` or environment variables and pass them to the selected graphify CLI. **Never expose them in wiki pages.**
+3. Do not request a graphify-specific API key. In this repository graph work is
+   driven by the selected coding-agent CLI (`codex`, `claude`, `gemini`, or
+   `cline`) plus the installed `graphify` package. If a prompt asks for an API
+   key before any graph work can start, that is normally the selected coding
+   agent CLI lacking login/session credentials in the webapp process
+   environment, not graphify itself. Report that distinction clearly. **Never
+   expose credentials in wiki pages.**
 4. Apply chunk limits and graph options from `config/default.json`, such as `min_community_size` and `extract_model`.
 
 ## Chunk Policy (Required, Leaf-First)
@@ -64,9 +80,9 @@ Execution path decision order:
 This follows the same principle as `wiki-ingest`.
 
 1. **Find leaf directories**: list directories with no child directories in `wiki/` and optionally `raw/`.
-2. **Build partial graphs**: for each leaf, run the selected graphify CLI once with only the files in that leaf.
+2. **Build partial graphs**: for each leaf, use the selected graphify execution path with only the files in that leaf.
    - Output path: `wiki/graph/parts/<sha1(leaf path)>.json`.
-   - Options: use graphify's single-directory mode or file-list input mode. Choose the narrowest input shape supported by the selected executable.
+   - Options: use supported graphify CLI commands where they fit, or call installed `graphify` Python package modules directly. Choose the narrowest input shape supported by the selected executable/package.
 3. **Record state**: update `wiki/graph/.state.json` with leaf path -> `{built_at, content_hash, part_file}`.
 4. **Merge pass**: combine all partial graphs into final `graph.json`. See merge algorithm below.
 5. **Resume**: if interrupted, compare hashes recorded in `.state.json` with disk state and continue from unbuilt/changed leaves.

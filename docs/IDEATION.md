@@ -272,7 +272,7 @@ Following dormammu's `cli_adapter.py` pattern, Node has an adapter layer with th
 Order:
 
 1. **Prerequisite checks**: `git`, `bash`, `curl`, `python3`, `node` (>=20), `pnpm` (enable corepack if missing), `whereis`, and so on.
-2. **graphify install/detection**: by default, find `graphify` in `PATH`; if missing, install the official `graphifyy` package globally and run `graphify install`. With `--skip-graphify`, skip installation and use only an already-installed global `graphify`.
+2. **graphify install/detection**: by default, find `graphify` in `PATH`, read the installed `graphifyy` package version, upgrade `graphifyy` to the latest available package globally, and run `graphify install`. With `--skip-graphify`, skip installation/upgrade and use only an already-installed global `graphify`.
 3. **Coding agent CLI detection (no install)**: search for `codex`, `claude`, `gemini`, and `cline` in `PATH` and common install paths. Record found items with path/version in `config/cli-detected.json`.
    - If at least one is found, continue. If none are found, warn and continue so the user can set a manual path in Settings.
    - **Automatic installation is disabled by default.** Only if the user passes `--install-cli=<name>[,<name>...]` should setup attempt official installation for that CLI, for example `--install-cli=claude` -> `npm i -g @anthropic-ai/claude-code`.

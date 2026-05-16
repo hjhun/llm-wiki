@@ -111,12 +111,14 @@ export const ConfigSchema = z.object({
         ingest: z.number().int().min(1000).nullable().default(null),
         query: z.number().int().min(1000).nullable().default(30 * 60 * 1000),
         lint: z.number().int().min(1000).nullable().default(30 * 60 * 1000),
+        graph: z.number().int().min(1000).nullable().default(30 * 60 * 1000),
       })
       .default({
         chat: 5 * 60 * 1000,
         ingest: null,
         query: 30 * 60 * 1000,
         lint: 30 * 60 * 1000,
+        graph: 30 * 60 * 1000,
       }),
   }),
   ui: z.object({
