@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { useLanguage } from "../i18n";
 import type { ChatMessage } from "./types";
 
 const ROLE_LABEL: Record<string, string> = {
@@ -24,6 +25,7 @@ export default function MessageList({
   messages: ChatMessage[];
   pending: boolean;
 }) {
+  const { t } = useLanguage();
   const endRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -34,23 +36,16 @@ export default function MessageList({
     <div className="flex flex-col gap-3 px-6 py-5">
       {messages.length === 0 && !pending ? (
         <div className="rounded-md border border-line bg-bg-panel px-4 py-6 text-sm text-ink-dim">
-          <div className="mb-1 font-medium text-ink">시작 가이드</div>
+          <div className="mb-1 font-medium text-ink">{t.chat.guideTitle}</div>
           <ul className="ml-4 list-disc text-[12.5px] leading-relaxed">
             <li>
-              자유 질문 또는 슬래시 커맨드:{" "}
+              {t.chat.guideFreeQuestion}{" "}
               <span className="font-mono">/ingest &lt;path&gt;</span>,{" "}
-              <span className="font-mono">/query &lt;질문&gt;</span>,{" "}
+              <span className="font-mono">/query &lt;question&gt;</span>,{" "}
               <span className="font-mono">/lint</span>
             </li>
-            <li>
-              세션 md는{" "}
-              <span className="font-mono">sessions/&lt;date&gt;/</span>에
-              자동 저장됩니다.
-            </li>
-            <li>
-              에이전트는 호스트 PC의 codex / claude / gemini / cline 중 Settings에서
-              지정한 것을 사용합니다.
-            </li>
+            <li>{t.chat.guideSessions}</li>
+            <li>{t.chat.guideAgent}</li>
           </ul>
         </div>
       ) : null}
@@ -71,7 +66,7 @@ export default function MessageList({
           </header>
           <div className="prose prose-invert max-w-none text-[13.5px]">
             <ReactMarkdown remarkPlugins={[remarkGfm]}>
-              {m.content || "_(empty)_"}
+              {m.content || t.chat.empty}
             </ReactMarkdown>
           </div>
         </article>
@@ -80,7 +75,7 @@ export default function MessageList({
         <article className="rounded-md border border-line bg-bg-subtle px-4 py-3 text-sm">
           <header className="mb-1 flex items-center gap-2 text-[11px] text-ink-faint">
             <span className="font-mono uppercase tracking-widest">agent</span>
-            <span>처리 중…</span>
+            <span>{t.chat.processing}</span>
           </header>
           <div className="flex items-center gap-1.5">
             <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-accent" />

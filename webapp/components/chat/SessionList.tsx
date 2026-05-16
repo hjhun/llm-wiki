@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useLanguage } from "../i18n";
 import type { SessionRef } from "./types";
 
 export default function SessionList({
@@ -18,6 +19,7 @@ export default function SessionList({
   onDelete: (paths: string[]) => void;
   deleting: boolean;
 }) {
+  const { t } = useLanguage();
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
   const selectedCount = selected.size;
   const allSelected = sessions.length > 0 && selectedCount === sessions.length;
@@ -60,7 +62,7 @@ export default function SessionList({
           onClick={onNew}
           className="w-full rounded-md bg-accent px-3 py-2 text-xs font-medium text-bg hover:opacity-90"
         >
-          + New Chat
+          {t.chat.newChat}
         </button>
         <div className="mt-2 grid grid-cols-[1fr_auto] gap-2">
           <button
@@ -69,7 +71,7 @@ export default function SessionList({
             disabled={sessions.length === 0 || deleting}
             className="h-7 rounded border border-line text-[11px] text-ink-dim hover:bg-bg-panel disabled:opacity-40"
           >
-            {allSelected ? "Clear" : "Select all"}
+            {allSelected ? t.chat.clear : t.chat.selectAll}
           </button>
           <button
             type="button"
@@ -77,14 +79,16 @@ export default function SessionList({
             disabled={selectedCount === 0 || deleting}
             className="h-7 rounded border border-red-900/70 px-2 text-[11px] text-red-300 hover:bg-red-950/40 disabled:opacity-40"
           >
-            {deleting ? "Deleting..." : `Delete ${selectedCount || ""}`}
+            {deleting
+              ? t.chat.deleting
+              : `${t.chat.delete} ${selectedCount || ""}`}
           </button>
         </div>
       </div>
       <div className="min-h-0 flex-1 overflow-auto py-1">
         {sessions.length === 0 ? (
           <div className="px-3 py-2 text-[11px] text-ink-faint">
-            아직 세션이 없습니다.
+            {t.chat.noSessions}
           </div>
         ) : (
           sessions.map((s) => {
@@ -104,7 +108,7 @@ export default function SessionList({
                     type="checkbox"
                     checked={selected.has(s.path)}
                     onChange={() => toggleOne(s.path)}
-                    aria-label={`${s.meta.title} 선택`}
+                    aria-label={t.chat.selectSession(s.meta.title)}
                     className="h-3.5 w-3.5 accent-accent"
                   />
                 </span>

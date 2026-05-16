@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { useLanguage } from "../i18n";
 import type { Entry, WsKey } from "./types";
 
 type FileMode = "edit" | "preview";
@@ -22,6 +23,7 @@ export default function Editor({
   readOnly: boolean;
   onSaved?: () => void;
 }) {
+  const { t } = useLanguage();
   const [mode, setMode] = useState<FileMode>("edit");
   const [original, setOriginal] = useState<string>("");
   const [content, setContent] = useState<string>("");
@@ -47,7 +49,7 @@ export default function Editor({
     const key = `${ws}:${entry.path}`;
     if (lastLoadedRef.current === key) return;
     if (!isText) {
-      // 바이너리/이미지 등은 텍스트 fetch 안 함
+      // Binary/image files are shown through their blob endpoint.
       lastLoadedRef.current = key;
       setContent("");
       setOriginal("");
@@ -116,7 +118,7 @@ export default function Editor({
   if (!entry) {
     return (
       <div className="flex h-full items-center justify-center text-sm text-ink-faint">
-        좌측에서 파일을 선택하세요.
+        {t.explorer.selectFile}
       </div>
     );
   }
@@ -128,7 +130,7 @@ export default function Editor({
           {ws}/{entry.path}/
         </div>
         <div className="flex flex-1 items-center justify-center text-sm text-ink-faint">
-          폴더입니다. 좌측 트리에서 자식을 펼쳐주세요.
+          {t.explorer.directory}
         </div>
       </div>
     );
@@ -142,7 +144,7 @@ export default function Editor({
             {ws}/{entry.path}
           </div>
           <div className="text-[10px] text-ink-faint">
-            {entry.size.toLocaleString()} bytes · 수정{" "}
+            {entry.size.toLocaleString()} bytes · {t.explorer.modified}{" "}
             {new Date(entry.mtime).toLocaleString()}
           </div>
         </div>
@@ -159,7 +161,7 @@ export default function Editor({
                     : "text-ink-dim hover:bg-bg-panel/60",
                 ].join(" ")}
               >
-                Edit
+                {t.common.edit}
               </button>
               <button
                 type="button"
@@ -171,7 +173,7 @@ export default function Editor({
                     : "text-ink-dim hover:bg-bg-panel/60",
                 ].join(" ")}
               >
-                Preview
+                {t.common.preview}
               </button>
             </div>
           ) : null}
@@ -182,7 +184,7 @@ export default function Editor({
             className="rounded bg-accent px-3 py-1 text-[11px] font-medium text-bg disabled:opacity-40"
             title="Ctrl/Cmd+S"
           >
-            {saving ? "저장 중..." : dirty ? "저장" : "저장됨"}
+            {saving ? t.common.saving : dirty ? t.common.save : t.common.saved}
           </button>
         </div>
       </header>
@@ -194,14 +196,13 @@ export default function Editor({
       ) : null}
       {readOnly ? (
         <div className="border-b border-line bg-bg-subtle px-4 py-1 text-[11px] text-ink-faint">
-          이 워크스페이스는 UI 편집이 잠겨 있습니다 (sessions/는 시스템이
-          append-only로 관리).
+          {t.explorer.readOnly}
         </div>
       ) : null}
 
       <div className="min-h-0 flex-1 overflow-auto bg-bg">
         {loading ? (
-          <div className="p-4 text-sm text-ink-faint">불러오는 중...</div>
+          <div className="p-4 text-sm text-ink-faint">{t.common.loading}</div>
         ) : isImage ? (
           <div className="flex h-full items-center justify-center p-4">
             <img
@@ -218,14 +219,14 @@ export default function Editor({
           />
         ) : !isText ? (
           <div className="p-4 text-sm text-ink-faint">
-            텍스트로 열 수 없는 파일입니다.{" "}
+            {t.explorer.binary}{" "}
             <a
               className="text-accent underline"
               href={`/api/files/blob?ws=${ws}&path=${encodeURIComponent(entry.path)}`}
               target="_blank"
               rel="noreferrer"
             >
-              다운로드
+              {t.common.download}
             </a>
           </div>
         ) : mode === "preview" && isMd ? (

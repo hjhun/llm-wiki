@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Composer from "./Composer";
 import MessageList from "./MessageList";
 import SessionList from "./SessionList";
+import { useLanguage } from "../i18n";
 import type { ChatMessage, SessionRef } from "./types";
 
 type ActiveSession = {
@@ -18,6 +19,7 @@ async function asError(res: Response): Promise<Error> {
 }
 
 export default function Chat() {
+  const { t } = useLanguage();
   const [sessions, setSessions] = useState<SessionRef[]>([]);
   const [active, setActive] = useState<ActiveSession | null>(null);
   const [pending, setPending] = useState(false);
@@ -73,9 +75,7 @@ export default function Chat() {
 
   async function deleteSessions(paths: string[]) {
     if (paths.length === 0 || deleting) return;
-    const ok = window.confirm(
-      `${paths.length}개 세션을 삭제할까요? 이 작업은 되돌릴 수 없습니다.`,
-    );
+    const ok = window.confirm(t.chat.deleteConfirm(paths.length));
     if (!ok) return;
     setDeleting(true);
     setError(null);
@@ -185,10 +185,10 @@ export default function Chat() {
         <header className="flex shrink-0 items-center justify-between border-b border-line px-4 py-2">
           <div className="min-w-0">
             <div className="truncate text-sm font-medium">
-              {active?.meta.title ?? "새 채팅"}
+              {active?.meta.title ?? t.chat.newTitle}
             </div>
             <div className="font-mono text-[11px] text-ink-faint">
-              {active?.path ?? "메시지를 보내면 세션이 생성됩니다"}
+              {active?.path ?? t.chat.pendingPath}
             </div>
           </div>
           {active?.meta.agent ? (

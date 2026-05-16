@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { type Language, useLanguage } from "../i18n";
 import type {
   CliInfo,
   CliName,
@@ -40,6 +41,7 @@ function statusTone(status: "ready" | "missing") {
 }
 
 export default function Settings() {
+  const { language, setLanguage, t } = useLanguage();
   const [state, setState] = useState<SettingsState | null>(null);
   const [draft, setDraft] = useState<SettingsConfig | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -54,11 +56,14 @@ export default function Settings() {
       if (!res.ok) throw await asError(res);
       const next = (await res.json()) as SettingsState;
       setState(next);
-      setDraft(cloneConfig(next.config));
+      setDraft({
+        ...cloneConfig(next.config),
+        ui: { ...next.config.ui, language },
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     }
-  }, []);
+  }, [language]);
 
   useEffect(() => {
     void load();
@@ -91,7 +96,10 @@ export default function Settings() {
           agent: draft.agent,
           chunking: draft.chunking,
           graph: draft.graph,
-          ui: draft.ui,
+          ui: {
+            ...draft.ui,
+            language,
+          },
           auth: {
             sessionTtlSec: draft.auth.sessionTtlSec,
           },
@@ -100,8 +108,11 @@ export default function Settings() {
       if (!res.ok) throw await asError(res);
       const next = (await res.json()) as SettingsState;
       setState(next);
-      setDraft(cloneConfig(next.config));
-      setNotice("설정을 저장했습니다.");
+      setDraft({
+        ...cloneConfig(next.config),
+        ui: { ...next.config.ui, language },
+      });
+      setNotice(t.settings.savedNotice);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -122,7 +133,7 @@ export default function Settings() {
       });
       if (!res.ok) throw await asError(res);
       setPassword({ current: "", next: "" });
-      setNotice("비밀번호를 변경했습니다.");
+      setNotice(t.settings.passwordNotice);
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -135,9 +146,9 @@ export default function Settings() {
     <div className="flex h-full w-full flex-col overflow-hidden">
       <header className="flex shrink-0 items-center justify-between border-b border-line px-4 py-2">
         <div className="min-w-0">
-          <h1 className="text-sm font-semibold">Settings</h1>
+          <h1 className="text-sm font-semibold">{t.settings.title}</h1>
           <p className="mt-0.5 truncate font-mono text-[11px] text-ink-faint">
-            {state?.projectRoot ?? "loading project root"}
+            {state?.projectRoot ?? t.settings.loadingRoot}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -147,7 +158,7 @@ export default function Settings() {
             disabled={busy != null}
             className="h-8 rounded border border-line px-3 text-xs text-ink-dim hover:bg-bg-panel disabled:opacity-40"
           >
-            Refresh
+            {t.settings.refresh}
           </button>
           <button
             type="button"
@@ -155,7 +166,7 @@ export default function Settings() {
             disabled={busy != null || !draft}
             className="h-8 rounded bg-accent px-3 text-xs font-medium text-bg disabled:opacity-40"
           >
-            {busy === "save" ? "Saving..." : "Save"}
+            {busy === "save" ? t.settings.saving : t.settings.save}
           </button>
         </div>
       </header>
@@ -173,13 +184,16 @@ export default function Settings() {
 
       {!draft ? (
         <div className="flex flex-1 items-center justify-center text-sm text-ink-dim">
-          설정을 읽는 중입니다.
+          {t.settings.loading}
         </div>
       ) : (
         <main className="min-h-0 flex-1 overflow-auto">
           <div className="grid gap-4 p-4 xl:grid-cols-[minmax(0,1fr)_360px]">
             <section className="space-y-4">
-              <Panel title="Coding Agent" eyebrow="default cli">
+              <Panel
+                title={t.settings.codingAgent}
+                eyebrow={t.settings.defaultCli}
+              >
                 <div className="grid gap-3 lg:grid-cols-2">
                   {CLI_NAMES.map((name) => (
                     <CliCard
@@ -203,10 +217,10 @@ export default function Settings() {
                 <label className="mt-4 flex items-center justify-between gap-4 rounded border border-line bg-bg px-3 py-2">
                   <span>
                     <span className="block text-sm font-medium text-ink">
-                      Safe mode
+                      {t.settings.safeMode}
                     </span>
                     <span className="block text-xs text-ink-faint">
-                      켜면 yolo/bypass 플래그를 빼고 CLI를 호출합니다.
+                      {t.settings.safeModeDesc}
                     </span>
                   </span>
                   <input
@@ -222,10 +236,13 @@ export default function Settings() {
                 </label>
               </Panel>
 
-              <Panel title="Runtime Defaults" eyebrow="wiki operation">
+              <Panel
+                title={t.settings.runtimeDefaults}
+                eyebrow={t.settings.wikiOperation}
+              >
                 <div className="grid gap-3 md:grid-cols-2">
                   <NumberField
-                    label="Chunk max files"
+                    label={t.settings.chunkMaxFiles}
                     value={draft.chunking.maxFiles}
                     min={1}
                     onChange={(value) =>
@@ -235,7 +252,7 @@ export default function Settings() {
                     }
                   />
                   <NumberField
-                    label="Chunk max bytes"
+                    label={t.settings.chunkMaxBytes}
                     value={draft.chunking.maxBytes}
                     min={1024}
                     onChange={(value) =>
@@ -245,7 +262,7 @@ export default function Settings() {
                     }
                   />
                   <NumberField
-                    label="Min community size"
+                    label={t.settings.minCommunitySize}
                     value={draft.graph.minCommunitySize}
                     min={1}
                     onChange={(value) =>
@@ -255,12 +272,15 @@ export default function Settings() {
                     }
                   />
                   <label className="rounded border border-line bg-bg px-3 py-2">
-                    <span className="text-xs text-ink-faint">Default tab</span>
+                    <span className="text-xs text-ink-faint">
+                      {t.settings.defaultTab}
+                    </span>
                     <select
                       value={draft.ui.defaultTab}
                       onChange={(e) =>
                         updateDraft((next) => {
-                          next.ui.defaultTab = e.target.value as SettingsConfig["ui"]["defaultTab"];
+                          next.ui.defaultTab = e.target
+                            .value as SettingsConfig["ui"]["defaultTab"];
                         })
                       }
                       className="mt-1 block w-full rounded border border-line bg-bg-panel px-2 py-1.5 text-sm text-ink outline-none focus:border-accent"
@@ -272,14 +292,33 @@ export default function Settings() {
                       ))}
                     </select>
                   </label>
+                  <label className="rounded border border-line bg-bg px-3 py-2">
+                    <span className="text-xs text-ink-faint">
+                      {t.settings.uiLanguage}
+                    </span>
+                    <select
+                      value={language}
+                      onChange={(e) => {
+                        const nextLanguage = e.target.value as Language;
+                        updateDraft((next) => {
+                          next.ui.language = nextLanguage;
+                        });
+                        void setLanguage(nextLanguage).catch(console.error);
+                      }}
+                      className="mt-1 block w-full rounded border border-line bg-bg-panel px-2 py-1.5 text-sm text-ink outline-none focus:border-accent"
+                    >
+                      <option value="ko">{t.common.korean}</option>
+                      <option value="en">{t.common.english}</option>
+                    </select>
+                  </label>
                 </div>
                 <label className="mt-3 flex items-center justify-between gap-4 rounded border border-line bg-bg px-3 py-2">
                   <span>
                     <span className="block text-sm font-medium text-ink">
-                      Auto-update graph after ingest
+                      {t.settings.autoGraph}
                     </span>
                     <span className="block text-xs text-ink-faint">
-                      ingest 머지 패스 후 wiki-graphify update를 권장합니다.
+                      {t.settings.autoGraphDesc}
                     </span>
                   </span>
                   <input
@@ -297,10 +336,10 @@ export default function Settings() {
             </section>
 
             <aside className="space-y-4">
-              <Panel title="Server" eyebrow="local web ui">
+              <Panel title={t.settings.server} eyebrow={t.settings.localWebUi}>
                 <div className="grid gap-3">
                   <TextField
-                    label="Host"
+                    label={t.settings.host}
                     value={draft.server.host}
                     onChange={(value) =>
                       updateDraft((next) => {
@@ -309,7 +348,7 @@ export default function Settings() {
                     }
                   />
                   <NumberField
-                    label="Port"
+                    label={t.settings.port}
                     value={draft.server.port}
                     min={1}
                     onChange={(value) =>
@@ -319,12 +358,12 @@ export default function Settings() {
                     }
                   />
                   <p className="text-xs leading-relaxed text-ink-faint">
-                    host/port 변경은 다음 서버 시작부터 반영됩니다.
+                    {t.settings.serverDesc}
                   </p>
                 </div>
               </Panel>
 
-              <Panel title="Tools" eyebrow="detected">
+              <Panel title={t.settings.tools} eyebrow={t.settings.detected}>
                 <div className="space-y-2">
                   {state?.tools.map((tool) => (
                     <ToolRow key={tool.name} tool={tool} />
@@ -332,7 +371,7 @@ export default function Settings() {
                 </div>
               </Panel>
 
-              <Panel title="Login Session" eyebrow="auth">
+              <Panel title={t.settings.loginSession} eyebrow="auth">
                 <div className="grid grid-cols-2 gap-2 rounded-md border border-line bg-bg p-1">
                   <button
                     type="button"
@@ -364,18 +403,18 @@ export default function Settings() {
                         : "text-ink-dim hover:bg-bg-panel hover:text-ink",
                     ].join(" ")}
                   >
-                    계속 유지
+                    {t.settings.keepSignedIn}
                   </button>
                 </div>
                 <p className="mt-2 text-xs leading-relaxed text-ink-faint">
-                  변경 후 새로 로그인한 세션부터 적용됩니다.
+                  {t.settings.sessionDesc}
                 </p>
               </Panel>
 
-              <Panel title="Password" eyebrow="admin">
+              <Panel title={t.settings.password} eyebrow={t.settings.admin}>
                 <div className="space-y-3">
                   <TextField
-                    label="Current password"
+                    label={t.settings.currentPassword}
                     type="password"
                     value={password.current}
                     onChange={(value) =>
@@ -383,7 +422,7 @@ export default function Settings() {
                     }
                   />
                   <TextField
-                    label="New password"
+                    label={t.settings.newPassword}
                     type="password"
                     value={password.next}
                     onChange={(value) =>
@@ -396,12 +435,14 @@ export default function Settings() {
                     disabled={busy != null || !password.current || !password.next}
                     className="h-8 w-full rounded border border-line text-xs font-medium text-ink-dim hover:bg-bg-panel disabled:opacity-40"
                   >
-                    {busy === "password" ? "Changing..." : "Change password"}
+                    {busy === "password"
+                      ? t.settings.changing
+                      : t.settings.changePassword}
                   </button>
                 </div>
               </Panel>
 
-              <Panel title="Config Files" eyebrow="paths">
+              <Panel title={t.settings.configFiles} eyebrow={t.settings.paths}>
                 <div className="space-y-2 font-mono text-[11px] text-ink-faint">
                   <PathLine label="default" path={state?.configPaths.default} />
                   <PathLine label="local" path={state?.configPaths.local} />
@@ -450,7 +491,10 @@ function CliCard({
   onSelect: () => void;
   onPathChange: (value: string) => void;
 }) {
+  const { t } = useLanguage();
   const status = info?.path ? "ready" : "missing";
+  const statusLabel =
+    status === "ready" ? "ready" : t.settings.missing.toLowerCase();
   return (
     <div
       className={[
@@ -464,7 +508,7 @@ function CliCard({
             {info?.name}
           </div>
           <div className="mt-1 truncate text-[11px] text-ink-faint">
-            {info?.path ?? "not detected"}
+            {info?.path ?? t.settings.notDetected}
           </div>
         </div>
         <button
@@ -477,12 +521,12 @@ function CliCard({
               : "border border-line text-ink-dim hover:bg-bg-panel",
           ].join(" ")}
         >
-          {selected ? "Default" : "Use"}
+          {selected ? t.settings.default : t.settings.use}
         </button>
       </div>
       <div className="mt-3 flex items-center gap-2">
         <span className={`rounded border px-1.5 py-0.5 text-[10px] ${statusTone(status)}`}>
-          {status}
+          {statusLabel}
         </span>
         <span className="text-[11px] text-ink-faint">
           {info?.source ?? "missing"}
@@ -494,7 +538,9 @@ function CliCard({
         ) : null}
       </div>
       <label className="mt-3 block">
-        <span className="text-[11px] text-ink-faint">Manual path</span>
+        <span className="text-[11px] text-ink-faint">
+          {t.settings.customPath}
+        </span>
         <input
           value={pathValue}
           onChange={(e) => onPathChange(e.target.value)}
@@ -507,6 +553,9 @@ function CliCard({
 }
 
 function ToolRow({ tool }: { tool: ToolStatus }) {
+  const { t } = useLanguage();
+  const statusLabel =
+    tool.status === "ready" ? "ready" : t.settings.missing.toLowerCase();
   return (
     <div className="rounded border border-line bg-bg px-3 py-2">
       <div className="flex items-center justify-between gap-3">
@@ -514,11 +563,11 @@ function ToolRow({ tool }: { tool: ToolStatus }) {
           {tool.name}
         </span>
         <span className={`rounded border px-1.5 py-0.5 text-[10px] ${statusTone(tool.status)}`}>
-          {tool.status}
+          {statusLabel}
         </span>
       </div>
       <div className="mt-1 truncate font-mono text-[11px] text-ink-faint">
-        {tool.path ?? "not detected"}
+        {tool.path ?? t.settings.notDetected}
       </div>
       <p className="mt-1 text-xs leading-relaxed text-ink-faint">{tool.note}</p>
     </div>

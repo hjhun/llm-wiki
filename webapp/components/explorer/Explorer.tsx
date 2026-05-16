@@ -1,21 +1,19 @@
 "use client";
 
 import { useCallback, useState } from "react";
+import { useLanguage } from "../i18n";
 import Editor from "./Editor";
 import FileTree from "./FileTree";
 import type { Entry, WsKey } from "./types";
 
-const WS_LIST: { key: WsKey; label: string; desc: string }[] = [
-  { key: "wiki", label: "wiki/", desc: "LLM이 유지하는 위키 (편집 가능)" },
-  { key: "raw", label: "raw/", desc: "원본 자료 (사용자 추가, LLM은 읽기만)" },
-  {
-    key: "sessions",
-    label: "sessions/",
-    desc: "채팅 세션 기록 (시스템 append-only, 읽기 전용)",
-  },
+const WS_LIST: { key: WsKey; label: string }[] = [
+  { key: "wiki", label: "wiki/" },
+  { key: "raw", label: "raw/" },
+  { key: "sessions", label: "sessions/" },
 ];
 
 export default function Explorer() {
+  const { t } = useLanguage();
   const [ws, setWs] = useState<WsKey>("wiki");
   const [selected, setSelected] = useState<Entry | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -34,14 +32,16 @@ export default function Explorer() {
   ) {
     setError(null);
     if (isReadOnly) {
-      setError("sessions/는 UI에서 수정할 수 없습니다.");
+      setError(t.explorer.readOnlyError);
       return;
     }
     try {
       if (kind === "new-file" || kind === "new-dir") {
         const base = target?.kind === "dir" ? `${target.path}/` : "";
         const name = window.prompt(
-          kind === "new-file" ? "새 파일 경로" : "새 폴더 경로",
+          kind === "new-file"
+            ? t.explorer.newFilePath
+            : t.explorer.newFolderPath,
           base,
         );
         if (!name) return;
@@ -57,7 +57,7 @@ export default function Explorer() {
         });
         if (!res.ok) throw await asError(res);
       } else if (kind === "rename" && target) {
-        const next = window.prompt("새 경로", target.path);
+        const next = window.prompt(t.explorer.newPath, target.path);
         if (!next || next === target.path) return;
         setBusy(kind);
         const res = await fetch("/api/files/rename", {
@@ -68,7 +68,7 @@ export default function Explorer() {
         if (!res.ok) throw await asError(res);
         if (selected?.path === target.path) setSelected(null);
       } else if (kind === "delete" && target) {
-        const ok = window.confirm(`${target.path}를 .trash/로 이동할까요?`);
+        const ok = window.confirm(t.explorer.deleteConfirm(target.path));
         if (!ok) return;
         setBusy(kind);
         const res = await fetch("/api/files/delete", {
@@ -92,7 +92,7 @@ export default function Explorer() {
     const files = input.files;
     if (!files || files.length === 0) return;
     if (isReadOnly) {
-      setError("sessions/는 업로드 불가");
+      setError(t.explorer.uploadBlocked);
       return;
     }
     const dir =
@@ -130,7 +130,7 @@ export default function Explorer() {
                 setWs(w.key);
                 setSelected(null);
               }}
-              title={w.desc}
+              title={t.explorer.workspaces[w.key]}
               className={[
                 "rounded px-2.5 py-1 text-xs",
                 ws === w.key
@@ -149,7 +149,7 @@ export default function Explorer() {
               isReadOnly ? "pointer-events-none opacity-40" : "",
             ].join(" ")}
           >
-            업로드
+            {t.explorer.upload}
             <input
               type="file"
               multiple
@@ -163,9 +163,9 @@ export default function Explorer() {
             onClick={refresh}
             className="rounded border border-line px-2 py-1 hover:bg-bg-panel"
           >
-            새로고침
+            {t.common.refresh}
           </button>
-          {busy ? <span>· {busy}…</span> : null}
+          {busy ? <span>{t.explorer.busy(busy)}</span> : null}
         </div>
       </header>
 
@@ -176,8 +176,9 @@ export default function Explorer() {
       ) : null}
       {ws === "raw" ? (
         <div className="border-b border-line bg-bg-subtle px-4 py-1 text-[11px] text-ink-faint">
-          <span className="text-ink-dim">raw/</span>에 자료를 떨군 뒤 Chat 탭의{" "}
-          <span className="font-mono text-ink">/ingest</span>로 위키에 반영하세요.
+          {t.explorer.rawHintPrefix}{" "}
+          <span className="font-mono text-ink">/ingest</span>
+          <span className="ml-1">{t.explorer.rawHintSuffix}</span>
         </div>
       ) : null}
 

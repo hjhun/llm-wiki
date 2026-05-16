@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useLanguage } from "../i18n";
 import GraphCanvas from "./GraphCanvas";
 import type { GraphData, GraphNode, GraphState } from "./types";
 
@@ -39,6 +40,7 @@ function nodeSummary(node: GraphNode): string {
 }
 
 export default function Graph() {
+  const { t } = useLanguage();
   const [state, setState] = useState<GraphState | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [busy, setBusy] = useState<"build" | "update" | null>(null);
@@ -105,7 +107,7 @@ export default function Graph() {
     <div className="flex h-full w-full flex-col overflow-hidden">
       <header className="flex shrink-0 items-center justify-between border-b border-line px-4 py-2">
         <div className="min-w-0">
-          <h1 className="text-sm font-semibold">Knowledge Graph</h1>
+          <h1 className="text-sm font-semibold">{t.graph.title}</h1>
           <p className="mt-0.5 truncate font-mono text-[11px] text-ink-faint">
             {state?.graphPath ?? "wiki/graph/graph.json"}
           </p>
@@ -117,7 +119,7 @@ export default function Graph() {
             disabled={busy != null}
             className="h-8 rounded border border-line px-3 text-xs text-ink-dim hover:bg-bg-panel disabled:opacity-40"
           >
-            Refresh
+            {t.graph.refresh}
           </button>
           <button
             type="button"
@@ -125,7 +127,7 @@ export default function Graph() {
             disabled={busy != null}
             className="h-8 rounded border border-line px-3 text-xs text-ink-dim hover:bg-bg-panel disabled:opacity-40"
           >
-            {busy === "update" ? "Updating..." : "Update"}
+            {busy === "update" ? t.graph.updating : t.graph.update}
           </button>
           <button
             type="button"
@@ -133,7 +135,7 @@ export default function Graph() {
             disabled={busy != null}
             className="h-8 rounded bg-accent px-3 text-xs font-medium text-bg disabled:opacity-40"
           >
-            {busy === "build" ? "Building..." : "Build"}
+            {busy === "build" ? t.graph.building : t.graph.build}
           </button>
         </div>
       </header>
@@ -145,7 +147,7 @@ export default function Graph() {
       ) : null}
       {lastRun ? (
         <div className="border-b border-line bg-bg-subtle px-4 py-1 text-[11px] text-ink-faint">
-          graph run exit={lastRun.exitCode} · {lastRun.durationMs}ms · session{" "}
+          {t.graph.runSummary(lastRun.exitCode, lastRun.durationMs)}{" "}
           <span className="font-mono text-ink-dim">{lastRun.sessionPath}</span>
         </div>
       ) : null}
@@ -153,10 +155,16 @@ export default function Graph() {
       <section className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_320px] overflow-hidden">
         <main className="flex min-w-0 flex-col overflow-hidden">
           <div className="grid shrink-0 grid-cols-4 border-b border-line bg-bg-subtle">
-            <Metric label="Nodes" value={graph?.nodes.length ?? 0} />
-            <Metric label="Edges" value={graph?.edges.length ?? 0} />
-            <Metric label="Communities" value={graph?.communities.length ?? 0} />
-            <Metric label="Updated" value={fmtDate(state?.updatedAt ?? null)} />
+            <Metric label={t.graph.nodes} value={graph?.nodes.length ?? 0} />
+            <Metric label={t.graph.edges} value={graph?.edges.length ?? 0} />
+            <Metric
+              label={t.graph.communities}
+              value={graph?.communities.length ?? 0}
+            />
+            <Metric
+              label={t.graph.updated}
+              value={fmtDate(state?.updatedAt ?? null)}
+            />
           </div>
 
           {graph ? (
@@ -172,6 +180,7 @@ export default function Graph() {
               loading={state == null}
               onBuild={() => void run("build")}
               busy={busy != null}
+              text={t.graph}
             />
           )}
         </main>
@@ -185,16 +194,14 @@ export default function Graph() {
               onSelect={setSelectedId}
               report={state?.report ?? null}
               reportPath={state?.reportPath ?? "wiki/graph/GRAPH_REPORT.md"}
+              text={t.graph}
             />
           ) : (
             <div className="p-4 text-sm text-ink-dim">
               <div className="font-mono text-[11px] uppercase tracking-widest text-ink-faint">
-                waiting for graph
+                {t.graph.waiting}
               </div>
-              <p className="mt-2 leading-relaxed">
-                `wiki-graphify build`가 끝나면 여기서 주요 노드와 리포트를
-                바로 확인할 수 있습니다.
-              </p>
+              <p className="mt-2 leading-relaxed">{t.graph.waitingText}</p>
             </div>
           )}
         </aside>
@@ -224,24 +231,24 @@ function EmptyGraph({
   loading,
   busy,
   onBuild,
+  text,
 }: {
   loading: boolean;
   busy: boolean;
   onBuild: () => void;
+  text: ReturnType<typeof useLanguage>["t"]["graph"];
 }) {
   return (
     <div className="flex min-h-0 flex-1 items-center justify-center px-6">
       <div className="max-w-lg text-center">
         <div className="font-mono text-[11px] uppercase tracking-widest text-ink-faint">
-          {loading ? "loading" : "no graph"}
+          {loading ? text.loading : text.noGraph}
         </div>
         <h2 className="mt-3 text-lg font-semibold text-ink">
-          지식 그래프가 아직 없습니다
+          {text.emptyTitle}
         </h2>
         <p className="mt-2 text-sm leading-relaxed text-ink-dim">
-          Build를 누르면 웹앱이 graphify를 직접 실행하지 않고 기본 코딩
-          에이전트에 `wiki-graphify build`를 요청합니다. 에이전트가
-          `wiki/graph/graph.json`과 `GRAPH_REPORT.md`를 생성합니다.
+          {text.emptyText}
         </p>
         <button
           type="button"
@@ -249,7 +256,7 @@ function EmptyGraph({
           disabled={busy}
           className="mt-5 h-9 rounded bg-accent px-4 text-sm font-medium text-bg disabled:opacity-40"
         >
-          {busy ? "Running..." : "Build graph"}
+          {busy ? text.running : text.buildGraph}
         </button>
       </div>
     </div>
@@ -263,6 +270,7 @@ function GraphInspector({
   onSelect,
   report,
   reportPath,
+  text,
 }: {
   graph: GraphData;
   selected: GraphNode | null;
@@ -270,12 +278,13 @@ function GraphInspector({
   onSelect: (id: string) => void;
   report: string | null;
   reportPath: string;
+  text: ReturnType<typeof useLanguage>["t"]["graph"];
 }) {
   return (
     <div className="flex min-h-full flex-col">
       <section className="border-b border-line p-4">
         <div className="font-mono text-[11px] uppercase tracking-widest text-ink-faint">
-          selected node
+          {text.selectedNode}
         </div>
         {selected ? (
           <div className="mt-3">
@@ -297,7 +306,7 @@ function GraphInspector({
             </div>
             <div className="mt-4">
               <div className="text-xs font-medium text-ink-dim">
-                Links ({selectedEdges.length})
+                {text.links} ({selectedEdges.length})
               </div>
               <div className="mt-2 space-y-1">
                 {selectedEdges.slice(0, 10).map((edge, index) => (
@@ -315,14 +324,14 @@ function GraphInspector({
           </div>
         ) : (
           <p className="mt-2 text-sm leading-relaxed text-ink-dim">
-            캔버스나 주요 노드 목록에서 노드를 선택하세요.
+            {text.chooseNode}
           </p>
         )}
       </section>
 
       <section className="border-b border-line p-4">
         <div className="font-mono text-[11px] uppercase tracking-widest text-ink-faint">
-          god nodes
+          {text.godNodes}
         </div>
         <div className="mt-2 space-y-1">
           {topNodes(graph).map((node) => (
@@ -345,7 +354,7 @@ function GraphInspector({
 
       <section className="border-b border-line p-4">
         <div className="font-mono text-[11px] uppercase tracking-widest text-ink-faint">
-          communities
+          {text.communities}
         </div>
         <div className="mt-2 space-y-1">
           {graph.communities.length > 0 ? (
@@ -363,14 +372,14 @@ function GraphInspector({
               </div>
             ))
           ) : (
-            <p className="text-sm text-ink-dim">community 정보가 없습니다.</p>
+            <p className="text-sm text-ink-dim">{text.noCommunity}</p>
           )}
         </div>
       </section>
 
       <section className="p-4">
         <div className="font-mono text-[11px] uppercase tracking-widest text-ink-faint">
-          report
+          {text.report}
         </div>
         <div className="mt-1 truncate font-mono text-[11px] text-ink-faint">
           {reportPath}
@@ -380,7 +389,7 @@ function GraphInspector({
             {report}
           </pre>
         ) : (
-          <p className="mt-2 text-sm text-ink-dim">리포트 파일이 없습니다.</p>
+          <p className="mt-2 text-sm text-ink-dim">{text.noReport}</p>
         )}
       </section>
     </div>

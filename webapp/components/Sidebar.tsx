@@ -3,24 +3,25 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { BRAND_NAME, type Language, useLanguage } from "./i18n";
 
 type Tab = {
   href: string;
-  label: string;
+  key: "chat" | "explorer" | "graph" | "settings";
   icon: string;
-  desc: string;
 };
 
 const TABS: Tab[] = [
-  { href: "/chat", label: "Chat", icon: "💬", desc: "코딩 에이전트와 대화" },
-  { href: "/explorer", label: "Explorer", icon: "📁", desc: "wiki/raw 탐색" },
-  { href: "/graph", label: "Knowledge Graph", icon: "🕸", desc: "지식 그래프" },
-  { href: "/settings", label: "Settings", icon: "⚙", desc: "CLI · 비밀번호" },
+  { href: "/chat", key: "chat", icon: "💬" },
+  { href: "/explorer", key: "explorer", icon: "📁" },
+  { href: "/graph", key: "graph", icon: "🕸" },
+  { href: "/settings", key: "settings", icon: "⚙" },
 ];
 
 export default function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
+  const { language, setLanguage, savingLanguage, t } = useLanguage();
   const [loggingOut, setLoggingOut] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
 
@@ -46,6 +47,14 @@ export default function Sidebar() {
     }
   }
 
+  async function onLanguage(nextLanguage: Language) {
+    try {
+      await setLanguage(nextLanguage);
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
   return (
     <aside
       className={[
@@ -57,15 +66,15 @@ export default function Sidebar() {
         <div className="flex items-start justify-between gap-2">
           <div className={collapsed ? "sr-only" : ""}>
             <div className="font-mono text-xs uppercase tracking-widest text-ink-faint">
-              llm wiki
+              {BRAND_NAME}
             </div>
-            <div className="mt-1 text-sm text-ink-dim">local</div>
+            <div className="mt-1 text-sm text-ink-dim">{t.sidebar.local}</div>
           </div>
           <button
             type="button"
             onClick={toggleCollapsed}
-            aria-label={collapsed ? "Expand navigation" : "Collapse navigation"}
-            title={collapsed ? "Expand navigation" : "Collapse navigation"}
+            aria-label={collapsed ? t.sidebar.expand : t.sidebar.collapse}
+            title={collapsed ? t.sidebar.expand : t.sidebar.collapse}
             className={[
               "flex h-8 w-8 items-center justify-center rounded border border-line text-sm text-ink-dim hover:bg-bg-panel hover:text-ink",
               collapsed ? "mx-auto" : "",
@@ -80,11 +89,12 @@ export default function Sidebar() {
         {TABS.map((tab) => {
           const active =
             pathname === tab.href || pathname?.startsWith(`${tab.href}/`);
+          const tabText = t.sidebar.tabs[tab.key];
           return (
             <Link
               key={tab.href}
               href={tab.href}
-              title={collapsed ? tab.label : undefined}
+              title={collapsed ? tabText.label : undefined}
               className={[
                 "group flex rounded-md transition-colors",
                 collapsed
@@ -100,7 +110,7 @@ export default function Sidebar() {
                   {tab.icon}
                 </span>
                 <span className={collapsed ? "sr-only" : "font-medium"}>
-                  {tab.label}
+                  {tabText.label}
                 </span>
               </span>
               {collapsed ? null : (
@@ -110,7 +120,7 @@ export default function Sidebar() {
                     active ? "text-ink-dim" : "text-ink-faint",
                   ].join(" ")}
                 >
-                  {tab.desc}
+                  {tabText.desc}
                 </span>
               )}
             </Link>
@@ -124,23 +134,62 @@ export default function Sidebar() {
           collapsed ? "px-2" : "px-5",
         ].join(" ")}
       >
+        <div
+          className={[
+            "rounded-md border border-line bg-bg/50 p-1",
+            collapsed ? "flex flex-col gap-1" : "",
+          ].join(" ")}
+          aria-label={t.common.language}
+          title={collapsed ? t.common.language : undefined}
+        >
+          {collapsed ? null : (
+            <div className="px-2 pb-1 font-mono text-[10px] uppercase tracking-widest text-ink-faint">
+              {t.common.language}
+              {savingLanguage ? ` · ${t.sidebar.languageSaving}` : ""}
+            </div>
+          )}
+          <div className={collapsed ? "flex flex-col gap-1" : "grid grid-cols-2 gap-1"}>
+            {(["ko", "en"] as const).map((code) => (
+              <button
+                key={code}
+                type="button"
+                onClick={() => void onLanguage(code)}
+                disabled={savingLanguage}
+                className={[
+                  "h-7 rounded text-[11px] font-medium transition-colors disabled:opacity-50",
+                  language === code
+                    ? "bg-accent text-bg"
+                    : "text-ink-dim hover:bg-bg-panel hover:text-ink",
+                ].join(" ")}
+                aria-pressed={language === code}
+                title={code === "ko" ? t.common.korean : t.common.english}
+              >
+                {code.toUpperCase()}
+              </button>
+            ))}
+          </div>
+        </div>
         <button
           type="button"
           onClick={onLogout}
           disabled={loggingOut}
-          title={collapsed ? "Logout" : undefined}
+          title={collapsed ? t.sidebar.logout : undefined}
           className={[
             "rounded-md border border-line bg-bg/60 px-3 py-2 text-xs text-ink-dim hover:bg-bg-panel hover:text-ink disabled:opacity-50",
             collapsed ? "px-0" : "",
           ].join(" ")}
         >
-          {collapsed ? "⎋" : loggingOut ? "로그아웃 중..." : "로그아웃"}
+          {collapsed ? "⎋" : loggingOut ? t.sidebar.loggingOut : t.sidebar.logout}
         </button>
         {collapsed ? null : (
           <div className="rounded-md border border-line bg-bg/40 px-3 py-2 text-[11px] leading-snug text-ink-faint">
-            이 인스턴스는 <span className="text-ink-dim">로컬 전용</span>입니다.
+            {t.sidebar.localOnlyPrefix}{" "}
+            <span className="text-ink-dim">
+              {t.sidebar.localOnlyEmphasis}
+            </span>
+            {t.sidebar.localOnlySuffix}
             <br />
-            기본 bind: <span className="font-mono">127.0.0.1</span>
+            {t.sidebar.defaultBind}: <span className="font-mono">127.0.0.1</span>
           </div>
         )}
       </div>

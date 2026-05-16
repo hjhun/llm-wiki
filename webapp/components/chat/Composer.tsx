@@ -1,12 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-
-const SLASH_COMMANDS: { name: string; arg: string; desc: string }[] = [
-  { name: "/ingest", arg: "<path|url>", desc: "raw의 자료를 위키로 흡수" },
-  { name: "/query", arg: "<질문>", desc: "위키 검색 + 답변 작성" },
-  { name: "/lint", arg: "", desc: "위키 건강 점검" },
-];
+import { useLanguage } from "../i18n";
 
 export default function Composer({
   disabled,
@@ -15,6 +10,7 @@ export default function Composer({
   disabled: boolean;
   onSend: (message: string) => void;
 }) {
+  const { t } = useLanguage();
   const [value, setValue] = useState("");
   const [showPlus, setShowPlus] = useState(false);
   const taRef = useRef<HTMLTextAreaElement | null>(null);
@@ -22,7 +18,7 @@ export default function Composer({
   // 슬래시 자동완성 후보
   const slashMatch =
     value.startsWith("/") && !value.includes(" ")
-      ? SLASH_COMMANDS.filter((c) =>
+      ? t.chat.slashCommands.filter((c) =>
           c.name.startsWith(value.toLowerCase()),
         )
       : [];
@@ -43,7 +39,7 @@ export default function Composer({
     setValue("");
   }
 
-  function pickCommand(cmd: (typeof SLASH_COMMANDS)[number]) {
+  function pickCommand(cmd: (typeof t.chat.slashCommands)[number]) {
     setValue(cmd.arg ? `${cmd.name} ` : cmd.name);
     setShowPlus(false);
     setTimeout(() => taRef.current?.focus(), 0);
@@ -54,9 +50,9 @@ export default function Composer({
       {showPlus ? (
         <div className="absolute bottom-full left-4 mb-2 w-72 rounded-md border border-line bg-bg-panel p-2 shadow-xl">
           <div className="mb-1 px-2 text-[10px] uppercase tracking-widest text-ink-faint">
-            명령
+            {t.chat.commands}
           </div>
-          {SLASH_COMMANDS.map((c) => (
+          {t.chat.slashCommands.map((c) => (
             <button
               key={c.name}
               type="button"
@@ -97,7 +93,7 @@ export default function Composer({
           type="button"
           onClick={() => setShowPlus((v) => !v)}
           className="rounded-md border border-line bg-bg px-2.5 py-2 text-sm text-ink-dim hover:bg-bg-panel hover:text-ink"
-          title="명령 메뉴"
+          title={t.chat.commandMenu}
         >
           +
         </button>
@@ -113,7 +109,7 @@ export default function Composer({
             }
             if (e.key === "Escape") setShowPlus(false);
           }}
-          placeholder="질문을 입력하거나 /ingest, /query, /lint …  (Shift+Enter로 줄바꿈)"
+          placeholder={t.chat.placeholder}
           className="block w-full resize-none rounded-md border border-line bg-bg px-3 py-2 text-sm leading-relaxed text-ink outline-none focus:border-accent"
         />
         <button
@@ -122,11 +118,11 @@ export default function Composer({
           disabled={disabled || !value.trim()}
           className="rounded-md bg-accent px-3 py-2 text-sm font-medium text-bg disabled:opacity-40"
         >
-          전송
+          {t.chat.send}
         </button>
       </div>
       <div className="mt-1 px-1 text-[10px] text-ink-faint">
-        Enter 전송 · Shift+Enter 줄바꿈 · `/`로 슬래시 커맨드 자동완성
+        {t.chat.hint}
       </div>
     </div>
   );

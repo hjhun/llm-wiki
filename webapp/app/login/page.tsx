@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import AuthCard from "@/components/AuthCard";
 import { SESSION_COOKIE, isFirstRun, verifySessionToken } from "@/lib/auth";
+import { loadConfig } from "@/lib/config";
 
 export const dynamic = "force-dynamic";
 
@@ -14,5 +15,6 @@ export default async function LoginPage() {
   if (session) {
     redirect("/");
   }
-  return <AuthCard mode="login" />;
+  const cfg = await loadConfig();
+  return <AuthCard mode="login" language={cfg.ui.language} />;
 }

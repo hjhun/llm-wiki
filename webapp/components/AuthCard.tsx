@@ -2,29 +2,31 @@
 
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
+import { BRAND_NAME, TEXT, type Language } from "./i18n";
 
 type Mode = "setup" | "login";
 
-const TEXT = {
+const MODE_CONFIG = {
   setup: {
-    title: "비밀번호 설정",
-    hint: "이 인스턴스의 관리자 비밀번호를 처음 설정합니다. 6자 이상.",
-    submit: "비밀번호 설정 후 시작",
     endpoint: "/api/auth/setup",
     requireConfirm: true,
   },
   login: {
-    title: "로그인",
-    hint: "이 인스턴스의 관리자 비밀번호를 입력하세요.",
-    submit: "로그인",
     endpoint: "/api/auth/login",
     requireConfirm: false,
   },
 } as const;
 
-export default function AuthCard({ mode }: { mode: Mode }) {
+export default function AuthCard({
+  mode,
+  language,
+}: {
+  mode: Mode;
+  language: Language;
+}) {
   const router = useRouter();
-  const t = TEXT[mode];
+  const config = MODE_CONFIG[mode];
+  const t = TEXT[language].auth;
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -34,18 +36,18 @@ export default function AuthCard({ mode }: { mode: Mode }) {
     e.preventDefault();
     setError(null);
 
-    if (t.requireConfirm && password !== confirm) {
-      setError("두 비밀번호가 일치하지 않습니다.");
+    if (config.requireConfirm && password !== confirm) {
+      setError(t.mismatch);
       return;
     }
     if (password.length < 6) {
-      setError("비밀번호는 6자 이상이어야 합니다.");
+      setError(t.shortPassword);
       return;
     }
 
     setPending(true);
     try {
-      const res = await fetch(t.endpoint, {
+      const res = await fetch(config.endpoint, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ password }),
@@ -54,14 +56,14 @@ export default function AuthCard({ mode }: { mode: Mode }) {
         const j = (await res.json().catch(() => null)) as
           | { error?: string }
           | null;
-        setError(j?.error ?? `요청 실패 (${res.status})`);
+        setError(j?.error ?? t.requestFailed(res.status));
         setPending(false);
         return;
       }
       router.replace("/");
       router.refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "네트워크 오류");
+      setError(err instanceof Error ? err.message : t.network);
       setPending(false);
     }
   }
@@ -73,14 +75,18 @@ export default function AuthCard({ mode }: { mode: Mode }) {
         className="w-full max-w-sm rounded-xl border border-line bg-bg-panel p-6 shadow-2xl"
       >
         <div className="mb-1 font-mono text-[11px] uppercase tracking-widest text-ink-faint">
-          llm wiki
+          {BRAND_NAME}
         </div>
-        <h1 className="text-lg font-semibold">{t.title}</h1>
-        <p className="mt-1 text-sm text-ink-dim">{t.hint}</p>
+        <h1 className="text-lg font-semibold">
+          {mode === "setup" ? t.setupTitle : t.loginTitle}
+        </h1>
+        <p className="mt-1 text-sm text-ink-dim">
+          {mode === "setup" ? t.setupHint : t.loginHint}
+        </p>
 
         <div className="mt-5 flex flex-col gap-3">
           <label className="block">
-            <span className="block text-xs text-ink-dim">비밀번호</span>
+            <span className="block text-xs text-ink-dim">{t.password}</span>
             <input
               type="password"
               autoComplete={mode === "setup" ? "new-password" : "current-password"}
@@ -92,9 +98,9 @@ export default function AuthCard({ mode }: { mode: Mode }) {
             />
           </label>
 
-          {t.requireConfirm ? (
+          {config.requireConfirm ? (
             <label className="block">
-              <span className="block text-xs text-ink-dim">비밀번호 확인</span>
+              <span className="block text-xs text-ink-dim">{t.confirm}</span>
               <input
                 type="password"
                 autoComplete="new-password"
@@ -118,13 +124,15 @@ export default function AuthCard({ mode }: { mode: Mode }) {
             disabled={pending}
             className="mt-1 rounded-md bg-accent px-3 py-2 text-sm font-medium text-bg disabled:opacity-50"
           >
-            {pending ? "처리 중..." : t.submit}
+            {pending
+              ? t.pending
+              : mode === "setup"
+                ? t.setupSubmit
+                : t.loginSubmit}
           </button>
 
           <p className="text-[11px] leading-relaxed text-ink-faint">
-            비밀번호와 세션 시크릿은{" "}
-            <span className="font-mono">config/local.json</span>에 저장되며 git
-            추적에서 제외됩니다.
+            {t.storage}
           </p>
         </div>
       </form>

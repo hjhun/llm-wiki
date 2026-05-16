@@ -116,7 +116,7 @@ export default function GraphCanvas({
       viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
       className="h-full w-full"
       role="img"
-      aria-label="LLM Wiki knowledge graph"
+      aria-label="CLIO - LLM WIKI knowledge graph"
     >
       <defs>
         <radialGradient id="nodeGlow">

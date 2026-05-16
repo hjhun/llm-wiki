@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useLanguage } from "../i18n";
 import type { Entry, WsKey } from "./types";
 
 type Node = Entry & { children?: Node[]; open?: boolean; loading?: boolean };
@@ -28,6 +29,7 @@ export default function FileTree({
   onSelect: (entry: Entry) => void;
   onContextAction: (action: "new-file" | "new-dir" | "delete" | "rename", target: Entry | null) => void;
 }) {
+  const { t } = useLanguage();
   const [roots, setRoots] = useState<Node[]>([]);
   const [error, setError] = useState<string | null>(null);
 
@@ -111,10 +113,7 @@ export default function FileTree({
           }}
           onContextMenu={(e) => {
             e.preventDefault();
-            const action = window.prompt(
-              `${n.path}\n\n동작: new-file / new-dir / rename / delete`,
-              "",
-            );
+            const action = window.prompt(t.explorer.contextAction(n.path), "");
             if (action === "new-file" || action === "new-dir" || action === "rename" || action === "delete") {
               onContextAction(action, n);
             }
@@ -149,17 +148,17 @@ export default function FileTree({
             type="button"
             onClick={() => onContextAction("new-file", null)}
             className="rounded px-1.5 py-0.5 text-[11px] text-ink-dim hover:bg-bg-panel hover:text-ink"
-            title="새 파일 (루트)"
+            title={t.explorer.newRootFile}
           >
-            + 파일
+            {t.explorer.fileButton}
           </button>
           <button
             type="button"
             onClick={() => onContextAction("new-dir", null)}
             className="rounded px-1.5 py-0.5 text-[11px] text-ink-dim hover:bg-bg-panel hover:text-ink"
-            title="새 폴더 (루트)"
+            title={t.explorer.newRootFolder}
           >
-            + 폴더
+            {t.explorer.folderButton}
           </button>
         </div>
       </div>
@@ -167,7 +166,9 @@ export default function FileTree({
         {error ? (
           <div className="px-3 py-2 text-[11px] text-red-300">{error}</div>
         ) : roots.length === 0 ? (
-          <div className="px-3 py-2 text-[11px] text-ink-faint">비어 있음</div>
+          <div className="px-3 py-2 text-[11px] text-ink-faint">
+            {t.explorer.empty}
+          </div>
         ) : (
           roots.map((n) => renderRow(n, 0))
         )}

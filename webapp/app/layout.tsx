@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "LLM Wiki",
+  title: "CLIO - LLM WIKI",
   description:
-    "Local LLM Wiki — chat, explore, graph and configure your personal knowledge base.",
+    "CLIO - LLM WIKI: chat, explore, graph and configure your personal knowledge base.",
 };
 
 export default function RootLayout({
