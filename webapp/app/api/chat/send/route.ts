@@ -382,6 +382,15 @@ export async function POST(req: Request) {
           // would SIGTERM the child mid-summary.
           timeoutMs: kindTimeout ?? undefined,
           signal: req.signal,
+          // When the operation is configured for infinite runtime (ingest),
+          // detach the HTTP request lifecycle from the CLI. An idle browser
+          // tab, WSL2/proxy idle disconnect, or Node HTTP idle timeout would
+          // otherwise fire req.signal.abort mid-chunk and re-introduce the
+          // SIGTERM we just disabled at the timer level. The CLI keeps
+          // running, persists progress to wiki/.progress/ingest/, and writes
+          // the final assistant message to the session file even if no client
+          // is listening anymore.
+          killOnAbort: kindTimeout != null,
           onStdout: (chunk) => {
             const text = displayChunk(chunk);
             if (text) {

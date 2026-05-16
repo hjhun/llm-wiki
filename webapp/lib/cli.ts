@@ -208,6 +208,15 @@ export async function runCli(
     /** Override config caps for testing. */
     maxStdoutBytes?: number;
     maxStderrBytes?: number;
+    /**
+     * When the caller's signal aborts, by default we SIGTERM the child so it
+     * does not outlive the HTTP request. Long-running ingest jobs need the
+     * opposite — if the browser/proxy drops the streaming response while the
+     * CLI is mid sub-chunk, we want the CLI to keep running to completion and
+     * persist its progress. Setting this to false detaches abort from kill.
+     * Defaults to true to preserve historical behavior for other callers.
+     */
+    killOnAbort?: boolean;
   } = {},
 ): Promise<RunResult> {
   const info = await detectCli(cli);
@@ -259,17 +268,18 @@ export async function runCli(
           child.kill("SIGTERM");
         }, opts.timeoutMs)
       : null;
+    const killOnAbort = opts.killOnAbort ?? true;
     const onAbort = () => child.kill("SIGTERM");
-    opts.signal?.addEventListener("abort", onAbort);
+    if (killOnAbort) opts.signal?.addEventListener("abort", onAbort);
 
     child.on("error", (err) => {
       if (timer) clearTimeout(timer);
-      opts.signal?.removeEventListener("abort", onAbort);
+      if (killOnAbort) opts.signal?.removeEventListener("abort", onAbort);
       reject(err);
     });
     child.on("close", (code) => {
       if (timer) clearTimeout(timer);
-      opts.signal?.removeEventListener("abort", onAbort);
+      if (killOnAbort) opts.signal?.removeEventListener("abort", onAbort);
       resolve({
         stdout: stdoutBuf.toString(),
         stderr: stderrBuf.toString(),
