@@ -203,6 +203,29 @@ export function resolveSessionAbs(rel: string): string {
   return abs;
 }
 
+export async function deleteSessions(paths: string[]): Promise<{
+  deleted: string[];
+}> {
+  const deleted: string[] = [];
+  for (const rel of paths) {
+    if (!rel.endsWith(".md")) {
+      throw new Error(`not a markdown session: ${rel}`);
+    }
+    const abs = resolveSessionAbs(rel);
+    try {
+      const st = await fs.stat(abs);
+      if (!st.isFile()) continue;
+      await fs.unlink(abs);
+      deleted.push(rel);
+      await fs.rmdir(path.dirname(abs)).catch(() => undefined);
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === "ENOENT") continue;
+      throw err;
+    }
+  }
+  return { deleted };
+}
+
 export async function readSession(rel: string): Promise<{
   meta: SessionMeta;
   messages: ChatMessage[];

@@ -12,8 +12,8 @@ const ROLE_LABEL: Record<string, string> = {
 };
 
 const ROLE_STYLE: Record<string, string> = {
-  user: "border-line bg-bg-subtle",
-  assistant: "border-accent/30 bg-bg-panel",
+  user: "border-sky-800/70 bg-sky-950/35",
+  assistant: "border-emerald-900/70 bg-emerald-950/25",
   system: "border-red-900/60 bg-red-950/30 text-red-200",
 };
 

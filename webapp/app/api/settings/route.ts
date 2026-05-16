@@ -47,7 +47,12 @@ const Body = z.object({
     .optional(),
   auth: z
     .object({
-      sessionTtlSec: z.number().int().min(60).max(60 * 60 * 24 * 30),
+      sessionTtlSec: z
+        .number()
+        .int()
+        .min(60)
+        .max(60 * 60 * 24 * 30)
+        .nullable(),
     })
     .optional(),
 });

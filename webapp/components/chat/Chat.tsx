@@ -21,6 +21,7 @@ export default function Chat() {
   const [sessions, setSessions] = useState<SessionRef[]>([]);
   const [active, setActive] = useState<ActiveSession | null>(null);
   const [pending, setPending] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const refreshSessions = useCallback(async () => {
@@ -68,6 +69,35 @@ export default function Chat() {
     // 실제 세션 파일 생성은 첫 메시지 전송 시 send 라우트가 만든다.
     setActive(null);
     setError(null);
+  }
+
+  async function deleteSessions(paths: string[]) {
+    if (paths.length === 0 || deleting) return;
+    const ok = window.confirm(
+      `${paths.length}개 세션을 삭제할까요? 이 작업은 되돌릴 수 없습니다.`,
+    );
+    if (!ok) return;
+    setDeleting(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/chat/sessions", {
+        method: "DELETE",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ paths }),
+      });
+      if (!res.ok) throw await asError(res);
+      if (active && paths.includes(active.path)) {
+        setActive(null);
+      }
+      const list = await refreshSessions();
+      if (active && paths.includes(active.path) && list.length > 0) {
+        await openSession(list[0]);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setDeleting(false);
+    }
   }
 
   async function send(message: string) {
@@ -146,6 +176,8 @@ export default function Chat() {
           activePath={active?.path ?? null}
           onSelect={openSession}
           onNew={newSessionDraft}
+          onDelete={deleteSessions}
+          deleting={deleting}
         />
       </aside>
 

@@ -39,7 +39,7 @@ export type SettingsConfig = {
   };
   auth: {
     passwordSet: boolean;
-    sessionTtlSec: number;
+    sessionTtlSec: number | null;
   };
 };
 

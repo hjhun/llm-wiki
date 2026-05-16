@@ -51,8 +51,8 @@ export const ConfigSchema = z.object({
     passwordHash: z.string().nullable().default(null),
     /** 세션 서명을 위한 32바이트 secret (base64). 첫 실행 시 자동 생성. */
     sessionSecret: z.string().nullable().default(null),
-    /** 세션 유효 시간(초) */
-    sessionTtlSec: z.number().int().min(60).default(60 * 60 * 24),
+    /** 세션 유효 시간(초). null이면 만료 시각 없는 장기 로그인. */
+    sessionTtlSec: z.number().int().min(60).nullable().default(60 * 60 * 24),
   }),
 });
 
@@ -78,7 +78,8 @@ async function readJsonIfExists<T>(p: string): Promise<Partial<T> | null> {
 }
 
 function deepMerge<T>(base: T, over: Partial<T> | null | undefined): T {
-  if (!over) return base;
+  if (over === undefined) return base;
+  if (over === null) return null as T;
   if (
     typeof base !== "object" ||
     base === null ||
@@ -86,7 +87,7 @@ function deepMerge<T>(base: T, over: Partial<T> | null | undefined): T {
     typeof over !== "object" ||
     Array.isArray(over)
   ) {
-    return (over as T) ?? base;
+    return over as T;
   }
   const out: Record<string, unknown> = { ...(base as Record<string, unknown>) };
   for (const [k, v] of Object.entries(over as Record<string, unknown>)) {

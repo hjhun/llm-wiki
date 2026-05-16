@@ -105,7 +105,7 @@ export default function Graph() {
     <div className="flex h-full w-full flex-col overflow-hidden">
       <header className="flex shrink-0 items-center justify-between border-b border-line px-4 py-2">
         <div className="min-w-0">
-          <h1 className="text-sm font-semibold">Graph</h1>
+          <h1 className="text-sm font-semibold">Knowledge Graph</h1>
           <p className="mt-0.5 truncate font-mono text-[11px] text-ink-faint">
             {state?.graphPath ?? "wiki/graph/graph.json"}
           </p>

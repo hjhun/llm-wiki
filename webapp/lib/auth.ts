@@ -10,6 +10,7 @@ const ISSUER = "llm-wiki";
 const AUDIENCE = "local";
 
 const BCRYPT_COST = 12;
+const LONG_LIVED_COOKIE_MAX_AGE_SEC = 60 * 60 * 24 * 365 * 10;
 
 function secretToKey(secretB64: string): Uint8Array {
   return Uint8Array.from(Buffer.from(secretB64, "base64"));
@@ -82,7 +83,7 @@ export async function changePassword(
 export type SessionPayload = {
   v: 1;
   iat: number;
-  exp: number;
+  exp?: number;
 };
 
 export async function createSessionToken(): Promise<{
@@ -93,14 +94,16 @@ export async function createSessionToken(): Promise<{
   const secret = await ensureSessionSecret();
   const ttl = cfg.auth.sessionTtlSec;
   const now = Math.floor(Date.now() / 1000);
-  const token = await new SignJWT({ v: 1 })
+  let jwt = new SignJWT({ v: 1 })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuer(ISSUER)
     .setAudience(AUDIENCE)
-    .setIssuedAt(now)
-    .setExpirationTime(now + ttl)
-    .sign(secretToKey(secret));
-  return { token, expSec: ttl };
+    .setIssuedAt(now);
+  if (ttl != null) {
+    jwt = jwt.setExpirationTime(now + ttl);
+  }
+  const token = await jwt.sign(secretToKey(secret));
+  return { token, expSec: ttl ?? LONG_LIVED_COOKIE_MAX_AGE_SEC };
 }
 
 export async function verifySessionToken(

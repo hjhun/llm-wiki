@@ -11,6 +11,7 @@ import type {
 
 const CLI_NAMES: CliName[] = ["codex", "claude", "gemini", "cline"];
 const DEFAULT_TABS = ["chat", "explorer", "graph", "settings"] as const;
+const SESSION_TTL_24H_SEC = 60 * 60 * 24;
 
 async function asError(res: Response): Promise<Error> {
   const j = (await res.json().catch(() => null)) as { error?: string } | null;
@@ -331,6 +332,46 @@ export default function Settings() {
                 </div>
               </Panel>
 
+              <Panel title="Login Session" eyebrow="auth">
+                <div className="grid grid-cols-2 gap-2 rounded-md border border-line bg-bg p-1">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      updateDraft((next) => {
+                        next.auth.sessionTtlSec = SESSION_TTL_24H_SEC;
+                      })
+                    }
+                    className={[
+                      "h-8 rounded text-xs font-medium transition-colors",
+                      draft.auth.sessionTtlSec === SESSION_TTL_24H_SEC
+                        ? "bg-accent text-bg"
+                        : "text-ink-dim hover:bg-bg-panel hover:text-ink",
+                    ].join(" ")}
+                  >
+                    24h
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      updateDraft((next) => {
+                        next.auth.sessionTtlSec = null;
+                      })
+                    }
+                    className={[
+                      "h-8 rounded text-xs font-medium transition-colors",
+                      draft.auth.sessionTtlSec == null
+                        ? "bg-accent text-bg"
+                        : "text-ink-dim hover:bg-bg-panel hover:text-ink",
+                    ].join(" ")}
+                  >
+                    계속 유지
+                  </button>
+                </div>
+                <p className="mt-2 text-xs leading-relaxed text-ink-faint">
+                  변경 후 새로 로그인한 세션부터 적용됩니다.
+                </p>
+              </Panel>
+
               <Panel title="Password" eyebrow="admin">
                 <div className="space-y-3">
                   <TextField
@@ -357,9 +398,6 @@ export default function Settings() {
                   >
                     {busy === "password" ? "Changing..." : "Change password"}
                   </button>
-                  <p className="text-xs text-ink-faint">
-                    세션 만료: {draft.auth.sessionTtlSec}초
-                  </p>
                 </div>
               </Panel>
 
