@@ -18,3 +18,16 @@ export type SessionRef = {
   path: string;
   meta: SessionMeta;
 };
+
+export type ChatProgressLog = {
+  ts: string;
+  op: string;
+  detail: string;
+};
+
+export type ChatProgress = {
+  summary: string | null;
+  active: string | null;
+  log: ChatProgressLog[];
+  updated: string;
+};

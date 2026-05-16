@@ -123,11 +123,33 @@ export async function verifySessionToken(
   }
 }
 
-export function sessionCookieOptions(maxAgeSec: number) {
+/**
+ * Detect whether the inbound request is actually being served over HTTPS so
+ * we only stamp `Secure` on the auth cookie when the browser will accept it.
+ * Modern browsers reject `Set-Cookie: ...; Secure` on plain HTTP, which broke
+ * LAN logins (host bound to 0.0.0.0 + no TLS proxy).
+ */
+export function isHttpsRequest(req: Request): boolean {
+  try {
+    if (new URL(req.url).protocol === "https:") return true;
+  } catch {
+    // Fall through to header sniffing.
+  }
+  const xfp = req.headers.get("x-forwarded-proto");
+  if (xfp) {
+    return xfp.split(",")[0].trim().toLowerCase() === "https";
+  }
+  return false;
+}
+
+export function sessionCookieOptions(
+  maxAgeSec: number,
+  opts: { secure?: boolean } = {},
+) {
   return {
     httpOnly: true,
     sameSite: "lax" as const,
-    secure: process.env.NODE_ENV === "production",
+    secure: opts.secure ?? false,
     path: "/",
     maxAge: maxAgeSec,
   };

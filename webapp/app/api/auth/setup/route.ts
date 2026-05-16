@@ -5,6 +5,7 @@ import {
   SESSION_COOKIE,
   createSessionToken,
   isFirstRun,
+  isHttpsRequest,
   sessionCookieOptions,
   setInitialPassword,
 } from "@/lib/auth";
@@ -33,7 +34,11 @@ export async function POST(req: Request) {
     await setInitialPassword(parsed.data.password);
     const { token, expSec } = await createSessionToken();
     const jar = await cookies();
-    jar.set(SESSION_COOKIE, token, sessionCookieOptions(expSec));
+    jar.set(
+      SESSION_COOKIE,
+      token,
+      sessionCookieOptions(expSec, { secure: isHttpsRequest(req) }),
+    );
     return NextResponse.json({ ok: true });
   } catch (err) {
     return NextResponse.json(

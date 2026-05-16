@@ -32,6 +32,8 @@ const Body = z.object({
 });
 
 const PROGRESS_DASHBOARD_PATH = "wiki/.progress/ingest/DASHBOARD.md";
+const PROGRESS_STATE_PATH = "wiki/.progress/ingest/.state.json";
+const WIKI_LOG_REL = "wiki/log.md";
 
 async function buildProgressReference(): Promise<string | null> {
   try {
@@ -46,6 +48,201 @@ async function buildProgressReference(): Promise<string | null> {
     if ((err as NodeJS.ErrnoException).code === "ENOENT") return null;
     return null;
   }
+}
+
+type StateSummary = {
+  total: number;
+  done: number;
+  in_progress: number;
+  partial: number;
+  pending: number;
+  error: number;
+  active_leaf: string | null;
+  active_subchunk: { id: string; status: string } | null;
+};
+
+function summarizeIngestState(raw: string): StateSummary | null {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+  if (
+    !parsed ||
+    typeof parsed !== "object" ||
+    !("leaves" in parsed) ||
+    typeof (parsed as { leaves: unknown }).leaves !== "object" ||
+    (parsed as { leaves: unknown }).leaves == null
+  ) {
+    return null;
+  }
+  const leaves = (parsed as { leaves: Record<string, unknown> }).leaves;
+  const summary: StateSummary = {
+    total: 0,
+    done: 0,
+    in_progress: 0,
+    partial: 0,
+    pending: 0,
+    error: 0,
+    active_leaf: null,
+    active_subchunk: null,
+  };
+  for (const [leafPath, leafValue] of Object.entries(leaves)) {
+    summary.total += 1;
+    const leaf = (leafValue ?? {}) as Record<string, unknown>;
+    const status = typeof leaf.status === "string" ? leaf.status : "pending";
+    if (status === "done") summary.done += 1;
+    else if (status === "in_progress") summary.in_progress += 1;
+    else if (status === "partial") summary.partial += 1;
+    else if (status === "error") summary.error += 1;
+    else summary.pending += 1;
+    if (summary.active_leaf == null && Array.isArray(leaf.sub_chunks)) {
+      for (const sc of leaf.sub_chunks as Array<Record<string, unknown>>) {
+        if (sc && typeof sc === "object" && sc.status === "in_progress") {
+          summary.active_leaf = leafPath;
+          summary.active_subchunk = {
+            id: String(sc.id ?? "?"),
+            status: "in_progress",
+          };
+          break;
+        }
+      }
+    }
+  }
+  return summary;
+}
+
+function formatStateSummary(s: StateSummary): string {
+  const counts =
+    `leaves ${s.done}/${s.total} done` +
+    (s.in_progress ? ` · ${s.in_progress} in_progress` : "") +
+    (s.partial ? ` · ${s.partial} partial` : "") +
+    (s.pending ? ` · ${s.pending} pending` : "") +
+    (s.error ? ` · ${s.error} error` : "");
+  if (s.active_leaf) {
+    const sc = s.active_subchunk
+      ? ` (sub-chunk ${s.active_subchunk.id} ${s.active_subchunk.status})`
+      : "";
+    return `${counts} · ${s.active_leaf}${sc}`;
+  }
+  return counts;
+}
+
+const LOG_HEADING_RE =
+  /^##\s+\[([^\]]+)\]\s+(ingest|query|lint|graph)\s*\|\s*(.+?)\s*$/;
+
+type ProgressEvent =
+  | {
+      type: "progress";
+      phase: "state";
+      summary: string;
+      active: string | null;
+    }
+  | {
+      type: "progress";
+      phase: "log";
+      ts: string;
+      op: string;
+      detail: string;
+    };
+
+/**
+ * Polling watcher that exposes ingest sub-chunk progress to the chat stream.
+ * Skills persist state to wiki/.progress/ingest/.state.json after every
+ * sub-chunk and append a heading to wiki/log.md, so this watcher reads both
+ * during runCli rather than relying on the CLI's stdout flushing behavior
+ * (claude -p / codex exec frequently buffer until exit).
+ *
+ * Returns a disposer that stops the timer. The watcher swallows all I/O
+ * errors — it must never break the main CLI stream.
+ */
+function startProgressWatcher(
+  emit: (event: ProgressEvent) => void,
+): () => void {
+  const stateAbs = path.join(PROJECT_ROOT, PROGRESS_STATE_PATH);
+  const logAbs = path.join(PROJECT_ROOT, WIKI_LOG_REL);
+  let stopped = false;
+  let lastStateMtime = 0;
+  let lastSummary = "";
+  let baselineLogSize: number | null = null;
+
+  const tick = async () => {
+    if (stopped) return;
+    try {
+      const st = await fs.stat(stateAbs);
+      if (st.mtimeMs !== lastStateMtime) {
+        lastStateMtime = st.mtimeMs;
+        const raw = await fs.readFile(stateAbs, "utf8");
+        const summary = summarizeIngestState(raw);
+        if (summary) {
+          const line = formatStateSummary(summary);
+          if (line !== lastSummary) {
+            lastSummary = line;
+            emit({
+              type: "progress",
+              phase: "state",
+              summary: line,
+              active: summary.active_leaf,
+            });
+          }
+        }
+      }
+    } catch {
+      // ENOENT or partial JSON — try again on the next tick.
+    }
+    try {
+      const st = await fs.stat(logAbs);
+      if (baselineLogSize == null) {
+        baselineLogSize = st.size;
+      } else if (st.size > baselineLogSize) {
+        const length = st.size - baselineLogSize;
+        const fh = await fs.open(logAbs, "r");
+        try {
+          const buf = Buffer.alloc(length);
+          await fh.read(buf, 0, length, baselineLogSize);
+          const text = buf.toString("utf8");
+          const lines = text.split("\n");
+          // Always drop the last element: split returns "" for a trailing
+          // newline (already consumed) or the partial line we will re-read
+          // on the next tick.
+          const completed = lines.slice(0, -1);
+          let consumedBytes = 0;
+          for (const line of completed) {
+            consumedBytes += Buffer.byteLength(line, "utf8") + 1;
+            const m = LOG_HEADING_RE.exec(line);
+            if (m) {
+              emit({
+                type: "progress",
+                phase: "log",
+                ts: m[1],
+                op: m[2],
+                detail: m[3],
+              });
+            }
+          }
+          baselineLogSize += consumedBytes;
+        } finally {
+          await fh.close();
+        }
+      } else if (st.size < baselineLogSize) {
+        // Log was truncated/rotated; reset the baseline so we do not negative-read.
+        baselineLogSize = st.size;
+      }
+    } catch {
+      // log.md may not exist yet — that is fine.
+    }
+  };
+
+  void tick();
+  const handle = setInterval(() => {
+    void tick();
+  }, 1500);
+
+  return () => {
+    stopped = true;
+    clearInterval(handle);
+  };
 }
 
 const encoder = new TextEncoder();
@@ -176,6 +373,7 @@ export async function POST(req: Request) {
 
       const kind = parsed.data.kind ?? "chat";
       const kindTimeout = cfg.cli.timeouts[kind];
+      const stopWatcher = startProgressWatcher((event) => send(event));
       try {
         const result = await runCli(agent, prompt, {
           safeMode: cfg.agent.safeMode,
@@ -217,6 +415,7 @@ export async function POST(req: Request) {
         ).catch(() => undefined);
         send({ type: "error", sessionPath, error: msg });
       } finally {
+        stopWatcher();
         close();
       }
     },

@@ -42,7 +42,7 @@ export const TEXT = {
       loggingOut: "로그아웃 중...",
       languageSaving: "저장 중",
       localOnlyPrefix: "이 인스턴스는",
-      localOnlyEmphasis: "로컬 전용",
+      localOnlyEmphasis: "LAN 공유",
       localOnlySuffix: "입니다.",
       defaultBind: "기본 bind",
     },
@@ -57,6 +57,8 @@ export const TEXT = {
       guideAgent:
         "에이전트는 호스트 PC의 codex / claude / gemini / cline 중 Settings에서 지정한 것을 사용합니다.",
       processing: "처리 중...",
+      progressTitle: "진행 상황",
+      progressWaiting: "진행 상태를 기다리는 중...",
       empty: "_(empty)_",
       commands: "명령",
       commandMenu: "명령 메뉴",
@@ -165,7 +167,7 @@ export const TEXT = {
       host: "Host",
       port: "Port",
       serverDesc:
-        "host/port 변경은 다음 서버 시작부터 반영됩니다. 같은 네트워크에서 접속하려면 host를 0.0.0.0으로 저장하거나 npm run dev:lan / npm run start:lan을 사용하세요.",
+        "host/port 변경은 다음 서버 시작부터 반영됩니다. 기본값은 0.0.0.0 (LAN 공유) 이며, 로컬에서만 접근하려면 127.0.0.1로 변경하세요.",
       tools: "Tools",
       detected: "detected",
       loginSession: "Login Session",
@@ -232,7 +234,7 @@ export const TEXT = {
       loggingOut: "Logging out...",
       languageSaving: "Saving",
       localOnlyPrefix: "This instance is",
-      localOnlyEmphasis: "local only",
+      localOnlyEmphasis: "LAN-reachable",
       localOnlySuffix: ".",
       defaultBind: "Default bind",
     },
@@ -247,6 +249,8 @@ export const TEXT = {
       guideAgent:
         "The agent uses the host codex / claude / gemini / cline selected in Settings.",
       processing: "Processing...",
+      progressTitle: "Progress",
+      progressWaiting: "Waiting for first progress update...",
       empty: "_(empty)_",
       commands: "Commands",
       commandMenu: "Command menu",
@@ -355,7 +359,7 @@ export const TEXT = {
       host: "Host",
       port: "Port",
       serverDesc:
-        "Host/port changes apply on the next server start. For same-network access, save host as 0.0.0.0 or use npm run dev:lan / npm run start:lan.",
+        "Host/port changes apply on the next server start. The default is 0.0.0.0 (LAN-reachable). Set host to 127.0.0.1 to restrict access to this machine.",
       tools: "Tools",
       detected: "detected",
       loginSession: "Login Session",

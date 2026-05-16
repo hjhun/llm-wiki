@@ -4,6 +4,7 @@ import { z } from "zod";
 import {
   SESSION_COOKIE,
   createSessionToken,
+  isHttpsRequest,
   sessionCookieOptions,
   verifyPassword,
 } from "@/lib/auth";
@@ -37,6 +38,10 @@ export async function POST(req: Request) {
 
   const { token, expSec } = await createSessionToken();
   const jar = await cookies();
-  jar.set(SESSION_COOKIE, token, sessionCookieOptions(expSec));
+  jar.set(
+    SESSION_COOKIE,
+    token,
+    sessionCookieOptions(expSec, { secure: isHttpsRequest(req) }),
+  );
   return NextResponse.json({ ok: true });
 }

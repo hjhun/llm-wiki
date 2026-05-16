@@ -10,7 +10,7 @@ import {
 export const ConfigSchema = z.object({
   server: z.object({
     port: z.number().int().min(1).max(65535).default(7777),
-    host: z.string().default("127.0.0.1"),
+    host: z.string().default("0.0.0.0"),
   }),
   agent: z.object({
     /** 사용자가 Settings에서 고른 기본 CLI */

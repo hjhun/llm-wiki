@@ -28,11 +28,15 @@ cd <repo-dir>
 ./setup.sh --start
 ```
 
-Open:
+Open from this machine:
 
 ```text
 http://127.0.0.1:7777
 ```
+
+CLIO binds to `0.0.0.0` by default, so other machines on the same LAN can also
+reach it at `http://<server-ip>:7777`. Override with `setup.sh --host 127.0.0.1`
+or by editing `server.host` in Settings if you want to restrict access.
 
 On first visit, CLIO redirects to `/setup` so you can set the administrator password. After login, open Settings and choose the default coding agent CLI.
 
@@ -161,7 +165,7 @@ Common options:
 | `--shutdown` | Stop the running CLIO web server and exit. |
 | `--no-restart` | With `--start`, fail if the target port is already in use. |
 | `--port <n>` | Web UI port. Default: `7777`. |
-| `--host <addr>` | Web UI host. Default: `127.0.0.1`. |
+| `--host <addr>` | Web UI host. Default: `0.0.0.0` (LAN-reachable). Use `127.0.0.1` to restrict to this machine. |
 | `--dev` | Use the development server command. |
 | `--skip-graphify` | Do not install graphify. Use existing global `graphify` if available. |
 | `--skip-npm-install` | Skip `webapp/` dependency installation. |
@@ -250,7 +254,8 @@ Important operating documents:
 
 ## Security Model
 
-- CLIO binds to `127.0.0.1` by default.
+- CLIO binds to `0.0.0.0` by default so other machines on the same LAN can connect via `http://<server-ip>:<port>`. Set `server.host` to `127.0.0.1` in Settings (or `config/local.json`) to restrict access to this machine.
+- The administrator-password gate is the only auth layer. Treat LAN exposure accordingly: only run on a trusted network.
 - First run requires an administrator password.
 - `config/local.json`, sessions, runtime logs, and generated local state are git-ignored by default.
 - `raw/` is treated as immutable source material. Agents must not edit, move, or delete it.

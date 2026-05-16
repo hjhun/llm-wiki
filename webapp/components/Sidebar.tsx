@@ -189,7 +189,7 @@ export default function Sidebar() {
             </span>
             {t.sidebar.localOnlySuffix}
             <br />
-            {t.sidebar.defaultBind}: <span className="font-mono">127.0.0.1</span>
+            {t.sidebar.defaultBind}: <span className="font-mono">0.0.0.0</span>
           </div>
         )}
       </div>

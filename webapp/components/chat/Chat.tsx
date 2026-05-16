@@ -5,7 +5,12 @@ import Composer from "./Composer";
 import MessageList from "./MessageList";
 import SessionList from "./SessionList";
 import { useLanguage } from "../i18n";
-import type { ChatMessage, SessionRef } from "./types";
+import type {
+  ChatMessage,
+  ChatProgress,
+  ChatProgressLog,
+  SessionRef,
+} from "./types";
 
 type ActiveSession = {
   path: string;
@@ -17,6 +22,19 @@ type ChatSendEvent =
   | { type: "start"; sessionPath: string }
   | { type: "chunk"; stream: "stdout" | "stderr"; text: string }
   | {
+      type: "progress";
+      phase: "state";
+      summary: string;
+      active: string | null;
+    }
+  | {
+      type: "progress";
+      phase: "log";
+      ts: string;
+      op: string;
+      detail: string;
+    }
+  | {
       type: "done";
       sessionPath: string;
       assistant: ChatMessage;
@@ -24,6 +42,8 @@ type ChatSendEvent =
       durationMs: number;
     }
   | { type: "error"; sessionPath: string; error: string };
+
+const PROGRESS_LOG_CAP = 12;
 
 async function asError(res: Response): Promise<Error> {
   const j = (await res.json().catch(() => null)) as { error?: string } | null;
@@ -47,6 +67,7 @@ export default function Chat() {
   const [pending, setPending] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [progress, setProgress] = useState<ChatProgress | null>(null);
 
   const refreshSessions = useCallback(async () => {
     try {
@@ -126,6 +147,7 @@ export default function Chat() {
     if (pending) return;
     setPending(true);
     setError(null);
+    setProgress(null);
 
     const now = new Date();
     const ts = now.toTimeString().slice(0, 8);
@@ -237,6 +259,31 @@ export default function Chat() {
         upsertStreamingAssistant(accumulated || t.chat.processing);
         return;
       }
+      if (event.type === "progress") {
+        setProgress((current) => {
+          const log: ChatProgressLog[] = current?.log ?? [];
+          if (event.phase === "state") {
+            return {
+              summary: event.summary,
+              active: event.active,
+              log,
+              updated: new Date().toISOString(),
+            };
+          }
+          // event.phase === "log"
+          const nextLog: ChatProgressLog[] = [
+            ...log,
+            { ts: event.ts, op: event.op, detail: event.detail },
+          ].slice(-PROGRESS_LOG_CAP);
+          return {
+            summary: current?.summary ?? null,
+            active: current?.active ?? null,
+            log: nextLog,
+            updated: new Date().toISOString(),
+          };
+        });
+        return;
+      }
       if (event.type === "done") {
         sessionPath = event.sessionPath;
         replaceStreamingAssistant(event.assistant);
@@ -340,7 +387,11 @@ export default function Chat() {
         ) : null}
 
         <div className="min-h-0 flex-1 overflow-auto">
-          <MessageList messages={active?.messages ?? []} pending={pending} />
+          <MessageList
+            messages={active?.messages ?? []}
+            pending={pending}
+            progress={progress}
+          />
         </div>
 
         <Composer disabled={pending} onSend={send} />

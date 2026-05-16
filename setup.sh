@@ -13,7 +13,7 @@ SERVER_PID_FILE="${RUN_DIR}/webapp.pid"
 SERVER_LOG_FILE="${RUN_DIR}/webapp.log"
 
 PORT="7777"
-HOST="127.0.0.1"
+HOST="0.0.0.0"
 DEV_MODE=0
 SKIP_GRAPHIFY=0
 SKIP_NPM_INSTALL=0
@@ -46,7 +46,7 @@ Prepare the local LLM Wiki project.
 
 Options:
   --port <n>                    Web UI port (default: 7777)
-  --host <addr>                 Web UI host (default: 127.0.0.1)
+  --host <addr>                 Web UI host (default: 0.0.0.0; use 127.0.0.1 for local-only)
   --dev                         Print dev-server command instead of production command
   --start                       Start the web server in the background after setup
   --shutdown                    Stop the running web server and exit
@@ -354,7 +354,7 @@ ensure_initial_files() {
 {
   "server": {
     "port": 7777,
-    "host": "127.0.0.1"
+    "host": "0.0.0.0"
   },
   "agent": {
     "default": null,

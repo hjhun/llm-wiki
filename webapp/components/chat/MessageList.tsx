@@ -4,7 +4,7 @@ import { useEffect, useRef } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { useLanguage } from "../i18n";
-import type { ChatMessage } from "./types";
+import type { ChatMessage, ChatProgress } from "./types";
 
 const ROLE_LABEL: Record<string, string> = {
   user: "you",
@@ -21,16 +21,23 @@ const ROLE_STYLE: Record<string, string> = {
 export default function MessageList({
   messages,
   pending,
+  progress,
 }: {
   messages: ChatMessage[];
   pending: boolean;
+  progress: ChatProgress | null;
 }) {
   const { t } = useLanguage();
   const endRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-  }, [messages, pending]);
+  }, [messages, pending, progress?.updated]);
+
+  const showProgress =
+    pending &&
+    progress != null &&
+    (progress.summary != null || progress.log.length > 0);
 
   return (
     <div className="flex flex-col gap-3 px-6 py-5">
@@ -71,6 +78,37 @@ export default function MessageList({
           </div>
         </article>
       ))}
+      {showProgress ? (
+        <article className="rounded-md border border-amber-900/60 bg-amber-950/20 px-4 py-3 text-[12.5px]">
+          <header className="mb-1 flex items-center gap-2 text-[11px] text-amber-200/80">
+            <span className="font-mono uppercase tracking-widest">
+              {t.chat.progressTitle}
+            </span>
+          </header>
+          {progress?.summary ? (
+            <div className="font-mono text-[11.5px] text-amber-100/90">
+              {progress.summary}
+            </div>
+          ) : (
+            <div className="text-[11.5px] text-amber-200/70">
+              {t.chat.progressWaiting}
+            </div>
+          )}
+          {progress && progress.log.length > 0 ? (
+            <ul className="mt-2 space-y-0.5 font-mono text-[11px] text-amber-100/80">
+              {progress.log.map((entry, i) => (
+                <li key={`${entry.ts}-${i}`} className="truncate">
+                  <span className="text-amber-300/70">{entry.ts}</span>
+                  <span className="mx-1 text-amber-400/60">·</span>
+                  <span className="text-amber-200/80">{entry.op}</span>
+                  <span className="mx-1 text-amber-400/60">|</span>
+                  <span>{entry.detail}</span>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </article>
+      ) : null}
       {pending ? (
         <article className="rounded-md border border-line bg-bg-subtle px-4 py-3 text-sm">
           <header className="mb-1 flex items-center gap-2 text-[11px] text-ink-faint">
