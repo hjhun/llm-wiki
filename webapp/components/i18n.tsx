@@ -164,7 +164,8 @@ export const TEXT = {
       localWebUi: "local web ui",
       host: "Host",
       port: "Port",
-      serverDesc: "host/port 변경은 다음 서버 시작부터 반영됩니다.",
+      serverDesc:
+        "host/port 변경은 다음 서버 시작부터 반영됩니다. 같은 네트워크에서 접속하려면 host를 0.0.0.0으로 저장하거나 npm run dev:lan / npm run start:lan을 사용하세요.",
       tools: "Tools",
       detected: "detected",
       loginSession: "Login Session",
@@ -353,7 +354,8 @@ export const TEXT = {
       localWebUi: "local web ui",
       host: "Host",
       port: "Port",
-      serverDesc: "Host/port changes apply on the next server start.",
+      serverDesc:
+        "Host/port changes apply on the next server start. For same-network access, save host as 0.0.0.0 or use npm run dev:lan / npm run start:lan.",
       tools: "Tools",
       detected: "detected",
       loginSession: "Login Session",

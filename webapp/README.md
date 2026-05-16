@@ -1,6 +1,6 @@
 # webapp/
 
-Local web UI for LLM Wiki (Next.js 15 + React 19 + Tailwind 3.4).
+Local web UI for CLIO - LLM WIKI (Next.js 15 + React 19 + Tailwind 3.4).
 
 The wiki is operated through four vertical tabs on the left: **Chat / Explorer / Graph / Settings**.
 
@@ -24,16 +24,26 @@ This folder accesses data in the wiki repository, which is the parent directory,
 ## Run
 
 ```bash
-# Development (port 7777, bound to 127.0.0.1)
+# Development, using ../config/default.json + ../config/local.json server.host/port
 npm run dev
+
+# Development, reachable from the same LAN/VPN
+npm run dev:lan
 
 # Production build + run
 npm run build
 npm start
 
+# Production run, reachable from the same LAN/VPN
+npm run start:lan
+
 # Typecheck
 npm run typecheck
 ```
+
+`npm run dev` and `npm start` honor the Settings page host/port values on
+the next server start. Use `0.0.0.0` or the `*:lan` scripts only on trusted
+networks, then connect from another machine with `http://<server-ip>:<port>`.
 
 On first run, set the administrator password at `/setup`. The password hash and session secret are stored in `../config/local.json`, which is excluded from git tracking.
 

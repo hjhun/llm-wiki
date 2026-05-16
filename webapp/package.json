@@ -5,9 +5,11 @@
   "license": "Apache-2.0",
   "description": "Local web UI for the LLM Wiki pattern. Chat, Explorer, Graph, Settings on top of raw/ + wiki/.",
   "scripts": {
-    "dev": "next dev -p 7777 -H 127.0.0.1",
+    "dev": "node scripts/next-from-config.mjs dev",
+    "dev:lan": "node scripts/next-from-config.mjs dev --lan",
     "build": "next build",
-    "start": "next start -p 7777 -H 127.0.0.1",
+    "start": "node scripts/next-from-config.mjs start",
+    "start:lan": "node scripts/next-from-config.mjs start --lan",
     "lint": "next lint",
     "typecheck": "tsc --noEmit"
   },
