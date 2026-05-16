@@ -13,6 +13,18 @@ type ActiveSession = {
   messages: ChatMessage[];
 };
 
+type ChatSendEvent =
+  | { type: "start"; sessionPath: string }
+  | { type: "chunk"; stream: "stdout" | "stderr"; text: string }
+  | {
+      type: "done";
+      sessionPath: string;
+      assistant: ChatMessage;
+      exitCode: number;
+      durationMs: number;
+    }
+  | { type: "error"; sessionPath: string; error: string };
+
 async function asError(res: Response): Promise<Error> {
   const j = (await res.json().catch(() => null)) as { error?: string } | null;
   return new Error(j?.error ?? `request failed (${res.status})`);
@@ -114,6 +126,12 @@ export default function Chat() {
       ts,
       content: message,
     };
+    const streamingAssistant: ChatMessage = {
+      role: "assistant",
+      ts,
+      agent: "streaming",
+      content: "",
+    };
     if (active) {
       setActive({ ...active, messages: [...active.messages, optimisticUser] });
     } else {
@@ -129,39 +147,145 @@ export default function Chat() {
       });
     }
 
+    let sessionPath = active?.path && active.path !== "(pending)"
+      ? active.path
+      : undefined;
+    let accumulated = "";
+    let assistantInserted = false;
+    let streamError: string | null = null;
+
+    function upsertStreamingAssistant(content: string) {
+      setActive((current) => {
+        if (!current) return current;
+        const messages = [...current.messages];
+        const index = messages.findIndex(
+          (m) =>
+            m.role === streamingAssistant.role &&
+            m.ts === streamingAssistant.ts &&
+            m.agent === streamingAssistant.agent,
+        );
+        const nextMessage = { ...streamingAssistant, content };
+        if (index >= 0) {
+          messages[index] = nextMessage;
+        } else {
+          messages.push(nextMessage);
+        }
+        assistantInserted = true;
+        return { ...current, messages };
+      });
+    }
+
+    function replaceStreamingAssistant(finalMessage: ChatMessage) {
+      setActive((current) => {
+        if (!current) return current;
+        const messages = [...current.messages];
+        const index = messages.findIndex(
+          (m) =>
+            m.role === streamingAssistant.role &&
+            m.ts === streamingAssistant.ts &&
+            m.agent === streamingAssistant.agent,
+        );
+        if (index >= 0) {
+          messages[index] = finalMessage;
+        } else {
+          messages.push(finalMessage);
+        }
+        return {
+          ...current,
+          path: sessionPath ?? current.path,
+          messages,
+        };
+      });
+    }
+
+    async function reopenSession(path: string) {
+      const reopen = await fetch(
+        `/api/chat/session?path=${encodeURIComponent(path)}`,
+      );
+      if (!reopen.ok) return;
+      const data = (await reopen.json()) as {
+        meta: SessionRef["meta"];
+        messages: ChatMessage[];
+      };
+      setActive({
+        path,
+        meta: data.meta,
+        messages: data.messages,
+      });
+    }
+
+    function handleEvent(event: ChatSendEvent) {
+      if (event.type === "start") {
+        sessionPath = event.sessionPath;
+        setActive((current) =>
+          current ? { ...current, path: event.sessionPath } : current,
+        );
+        return;
+      }
+      if (event.type === "chunk") {
+        accumulated += event.text;
+        upsertStreamingAssistant(accumulated || t.chat.processing);
+        return;
+      }
+      if (event.type === "done") {
+        sessionPath = event.sessionPath;
+        replaceStreamingAssistant(event.assistant);
+        return;
+      }
+      streamError = event.error;
+      setError(event.error);
+    }
+
     try {
       const res = await fetch("/api/chat/send", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          sessionPath: active?.path && active.path !== "(pending)"
-            ? active.path
-            : undefined,
+          sessionPath,
           message,
         }),
       });
       if (!res.ok) throw await asError(res);
-      const j = (await res.json()) as {
-        sessionPath: string;
-        assistant: ChatMessage;
-      };
-      // 새 세션이 만들어졌을 수 있음. 전체 다시 로드.
-      const reopen = await fetch(
-        `/api/chat/session?path=${encodeURIComponent(j.sessionPath)}`,
-      );
-      if (reopen.ok) {
-        const data = (await reopen.json()) as {
-          meta: SessionRef["meta"];
-          messages: ChatMessage[];
-        };
-        setActive({
-          path: j.sessionPath,
-          meta: data.meta,
-          messages: data.messages,
-        });
+      if (!res.body) {
+        throw new Error("streaming response body is unavailable");
+      }
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let failed = false;
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          const event = JSON.parse(line) as ChatSendEvent;
+          handleEvent(event);
+          if (event.type === "error") failed = true;
+        }
+      }
+      buffer += decoder.decode();
+      if (buffer.trim()) {
+        const event = JSON.parse(buffer) as ChatSendEvent;
+        handleEvent(event);
+        if (event.type === "error") failed = true;
+      }
+
+      if (sessionPath) {
+        await reopenSession(sessionPath);
       }
       await refreshSessions();
+      if (failed) {
+        throw new Error(streamError ?? "CLI stream failed");
+      }
     } catch (err) {
+      if (assistantInserted && accumulated) {
+        upsertStreamingAssistant(accumulated);
+      }
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setPending(false);

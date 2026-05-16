@@ -30,7 +30,7 @@ export default function MessageList({
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-  }, [messages.length, pending]);
+  }, [messages, pending]);
 
   return (
     <div className="flex flex-col gap-3 px-6 py-5">

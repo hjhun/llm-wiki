@@ -7,7 +7,6 @@ import {
   appendMessage,
   newSession,
   readSession,
-  slugify,
 } from "@/lib/sessions";
 
 const Body = z.object({
@@ -17,10 +16,22 @@ const Body = z.object({
 });
 
 const TIMEOUT_MS = 5 * 60 * 1000; // 5분
+const encoder = new TextEncoder();
+const ANSI_RE =
+  // eslint-disable-next-line no-control-regex
+  /[\u001B\u009B][[\]()#;?]*(?:[a-zA-Z\d]*(?:;[a-zA-Z\d]*)*)?\u0007|(?:\d{1,4}(?:;\d{0,4})*)?[\dA-PR-TZcf-nq-uy=><~]/g;
 
 function shorten(s: string, n: number): string {
   const t = s.trim().replace(/\s+/g, " ");
   return t.length > n ? `${t.slice(0, n - 1)}…` : t;
+}
+
+function displayChunk(chunk: string): string {
+  const text = chunk
+    .replace(ANSI_RE, "")
+    .replace(/\r[^\n]*/g, "")
+    .replace(/\u0000/g, "");
+  return text.trim().length > 0 ? text : "";
 }
 
 export async function POST(req: Request) {
@@ -91,35 +102,69 @@ export async function POST(req: Request) {
     "Respond now as the assistant.",
   ].join("\n");
 
-  try {
-    const result = await runCli(agent, prompt, {
-      safeMode: cfg.agent.safeMode,
-      timeoutMs: TIMEOUT_MS,
-    });
-    const reply =
-      (result.stdout.trim() || result.stderr.trim()) ||
-      `(에이전트가 빈 응답을 반환했습니다. exitCode=${result.exitCode})`;
+  const stream = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      let closed = false;
+      const send = (event: unknown) => {
+        if (closed || req.signal.aborted) return;
+        controller.enqueue(encoder.encode(`${JSON.stringify(event)}\n`));
+      };
+      const close = () => {
+        if (closed) return;
+        closed = true;
+        controller.close();
+      };
 
-    const assistantMsg = await appendMessage(
-      sessionPath,
-      "assistant",
-      reply,
-      agent,
-    );
-    return NextResponse.json({
-      sessionPath,
-      assistant: assistantMsg,
-      exitCode: result.exitCode,
-      durationMs: result.durationMs,
-    });
-  } catch (err) {
-    const msg = errorMessage(err);
-    // 실패도 로그로 남긴다 (사용자가 무엇이 잘못됐는지 보도록).
-    await appendMessage(
-      sessionPath,
-      "system",
-      `❌ CLI 호출 실패: ${msg}`,
-    ).catch(() => undefined);
-    return jsonError(msg, 500);
-  }
+      send({ type: "start", sessionPath });
+
+      try {
+        const result = await runCli(agent, prompt, {
+          safeMode: cfg.agent.safeMode,
+          timeoutMs: TIMEOUT_MS,
+          signal: req.signal,
+          onStdout: (chunk) => {
+            const text = displayChunk(chunk);
+            if (text) {
+              send({ type: "chunk", stream: "stdout", text });
+            }
+          },
+        });
+        const reply =
+          (result.stdout.trim() || result.stderr.trim()) ||
+          `(에이전트가 빈 응답을 반환했습니다. exitCode=${result.exitCode})`;
+
+        const assistantMsg = await appendMessage(
+          sessionPath,
+          "assistant",
+          reply,
+          agent,
+        );
+        send({
+          type: "done",
+          sessionPath,
+          assistant: assistantMsg,
+          exitCode: result.exitCode,
+          durationMs: result.durationMs,
+        });
+      } catch (err) {
+        const msg = errorMessage(err);
+        await appendMessage(
+          sessionPath,
+          "system",
+          `❌ CLI 호출 실패: ${msg}`,
+        ).catch(() => undefined);
+        send({ type: "error", sessionPath, error: msg });
+      } finally {
+        close();
+      }
+    },
+  });
+
+  return new Response(stream, {
+    headers: {
+      "content-type": "application/x-ndjson; charset=utf-8",
+      "cache-control": "no-cache, no-transform",
+      "x-accel-buffering": "no",
+    },
+  });
 }

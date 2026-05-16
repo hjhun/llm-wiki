@@ -146,6 +146,8 @@ export async function runCli(
     safeMode?: boolean;
     timeoutMs?: number;
     signal?: AbortSignal;
+    onStdout?: (chunk: string) => void;
+    onStderr?: (chunk: string) => void;
   } = {},
 ): Promise<RunResult> {
   const info = await detectCli(cli);
@@ -166,10 +168,14 @@ export async function runCli(
     let stdout = "";
     let stderr = "";
     child.stdout.on("data", (d: Buffer) => {
-      stdout += d.toString();
+      const chunk = d.toString();
+      stdout += chunk;
+      opts.onStdout?.(chunk);
     });
     child.stderr.on("data", (d: Buffer) => {
-      stderr += d.toString();
+      const chunk = d.toString();
+      stderr += chunk;
+      opts.onStderr?.(chunk);
     });
 
     const timer = opts.timeoutMs
