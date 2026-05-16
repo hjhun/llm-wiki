@@ -1,0 +1,28 @@
+{
+  "server": {
+    "port": 7777,
+    "host": "127.0.0.1"
+  },
+  "agent": {
+    "default": null,
+    "safeMode": false,
+    "paths": {}
+  },
+  "chunking": {
+    "maxFiles": 8,
+    "maxBytes": 262144
+  },
+  "graph": {
+    "minCommunitySize": 3,
+    "autoUpdateOnIngest": true
+  },
+  "ui": {
+    "language": "ko",
+    "defaultTab": "chat"
+  },
+  "auth": {
+    "passwordHash": null,
+    "sessionSecret": null,
+    "sessionTtlSec": 86400
+  }
+}
