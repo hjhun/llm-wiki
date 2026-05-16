@@ -151,10 +151,11 @@ allowed-cli: [codex, claude, gemini, cline]
 - **Trigger**: `/query <question>`, general chat input, or questions without a slash command.
 - **Workflow**:
   1. Scan `wiki/index.md` first and select candidate pages.
-  2. If optional `wiki-search-qmd` is active, delegate hybrid search.
-  3. Read candidate pages and produce an answer with citations.
-  4. Auto-select answer format: Markdown answer, comparison table, Marp slides, or matplotlib chart.
-  5. With user confirmation, feed the answer back into `wiki/answers/<slug>.md` and update `index.md` and `log.md`.
+  2. If optional `wiki-search-qmd` is active, use it as a hybrid-search helper.
+  3. If graph artifacts exist, use `wiki-graphify` as a graph-context helper for related nodes, communities, and cited-page clues.
+  4. Read candidate pages and produce an answer with citations.
+  5. Auto-select answer format: Markdown answer, comparison table, Marp slides, or matplotlib chart.
+  6. With user confirmation, feed the answer back into `wiki/answers/<slug>.md` and update `index.md` and `log.md`.
 - **Output**: answer, cited page links, and a "Save to wiki?" toggle.
 
 ### 5.3 `wiki-lint`
@@ -174,7 +175,7 @@ allowed-cli: [codex, claude, gemini, cline]
 - **Commands**:
   - `wiki-graphify build` - full build, outputting `wiki/graph/graph.json` and `GRAPH_REPORT.md`.
   - `wiki-graphify update` - incremental update, triggered automatically after ingest when configured.
-  - `wiki-graphify query "<question>"` - graph-based query and answer.
+  - `wiki-graphify query "<question>"` - graph-based context and, when invoked directly, a graph-cited answer.
 - **Chunk policy (required)**: graphifying the whole corpus at once can hit the coding agent context limit. Use the same principle as `wiki-ingest`: create **partial graphs by leaf directory** and then merge.
   1. List leaf directories in `raw/` and `wiki/`.
   2. For each leaf, use the global graphify CLI to build a **partial graph** into `wiki/graph/parts/<path-hash>.json`.
@@ -182,7 +183,7 @@ allowed-cli: [codex, claude, gemini, cline]
   4. `update` rebuilds only changed leaves and reruns the merge pass.
   5. Store progress in `wiki/graph/.state.json` as leaf path -> last build time/hash, so runs can resume.
 - **Source**: <https://github.com/safishamsi/graphify>.
-- **Integration point**: the Graph tab visualizes `wiki/graph/graph.json`. Build/Update buttons do not call graphify from the web server; they ask the default coding agent CLI in Settings to run `wiki-graphify build/update`. `wiki-query` can optionally combine graph context into answers.
+- **Integration point**: the Graph tab visualizes `wiki/graph/graph.json`. Build/Update buttons do not call graphify from the web server; they ask the default coding agent CLI in Settings to run `wiki-graphify build/update`. `wiki-query` can optionally use graph context as an auxiliary retrieval/context signal, similar to qmd, while keeping final answers grounded in wiki/source pages.
 
 ### 5.5 Optional Tool Skills, Active When Installed
 - `wiki-search-qmd` - if [qmd](https://github.com/tobi/qmd) exists, delegate BM25 + vector + LLM reranking search to `wiki-query`.

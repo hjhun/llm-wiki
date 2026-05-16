@@ -53,6 +53,7 @@ Each of the three operations maps to one skill. If these rules conflict with a s
 ### 3.2 Query (`/query`, [`.agents/skills/wiki-query/SKILL.md`](.agents/skills/wiki-query/SKILL.md))
 - Read `wiki/index.md` first to narrow candidate pages. Use original material in `raw/` only as a fallback when the wiki is insufficient.
 - If optional `wiki-search-qmd` is active, delegate search to it.
+- If `wiki/graph/graph.json` exists, `wiki-graphify` may be used as an auxiliary graph-context tool, similar to qmd: use it for related nodes, 1-hop neighbors, communities, and cited-page clues, but still read candidate wiki/source pages before answering.
 - Choose the response shape freely: Markdown, table, Marp slides, chart, and so on.
 - With user consent, feed the answer back into `wiki/answers/<slug>.md` and update `index.md` and `log.md`.
 
@@ -144,7 +145,7 @@ This applies to both ingest and graphify. Never start by throwing the whole root
 - Graph creation, update, and query operations must go through the [`wiki-graphify`](.agents/skills/wiki-graphify/SKILL.md) skill.
 - The web app Graph tab does not execute graphify directly. It sends `wiki-graphify build/update` requests to the coding agent CLI selected in Settings, and the coding agent follows this repository's rules and skills to run graphify, chunk processing, and the merge pass.
 - Wiki pages must not call the `graphify` binary directly. The coding agent running `wiki-graphify` chooses the execution path: global `graphify`, or `python3 -m graphify` when needed.
-- `wiki-query` may optionally use graph context from `wiki/graph/GRAPH_REPORT.md` and node adjacency.
+- `wiki-query` may optionally use graph context from `wiki/graph/GRAPH_REPORT.md`, node adjacency, or `wiki-graphify query` as an auxiliary candidate/context source; it must still ground final answers in wiki/source pages.
 - At the end of an ingest merge pass, calling `wiki-graphify update` is recommended, depending on user settings.
 
 ## 9. Hard Rules

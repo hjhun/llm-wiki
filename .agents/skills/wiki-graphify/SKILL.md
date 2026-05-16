@@ -1,6 +1,6 @@
 ---
 name: wiki-graphify
-description: Use the global graphify command from PATH to build, update, and query the knowledge graph for wiki/ and raw/ with a leaf-first workflow.
+description: Use the global graphify command from PATH to build and update the knowledge graph for wiki/ and raw/ with a leaf-first workflow, and provide optional graph context to wiki-query.
 allowed-cli: [codex, claude, gemini, cline]
 ---
 
@@ -18,6 +18,8 @@ Use the wiki and original sources as input to produce the following artifacts.
 Knowledge graph work must **always go through this skill**. The web app does not execute graphify directly. It sends `wiki-graphify build/update/query` requests to the coding agent CLI selected in Settings. The coding agent reads this skill and handles execution path selection, leaf-first chunk processing, the merge pass, and logging.
 
 Wiki pages and other skills do not call the `graphify` binary directly.
+
+For normal `/query` workflows, this skill is an **auxiliary tool** like `wiki-search-qmd`: it helps find related nodes, 1-hop neighbors, communities, and cited pages, but `wiki-query` still reads the actual wiki/source pages before writing the final answer.
 
 ## Execution Path Rules (HARD)
 
@@ -48,7 +50,7 @@ Execution path decision order:
 |---|---|---|
 | `build` | Optional: `--scope=wiki|raw|wiki+raw` (default `wiki+raw`) | Refresh full `graph.json`, `GRAPH_REPORT.md`, `parts/*`, `.state.json` |
 | `update` | Optional: `--since=<date>` or automatic change detection | Rebuild changed leaves only -> rerun merge pass |
-| `query` | One natural-language question, optional `--k=<neighbor-count>` | Markdown answer + cited nodes |
+| `query` | One natural-language question, optional `--k=<neighbor-count>` | Graph candidate/context notes, cited nodes, and optional Markdown answer when invoked directly |
 
 ## Preflight
 
@@ -144,6 +146,8 @@ This follows the same principle as `wiki-ingest`.
 4. Write the answer. Cite as `(graph: community #C, node "Label")` together with wikilinks.
 5. With `--save` or user consent, feed the answer back into `wiki/answers/` using the same schema as `wiki-query`.
 
+When called from `wiki-query`, return graph candidates and context first. Do not replace the `wiki-query` evidence flow; the caller must still read candidate pages and cite them in the final response.
+
 ## Error Handling / Resume
 
 - If the selected graphify CLI call fails, write stderr logs to `sessions/.cli/<timestamp>.log` and mark that leaf as `error` in `.state.json`. Continue other leaves.
@@ -176,5 +180,5 @@ Skill behavior:
 ## Related Skills
 
 - [wiki-ingest](../wiki-ingest/SKILL.md) — calls `wiki-graphify update` at the end of the merge pass.
-- [wiki-query](../wiki-query/SKILL.md) — uses graph context when active.
+- [wiki-query](../wiki-query/SKILL.md) — may use graph context as an auxiliary candidate/context source.
 - [wiki-lint](../wiki-lint/SKILL.md) — checks graph <-> wiki mismatches.

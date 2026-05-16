@@ -86,6 +86,8 @@ wiki-graphify query "<question>"
 
 The web app does not execute `graphify` directly. It asks the selected coding agent to run the `wiki-graphify` skill, and that skill performs the leaf-first graph build/update flow.
 
+For `/query`, CLIO keeps the LLM Wiki pattern wiki-first: the agent reads `wiki/index.md`, selects candidate pages, and answers from cited wiki/source pages. Optional helpers such as `qmd` and `wiki-graphify` can improve candidate search and relationship context, but they do not replace page reading.
+
 ---
 
 ## Web UI
