@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import AutoLintBadge from "./AutoLintBadge";
 import { BRAND_NAME, type Language, useLanguage } from "./i18n";
 
 type Tab = {
@@ -96,7 +97,7 @@ export default function Sidebar() {
               href={tab.href}
               title={collapsed ? tabText.label : undefined}
               className={[
-                "group flex rounded-md transition-colors",
+                "group relative flex rounded-md transition-colors",
                 collapsed
                   ? "h-10 items-center justify-center px-0 py-0"
                   : "flex-col px-3 py-2",
@@ -105,6 +106,9 @@ export default function Sidebar() {
                   : "text-ink-dim hover:bg-bg-panel/60 hover:text-ink",
               ].join(" ")}
             >
+              {tab.key === "settings" ? (
+                <AutoLintBadge className="absolute right-1.5 top-1.5" />
+              ) : null}
               <span className="flex items-center gap-2 text-sm">
                 <span aria-hidden className="text-base leading-none">
                   {tab.icon}

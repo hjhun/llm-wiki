@@ -234,6 +234,39 @@ export const TEXT = {
         `자동 인제스트가 종료되었습니다: ${halt} · iter=${iterations}.`,
       autoIngestBannerSkipped: (reason: string) =>
         `자동 인제스트 건너뜀: ${reason}`,
+      autoLint: "자동 lint",
+      autoLintDesc:
+        "ingest 누적 건수가 임계값을 넘으면 추천 알림을 띄우고, 지정한 주기에 자동으로 /lint --fix를 실행합니다.",
+      autoLintEnabled: "자동 lint 사용",
+      autoLintCounter: "카운터 (추천만, 자동 실행 안 함)",
+      autoLintThreshold: "ingest 건수 임계값",
+      autoLintCronEnabled: "주기적 자동 실행",
+      autoLintCronPreset: "주기",
+      autoLintCronPresetDaily: "매일",
+      autoLintCronPresetWeekly: "매주",
+      autoLintCronPresetMonthly: "매월",
+      autoLintCronTime: "시각 (HH:MM)",
+      autoLintCronDayOfWeek: "요일",
+      autoLintCronDayOfMonth: "일 (1–28)",
+      autoLintFix: "--fix 옵션으로 자동 수정 적용",
+      autoLintFixDesc:
+        "켜면 자동으로 고칠 수 있는 항목(끊긴 wikilink, 메타데이터 등)은 즉시 수정하고, 의미적 검토가 필요한 항목만 보고서에 남깁니다.",
+      autoLintSkipIfBusy: "ingest/lint 락이 있으면 스킵",
+      autoLintSkipIfBusyDesc:
+        "켜면 wiki/.progress/ingest/.lock 또는 wiki/.progress/lint/.lock이 있을 때 트리거를 건너뜁니다.",
+      autoLintStatus: "상태",
+      autoLintCounterStatus: (value: number, threshold: number) =>
+        `누적 ${value} / ${threshold}`,
+      autoLintLastRun: "마지막 실행",
+      autoLintNextRun: "다음 cron 실행",
+      autoLintRunNow: "지금 lint 실행",
+      autoLintRunningNow: "실행 요청 중...",
+      autoLintNoLastRun: "아직 실행된 적 없음",
+      autoLintNoNextRun: "예약 없음",
+      autoLintSuggestionHint: (count: number) =>
+        `/lint 추천: ingest ${count}건 누적`,
+      autoLintRunSuggested: "지금 실행",
+      autoLintWeekdayShort: ["일", "월", "화", "수", "목", "금", "토"],
     },
     auth: {
       setupTitle: "비밀번호 설정",
@@ -477,6 +510,39 @@ export const TEXT = {
         `Auto-ingest finished: ${halt} · iter=${iterations}.`,
       autoIngestBannerSkipped: (reason: string) =>
         `Auto-ingest skipped: ${reason}`,
+      autoLint: "Auto-lint",
+      autoLintDesc:
+        "Surface a suggestion once ingest activity reaches the threshold and optionally run /lint --fix on a fixed schedule.",
+      autoLintEnabled: "Enable auto-lint",
+      autoLintCounter: "Counter (suggests only, never auto-runs)",
+      autoLintThreshold: "Ingest count threshold",
+      autoLintCronEnabled: "Run on a schedule",
+      autoLintCronPreset: "Frequency",
+      autoLintCronPresetDaily: "Daily",
+      autoLintCronPresetWeekly: "Weekly",
+      autoLintCronPresetMonthly: "Monthly",
+      autoLintCronTime: "Time (HH:MM)",
+      autoLintCronDayOfWeek: "Day of week",
+      autoLintCronDayOfMonth: "Day of month (1–28)",
+      autoLintFix: "Apply --fix",
+      autoLintFixDesc:
+        "When on, auto-fixable issues (broken wikilinks, missing metadata, etc.) are fixed in place; the report only records items needing manual review.",
+      autoLintSkipIfBusy: "Skip if ingest/lint lock present",
+      autoLintSkipIfBusyDesc:
+        "Skip the trigger when wiki/.progress/ingest/.lock or wiki/.progress/lint/.lock exists.",
+      autoLintStatus: "Status",
+      autoLintCounterStatus: (value: number, threshold: number) =>
+        `${value} / ${threshold}`,
+      autoLintLastRun: "Last run",
+      autoLintNextRun: "Next cron run",
+      autoLintRunNow: "Run lint now",
+      autoLintRunningNow: "Requesting...",
+      autoLintNoLastRun: "No runs yet",
+      autoLintNoNextRun: "No schedule",
+      autoLintSuggestionHint: (count: number) =>
+        `/lint recommended: ${count} ingests accumulated`,
+      autoLintRunSuggested: "Run now",
+      autoLintWeekdayShort: ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"],
     },
     auth: {
       setupTitle: "Set password",

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { type Language, useLanguage } from "../i18n";
 import AutoIngestPanel from "./AutoIngestPanel";
+import AutoLintPanel from "./AutoLintPanel";
 import type {
   CliInfo,
   CliName,
@@ -36,6 +37,14 @@ function cloneConfig(config: SettingsConfig): SettingsConfig {
       ...config.autoIngest,
       watch: { ...config.autoIngest.watch },
       schedule: { ...config.autoIngest.schedule },
+    },
+    autoLint: {
+      ...config.autoLint,
+      counter: { ...config.autoLint.counter },
+      cron: {
+        ...config.autoLint.cron,
+        time: { ...config.autoLint.cron.time },
+      },
     },
   };
 }
@@ -110,6 +119,7 @@ export default function Settings() {
             sessionTtlSec: draft.auth.sessionTtlSec,
           },
           autoIngest: draft.autoIngest,
+          autoLint: draft.autoLint,
         }),
       });
       if (!res.ok) throw await asError(res);
@@ -349,6 +359,22 @@ export default function Settings() {
                       ...nextAutoIngest,
                       watch: { ...nextAutoIngest.watch },
                       schedule: { ...nextAutoIngest.schedule },
+                    };
+                  })
+                }
+              />
+
+              <AutoLintPanel
+                draft={draft.autoLint}
+                onChange={(nextAutoLint) =>
+                  updateDraft((next) => {
+                    next.autoLint = {
+                      ...nextAutoLint,
+                      counter: { ...nextAutoLint.counter },
+                      cron: {
+                        ...nextAutoLint.cron,
+                        time: { ...nextAutoLint.cron.time },
+                      },
                     };
                   })
                 }

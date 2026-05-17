@@ -213,6 +213,68 @@ export const ConfigSchema = z.object({
       schedule: { intervalMinutes: 30 },
       skipIfBusy: true,
     }),
+  /**
+   * Auto-lint trigger. Two independent firing modes share one manager:
+   *   - counter: counts `ingest |` entries in wiki/log.md since the last
+   *     `lint |` entry; when the value reaches `counter.threshold` the UI
+   *     surfaces a "lint recommended" suggestion. Never auto-executes.
+   *   - cron: fires the wiki-lint skill on a preset schedule
+   *     (daily / weekly / monthly + HH:MM, with day-of-week for weekly and
+   *     day-of-month for monthly).
+   */
+  autoLint: z
+    .object({
+      enabled: z.boolean().default(false),
+      counter: z
+        .object({
+          threshold: z.number().int().min(1).max(1000).default(10),
+        })
+        .default({ threshold: 10 }),
+      cron: z
+        .object({
+          enabled: z.boolean().default(false),
+          preset: z
+            .enum(["daily", "weekly", "monthly"])
+            .default("weekly"),
+          time: z
+            .object({
+              hour: z.number().int().min(0).max(23).default(3),
+              minute: z.number().int().min(0).max(59).default(0),
+            })
+            .default({ hour: 3, minute: 0 }),
+          /** 0 = Sunday … 6 = Saturday. Used when preset === "weekly". */
+          dayOfWeek: z.number().int().min(0).max(6).default(0),
+          /** 1..28 to avoid edge cases on short months. preset === "monthly". */
+          dayOfMonth: z.number().int().min(1).max(28).default(1),
+        })
+        .default({
+          enabled: false,
+          preset: "weekly",
+          time: { hour: 3, minute: 0 },
+          dayOfWeek: 0,
+          dayOfMonth: 1,
+        }),
+      /** When true, pass `--fix` to /lint so auto-fixable issues are applied. */
+      fix: z.boolean().default(true),
+      /**
+       * When true, skip if either wiki/.progress/ingest/.lock or
+       * wiki/.progress/lint/.lock exists. Mirrors autoIngest.skipIfBusy.
+       */
+      skipIfBusy: z.boolean().default(true),
+    })
+    .default({
+      enabled: false,
+      counter: { threshold: 10 },
+      cron: {
+        enabled: false,
+        preset: "weekly",
+        time: { hour: 3, minute: 0 },
+        dayOfWeek: 0,
+        dayOfMonth: 1,
+      },
+      fix: true,
+      skipIfBusy: true,
+    }),
 });
 
 export type Config = z.infer<typeof ConfigSchema>;

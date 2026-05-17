@@ -10,6 +10,7 @@ import {
   runIngestLoop,
   type RunIngestLoopResult,
 } from "../ingest-loop";
+import { lintLockExists } from "../lint-lock";
 import {
   readRuntimeState,
   writeRuntimeState,
@@ -191,6 +192,10 @@ export class AutoIngestManager {
     }
     if (cfg.skipIfBusy && (await lockFileExists())) {
       await recordSkip(source, "ingest lock 존재 — 다음 트리거까지 대기");
+      return;
+    }
+    if (cfg.skipIfBusy && (await lintLockExists())) {
+      await recordSkip(source, "lint lock 존재 — auto-lint 실행 중");
       return;
     }
     const agent = (await loadConfig()).agent.default as CliName | null;

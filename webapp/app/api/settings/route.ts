@@ -4,6 +4,7 @@ import { requireSession, errorMessage, jsonError } from "@/lib/api";
 import { loadConfig, patchLocalConfig, type Config } from "@/lib/config";
 import { readSettingsState } from "@/lib/settings";
 import { getAutoIngestManager } from "@/lib/auto-ingest/manager";
+import { getAutoLintManager } from "@/lib/auto-lint/manager";
 
 export const dynamic = "force-dynamic";
 
@@ -69,6 +70,26 @@ const Body = z.object({
       skipIfBusy: z.boolean(),
     })
     .optional(),
+  autoLint: z
+    .object({
+      enabled: z.boolean(),
+      counter: z.object({
+        threshold: z.number().int().min(1).max(1000),
+      }),
+      cron: z.object({
+        enabled: z.boolean(),
+        preset: z.enum(["daily", "weekly", "monthly"]),
+        time: z.object({
+          hour: z.number().int().min(0).max(23),
+          minute: z.number().int().min(0).max(59),
+        }),
+        dayOfWeek: z.number().int().min(0).max(6),
+        dayOfMonth: z.number().int().min(1).max(28),
+      }),
+      fix: z.boolean(),
+      skipIfBusy: z.boolean(),
+    })
+    .optional(),
 });
 
 function normalizePaths(paths: z.infer<typeof AgentPaths>) {
@@ -125,6 +146,7 @@ export async function PUT(req: Request) {
           }
         : undefined,
       autoIngest: parsed.data.autoIngest,
+      autoLint: parsed.data.autoLint,
     } satisfies Partial<Config>;
     await patchLocalConfig(patch);
     if (parsed.data.autoIngest) {
@@ -132,6 +154,9 @@ export async function PUT(req: Request) {
       // touches auto-ingest so the new mode / debounce / interval takes
       // effect immediately without a server restart.
       await getAutoIngestManager().restart();
+    }
+    if (parsed.data.autoLint) {
+      await getAutoLintManager().restart();
     }
     return NextResponse.json(await readSettingsState());
   } catch (err) {

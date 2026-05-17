@@ -48,6 +48,19 @@ export type SettingsConfig = {
     schedule: { intervalMinutes: number };
     skipIfBusy: boolean;
   };
+  autoLint: {
+    enabled: boolean;
+    counter: { threshold: number };
+    cron: {
+      enabled: boolean;
+      preset: "daily" | "weekly" | "monthly";
+      time: { hour: number; minute: number };
+      dayOfWeek: number;
+      dayOfMonth: number;
+    };
+    fix: boolean;
+    skipIfBusy: boolean;
+  };
 };
 
 export type SettingsState = {

@@ -162,6 +162,7 @@ export async function readSettingsState() {
         sessionTtlSec: cfg.auth.sessionTtlSec,
       },
       autoIngest: cfg.autoIngest,
+      autoLint: cfg.autoLint,
     },
     cli,
     tools: [graphify, qmd, marp],
