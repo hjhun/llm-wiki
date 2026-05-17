@@ -16,5 +16,7 @@ export default async function LoginPage() {
     redirect("/");
   }
   const cfg = await loadConfig();
-  return <AuthCard mode="login" language={cfg.ui.language} />;
+  return (
+    <AuthCard mode="login" language={cfg.ui.language} theme={cfg.ui.theme} />
+  );
 }

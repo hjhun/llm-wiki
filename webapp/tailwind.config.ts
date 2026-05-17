@@ -11,19 +11,19 @@ const config: Config = {
     extend: {
       colors: {
         bg: {
-          DEFAULT: "#0b0d10",
-          subtle: "#13161a",
-          panel: "#181c22",
+          DEFAULT: "rgb(var(--color-bg) / <alpha-value>)",
+          subtle: "rgb(var(--color-bg-subtle) / <alpha-value>)",
+          panel: "rgb(var(--color-bg-panel) / <alpha-value>)",
         },
-        line: "#262b33",
+        line: "rgb(var(--color-line) / <alpha-value>)",
         ink: {
-          DEFAULT: "#e7ebf0",
-          dim: "#8a93a0",
-          faint: "#5b6470",
+          DEFAULT: "rgb(var(--color-ink) / <alpha-value>)",
+          dim: "rgb(var(--color-ink-dim) / <alpha-value>)",
+          faint: "rgb(var(--color-ink-faint) / <alpha-value>)",
         },
         accent: {
-          DEFAULT: "#7aa2ff",
-          soft: "#3b4a7a",
+          DEFAULT: "rgb(var(--color-accent) / <alpha-value>)",
+          soft: "rgb(var(--color-accent-soft) / <alpha-value>)",
         },
       },
       fontFamily: {

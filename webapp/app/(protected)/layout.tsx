@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { LanguageProvider } from "@/components/i18n";
 import Sidebar from "@/components/Sidebar";
+import { ThemeProvider } from "@/components/theme";
 import { SESSION_COOKIE, isFirstRun, verifySessionToken } from "@/lib/auth";
 import { loadConfig } from "@/lib/config";
 
@@ -24,13 +25,15 @@ export default async function ProtectedLayout({
   const cfg = await loadConfig();
 
   return (
-    <LanguageProvider initialLanguage={cfg.ui.language}>
-      <div className="flex h-screen w-screen overflow-hidden">
-        <Sidebar />
-        <main className="flex h-screen flex-1 flex-col overflow-hidden bg-bg">
-          {children}
-        </main>
-      </div>
-    </LanguageProvider>
+    <ThemeProvider initialTheme={cfg.ui.theme}>
+      <LanguageProvider initialLanguage={cfg.ui.language}>
+        <div className="flex h-screen w-screen overflow-hidden">
+          <Sidebar />
+          <main className="flex h-screen flex-1 flex-col overflow-hidden bg-bg">
+            {children}
+          </main>
+        </div>
+      </LanguageProvider>
+    </ThemeProvider>
   );
 }

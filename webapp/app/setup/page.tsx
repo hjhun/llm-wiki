@@ -10,5 +10,7 @@ export default async function SetupPage() {
     redirect("/login");
   }
   const cfg = await loadConfig();
-  return <AuthCard mode="setup" language={cfg.ui.language} />;
+  return (
+    <AuthCard mode="setup" language={cfg.ui.language} theme={cfg.ui.theme} />
+  );
 }

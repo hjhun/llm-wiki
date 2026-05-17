@@ -36,14 +36,14 @@ type StatusResponse = {
 function statusTone(status: AutoLintRuntime["status"]) {
   switch (status) {
     case "running":
-      return "border-amber-900/60 bg-amber-950/30 text-amber-200";
+      return "status-warning";
     case "skipped":
-      return "border-yellow-900/60 bg-yellow-950/30 text-yellow-200";
+      return "status-skipped";
     case "disabled":
-      return "border-line bg-bg text-ink-faint";
+      return "status-disabled";
     case "idle":
     default:
-      return "border-emerald-900/60 bg-emerald-950/30 text-emerald-300";
+      return "status-ready";
   }
 }
 

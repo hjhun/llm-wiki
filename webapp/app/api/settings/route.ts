@@ -44,6 +44,7 @@ const Body = z.object({
   ui: z
     .object({
       language: z.enum(["ko", "en"]),
+      theme: z.enum(["light", "dark"]),
       defaultTab: z.enum(["chat", "explorer", "graph", "settings"]),
     })
     .optional(),

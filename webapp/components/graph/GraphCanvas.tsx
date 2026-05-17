@@ -235,7 +235,7 @@ export default function GraphCanvas({
   }
 
   return (
-    <div className="relative h-full w-full overflow-hidden bg-[#0b0d10]">
+    <div className="relative h-full w-full overflow-hidden bg-bg">
       <div ref={containerRef} className="h-full w-full" />
       <div className="absolute right-3 top-3 flex overflow-hidden rounded border border-line bg-bg-subtle/95 shadow-lg">
         <button

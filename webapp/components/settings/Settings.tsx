@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { type Language, useLanguage } from "../i18n";
+import { useTheme } from "../theme";
 import AutoIngestPanel from "./AutoIngestPanel";
 import AutoLintPanel from "./AutoLintPanel";
 import type {
@@ -50,13 +51,12 @@ function cloneConfig(config: SettingsConfig): SettingsConfig {
 }
 
 function statusTone(status: "ready" | "missing") {
-  return status === "ready"
-    ? "border-emerald-900/60 bg-emerald-950/30 text-emerald-300"
-    : "border-line bg-bg text-ink-faint";
+  return status === "ready" ? "status-ready" : "status-disabled";
 }
 
 export default function Settings() {
   const { language, setLanguage, t } = useLanguage();
+  const { setTheme } = useTheme();
   const [state, setState] = useState<SettingsState | null>(null);
   const [draft, setDraft] = useState<SettingsConfig | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -71,6 +71,7 @@ export default function Settings() {
       if (!res.ok) throw await asError(res);
       const next = (await res.json()) as SettingsState;
       setState(next);
+      setTheme(next.config.ui.theme);
       setDraft({
         ...cloneConfig(next.config),
         ui: { ...next.config.ui, language },
@@ -78,7 +79,7 @@ export default function Settings() {
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     }
-  }, [language]);
+  }, [language, setTheme]);
 
   useEffect(() => {
     void load();
@@ -328,6 +329,35 @@ export default function Settings() {
                       <option value="en">{t.common.english}</option>
                     </select>
                   </label>
+                  <div className="rounded border border-line bg-bg px-3 py-2">
+                    <span className="text-xs text-ink-faint">
+                      {t.settings.uiTheme}
+                    </span>
+                    <div className="mt-1 grid grid-cols-2 gap-1 rounded border border-line bg-bg-subtle p-1">
+                      {(["light", "dark"] as const).map((themeOption) => (
+                        <button
+                          key={themeOption}
+                          type="button"
+                          onClick={() => {
+                            updateDraft((next) => {
+                              next.ui.theme = themeOption;
+                            });
+                            setTheme(themeOption);
+                          }}
+                          className={[
+                            "h-8 rounded text-xs font-medium transition-colors",
+                            draft.ui.theme === themeOption
+                              ? "bg-accent text-bg"
+                              : "text-ink-dim hover:bg-bg-panel hover:text-ink",
+                          ].join(" ")}
+                        >
+                          {themeOption === "light"
+                            ? t.settings.lightTheme
+                            : t.settings.darkTheme}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 </div>
                 <label className="mt-3 flex items-center justify-between gap-4 rounded border border-line bg-bg px-3 py-2">
                   <span>

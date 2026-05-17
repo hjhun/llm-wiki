@@ -13,9 +13,9 @@ const ROLE_LABEL: Record<string, string> = {
 };
 
 const ROLE_STYLE: Record<string, string> = {
-  user: "border-sky-800/70 bg-sky-950/35",
-  assistant: "border-emerald-900/70 bg-emerald-950/25",
-  system: "border-red-900/60 bg-red-950/30 text-red-200",
+  user: "chat-message-user",
+  assistant: "chat-message-assistant",
+  system: "chat-message-system",
 };
 
 export default function MessageList({
@@ -62,6 +62,7 @@ export default function MessageList({
           className={[
             "rounded-md border px-4 py-3 text-sm leading-relaxed",
             ROLE_STYLE[m.role] ?? "border-line",
+            "chat-message",
           ].join(" ")}
         >
           <header className="mb-1 flex items-center gap-2 text-[11px] text-ink-faint">
@@ -71,7 +72,7 @@ export default function MessageList({
             </span>
             <span className="font-mono">{m.ts}</span>
           </header>
-          <div className="prose prose-invert max-w-none text-[13.5px]">
+          <div className="prose prose-theme max-w-none text-[13.5px]">
             <ReactMarkdown remarkPlugins={[remarkGfm]}>
               {m.content || t.chat.empty}
             </ReactMarkdown>
@@ -79,29 +80,29 @@ export default function MessageList({
         </article>
       ))}
       {showProgress ? (
-        <article className="rounded-md border border-amber-900/60 bg-amber-950/20 px-4 py-3 text-[12.5px]">
-          <header className="mb-1 flex items-center gap-2 text-[11px] text-amber-200/80">
+        <article className="chat-progress-card rounded-md border px-4 py-3 text-[12.5px]">
+          <header className="chat-progress-title mb-1 flex items-center gap-2 text-[11px]">
             <span className="font-mono uppercase tracking-widest">
               {t.chat.progressTitle}
             </span>
           </header>
           {progress?.summary ? (
-            <div className="font-mono text-[11.5px] text-amber-100/90">
+            <div className="chat-progress-summary font-mono text-[11.5px]">
               {progress.summary}
             </div>
           ) : (
-            <div className="text-[11.5px] text-amber-200/70">
+            <div className="chat-progress-muted text-[11.5px]">
               {t.chat.progressWaiting}
             </div>
           )}
           {progress && progress.log.length > 0 ? (
-            <ul className="mt-2 space-y-0.5 font-mono text-[11px] text-amber-100/80">
+            <ul className="chat-progress-log mt-2 space-y-0.5 font-mono text-[11px]">
               {progress.log.map((entry, i) => (
                 <li key={`${entry.ts}-${i}`} className="truncate">
-                  <span className="text-amber-300/70">{entry.ts}</span>
-                  <span className="mx-1 text-amber-400/60">·</span>
-                  <span className="text-amber-200/80">{entry.op}</span>
-                  <span className="mx-1 text-amber-400/60">|</span>
+                  <span className="chat-progress-time">{entry.ts}</span>
+                  <span className="chat-progress-separator mx-1">·</span>
+                  <span>{entry.op}</span>
+                  <span className="chat-progress-separator mx-1">|</span>
                   <span>{entry.detail}</span>
                 </li>
               ))}

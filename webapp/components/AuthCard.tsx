@@ -1,8 +1,9 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { BRAND_NAME, TEXT, type Language } from "./i18n";
+import type { Theme } from "./theme";
 
 type Mode = "setup" | "login";
 
@@ -20,9 +21,11 @@ const MODE_CONFIG = {
 export default function AuthCard({
   mode,
   language,
+  theme,
 }: {
   mode: Mode;
   language: Language;
+  theme: Theme;
 }) {
   const router = useRouter();
   const config = MODE_CONFIG[mode];
@@ -31,6 +34,10 @@ export default function AuthCard({
   const [confirm, setConfirm] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+  }, [theme]);
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();

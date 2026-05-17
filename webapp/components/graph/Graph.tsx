@@ -564,7 +564,7 @@ function DocumentPreview({
           {preview.message}
         </p>
       ) : isMarkdownDocument(preview.doc) ? (
-        <div className="prose prose-invert mt-3 max-h-80 overflow-auto rounded border border-line bg-bg p-3 text-xs leading-relaxed">
+        <div className="prose prose-theme mt-3 max-h-80 overflow-auto rounded border border-line bg-bg p-3 text-xs leading-relaxed">
           <ReactMarkdown remarkPlugins={[remarkGfm]}>
             {preview.content}
           </ReactMarkdown>

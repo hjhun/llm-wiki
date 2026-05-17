@@ -153,6 +153,7 @@ export const ConfigSchema = z.object({
   }),
   ui: z.object({
     language: z.enum(["ko", "en"]).default("ko"),
+    theme: z.enum(["light", "dark"]).default("dark"),
     defaultTab: z
       .enum(["chat", "explorer", "graph", "settings"])
       .default("chat"),
