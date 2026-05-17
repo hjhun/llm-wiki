@@ -5,6 +5,11 @@ import path from "node:path";
 import { loadConfig } from "./config";
 import { runCli, type CliName } from "./cli";
 import {
+  isLikelyText,
+  resolveEntry,
+  type WsKey,
+} from "./files";
+import {
   WIKI_GRAPH_PATH,
   WIKI_GRAPH_REPORT_PATH,
 } from "./paths";
@@ -13,12 +18,24 @@ import {
   newSession,
 } from "./sessions";
 
+export type GraphDocument = {
+  source: string;
+  label: string;
+  ws: WsKey | null;
+  path: string | null;
+  exists: boolean;
+  text: boolean;
+  previewable: boolean;
+  reason: "ok" | "unsupported" | "missing" | "blocked" | "binary";
+};
+
 export type GraphNode = {
   id: string;
   label: string;
   type?: string;
   tags: string[];
   sources: string[];
+  documents: GraphDocument[];
   community: number | null;
   centrality: number | null;
   aliases: string[];
@@ -30,6 +47,7 @@ export type GraphEdge = {
   type?: string;
   weight: number;
   sources: string[];
+  documents: GraphDocument[];
 };
 
 export type GraphCommunity = {
@@ -165,6 +183,7 @@ function normalizeNode(v: unknown, index: number): GraphNode | null {
     type: asString(v.type) || undefined,
     tags: asStringArray(v.tags),
     sources: asStringArray(v.sources),
+    documents: [],
     community: asNumber(v.community, null),
     centrality: asNumber(v.centrality, null),
     aliases: asStringArray(v.aliases),
@@ -188,6 +207,7 @@ function normalizeEdge(v: unknown): GraphEdge | null {
     type: asString(v.type) || undefined,
     weight: asNumber(v.weight, 1) ?? 1,
     sources: asStringArray(v.sources),
+    documents: [],
   };
 }
 
@@ -200,6 +220,106 @@ function normalizeCommunity(v: unknown, index: number): GraphCommunity | null {
     label: asString(v.label) || `Community ${id}`,
     size: asNumber(v.size, 0) ?? 0,
   };
+}
+
+function parseGraphSource(source: string): { ws: WsKey; rel: string } | null {
+  const normalized = source
+    .trim()
+    .replace(/\\/g, "/")
+    .replace(/^\.?\//, "");
+  const match = /^(wiki|raw|sessions)\/(.+)$/.exec(normalized);
+  if (!match) return null;
+  return {
+    ws: match[1] as WsKey,
+    rel: match[2].replace(/^\/+/, ""),
+  };
+}
+
+async function sourceDocument(source: string): Promise<GraphDocument> {
+  const parsed = parseGraphSource(source);
+  const label = parsed ? `${parsed.ws}/${parsed.rel}` : source;
+  if (!parsed) {
+    return {
+      source,
+      label,
+      ws: null,
+      path: null,
+      exists: false,
+      text: false,
+      previewable: false,
+      reason: "unsupported",
+    };
+  }
+
+  try {
+    const abs = resolveEntry(parsed.ws, parsed.rel);
+    const st = await fs.stat(abs).catch((err: NodeJS.ErrnoException) => {
+      if (err.code === "ENOENT") return null;
+      throw err;
+    });
+    if (!st || !st.isFile()) {
+      return {
+        source,
+        label,
+        ws: parsed.ws,
+        path: parsed.rel,
+        exists: false,
+        text: false,
+        previewable: false,
+        reason: "missing",
+      };
+    }
+
+    const text = isLikelyText(parsed.rel);
+    return {
+      source,
+      label,
+      ws: parsed.ws,
+      path: parsed.rel,
+      exists: true,
+      text,
+      previewable: text,
+      reason: text ? "ok" : "binary",
+    };
+  } catch {
+    return {
+      source,
+      label,
+      ws: parsed.ws,
+      path: parsed.rel,
+      exists: false,
+      text: false,
+      previewable: false,
+      reason: "blocked",
+    };
+  }
+}
+
+async function attachDocuments(graph: GraphData): Promise<GraphData> {
+  const cache = new Map<string, Promise<GraphDocument>>();
+  const documentFor = (source: string) => {
+    let cached = cache.get(source);
+    if (!cached) {
+      cached = sourceDocument(source);
+      cache.set(source, cached);
+    }
+    return cached;
+  };
+
+  const nodes = await Promise.all(
+    graph.nodes.map(async (node) => ({
+      ...node,
+      documents: await Promise.all(node.sources.map(documentFor)),
+    })),
+  );
+  const edges = await Promise.all(
+    graph.edges.map(async (edge) => ({
+      ...edge,
+      documents: await Promise.all(edge.sources.map(documentFor)),
+    })),
+  );
+
+  return { ...graph, nodes, edges };
 }
 
 function normalizeGraph(raw: unknown): GraphData {
@@ -274,7 +394,7 @@ export async function readGraphState(): Promise<GraphState> {
 
   return {
     exists: true,
-    graph: normalizeGraph(JSON.parse(graphText)),
+    graph: await attachDocuments(normalizeGraph(JSON.parse(graphText))),
     report,
     graphPath: path.relative(process.cwd(), WIKI_GRAPH_PATH),
     reportPath: path.relative(process.cwd(), WIKI_GRAPH_REPORT_PATH),

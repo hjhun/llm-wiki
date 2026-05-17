@@ -16,6 +16,7 @@
   "dependencies": {
     "bcryptjs": "^3.0.3",
     "chokidar": "^5.0.0",
+    "cytoscape": "^3.33.3",
     "jose": "^6.2.3",
     "next": "^15.1.0",
     "react": "^19.0.0",

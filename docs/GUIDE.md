@@ -425,6 +425,11 @@ Use:
 - **Build** for a full graph refresh.
 - **Incremental Update** after new ingest work.
 
+The graph canvas uses Cytoscape. Wheel and drag gestures zoom and pan the graph,
+and `Ctrl`/`Cmd` + wheel is captured inside the canvas so the browser page does
+not zoom. Selecting a node highlights its one-hop neighbors and shows linked
+source documents in the inspector.
+
 Generated files:
 
 ```text

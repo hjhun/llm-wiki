@@ -1,9 +1,21 @@
+export type GraphDocument = {
+  source: string;
+  label: string;
+  ws: "wiki" | "raw" | "sessions" | null;
+  path: string | null;
+  exists: boolean;
+  text: boolean;
+  previewable: boolean;
+  reason: "ok" | "unsupported" | "missing" | "blocked" | "binary";
+};
+
 export type GraphNode = {
   id: string;
   label: string;
   type?: string;
   tags: string[];
   sources: string[];
+  documents: GraphDocument[];
   community: number | null;
   centrality: number | null;
   aliases: string[];
@@ -15,6 +27,7 @@ export type GraphEdge = {
   type?: string;
   weight: number;
   sources: string[];
+  documents: GraphDocument[];
 };
 
 export type GraphCommunity = {

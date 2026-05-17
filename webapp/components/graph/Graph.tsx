@@ -1,9 +1,17 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { useLanguage } from "../i18n";
 import GraphCanvas from "./GraphCanvas";
-import type { GraphData, GraphNode, GraphState } from "./types";
+import type {
+  GraphData,
+  GraphDocument,
+  GraphEdge,
+  GraphNode,
+  GraphState,
+} from "./types";
 
 type RunResult = {
   sessionPath: string;
@@ -39,6 +47,20 @@ function nodeSummary(node: GraphNode): string {
   return bits.join(" · ") || node.id;
 }
 
+function documentKey(doc: GraphDocument): string {
+  return `${doc.ws ?? "none"}:${doc.path ?? doc.source}`;
+}
+
+function isMarkdownDocument(doc: GraphDocument): boolean {
+  return /\.mdx?$/i.test(doc.path ?? doc.source);
+}
+
+function blobHref(doc: GraphDocument): string | null {
+  if (!doc.ws || !doc.path) return null;
+  const params = new URLSearchParams({ ws: doc.ws, path: doc.path });
+  return `/api/files/blob?${params.toString()}`;
+}
+
 export default function Graph() {
   const { t } = useLanguage();
   const [state, setState] = useState<GraphState | null>(null);
@@ -68,6 +90,10 @@ export default function Graph() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  const handleNodeSelect = useCallback((node: GraphNode) => {
+    setSelectedId(node.id);
+  }, []);
 
   async function run(action: "build" | "update") {
     if (busy) return;
@@ -172,7 +198,8 @@ export default function Graph() {
               <GraphCanvas
                 graph={graph}
                 selectedId={selectedId}
-                onSelect={(node) => setSelectedId(node.id)}
+                onSelect={handleNodeSelect}
+                text={t.graph}
               />
             </div>
           ) : (
@@ -274,12 +301,66 @@ function GraphInspector({
 }: {
   graph: GraphData;
   selected: GraphNode | null;
-  selectedEdges: { src: string; dst: string; type?: string; weight: number }[];
+  selectedEdges: GraphEdge[];
   onSelect: (id: string) => void;
   report: string | null;
   reportPath: string;
   text: ReturnType<typeof useLanguage>["t"]["graph"];
 }) {
+  const [activeDoc, setActiveDoc] = useState<GraphDocument | null>(null);
+  const [preview, setPreview] = useState<
+    | { status: "idle" }
+    | { status: "loading"; doc: GraphDocument }
+    | { status: "ready"; doc: GraphDocument; content: string }
+    | { status: "unavailable"; doc: GraphDocument }
+    | { status: "error"; doc: GraphDocument; message: string }
+  >({ status: "idle" });
+
+  const nodeById = useMemo(() => {
+    return new Map(graph.nodes.map((node) => [node.id, node]));
+  }, [graph.nodes]);
+
+  const documents = useMemo(() => {
+    const byKey = new Map<string, GraphDocument>();
+    for (const doc of selected?.documents ?? []) {
+      byKey.set(documentKey(doc), doc);
+    }
+    for (const edge of selectedEdges) {
+      for (const doc of edge.documents) byKey.set(documentKey(doc), doc);
+    }
+    return Array.from(byKey.values());
+  }, [selected, selectedEdges]);
+
+  useEffect(() => {
+    setActiveDoc(null);
+    setPreview({ status: "idle" });
+  }, [selected?.id]);
+
+  async function openDocument(doc: GraphDocument) {
+    setActiveDoc(doc);
+    if (!doc.previewable || !doc.ws || !doc.path) {
+      setPreview({ status: "unavailable", doc });
+      return;
+    }
+
+    setPreview({ status: "loading", doc });
+    try {
+      const u = new URL("/api/files/content", window.location.origin);
+      u.searchParams.set("ws", doc.ws);
+      u.searchParams.set("path", doc.path);
+      const res = await fetch(u, { cache: "no-store" });
+      if (!res.ok) throw await asError(res);
+      const body = (await res.json()) as { content: string };
+      setPreview({ status: "ready", doc, content: body.content });
+    } catch (err) {
+      setPreview({
+        status: "error",
+        doc,
+        message: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
   return (
     <div className="flex min-h-full flex-col">
       <section className="border-b border-line p-4">
@@ -309,18 +390,75 @@ function GraphInspector({
                 {text.links} ({selectedEdges.length})
               </div>
               <div className="mt-2 space-y-1">
-                {selectedEdges.slice(0, 10).map((edge, index) => (
-                  <div
-                    key={`${edge.src}-${edge.dst}-${index}`}
-                    className="truncate font-mono text-[11px] text-ink-faint"
-                    title={`${edge.src} -> ${edge.dst}`}
-                  >
-                    {edge.src === selected.id ? edge.dst : edge.src}
-                    {edge.type ? ` · ${edge.type}` : ""}
-                  </div>
-                ))}
+                {selectedEdges.slice(0, 10).map((edge, index) => {
+                  const otherId = edge.src === selected.id ? edge.dst : edge.src;
+                  const other = nodeById.get(otherId);
+                  return (
+                    <button
+                      key={`${edge.src}-${edge.dst}-${index}`}
+                      type="button"
+                      onClick={() => onSelect(otherId)}
+                      className="block w-full truncate rounded px-2 py-1 text-left font-mono text-[11px] text-ink-faint hover:bg-bg-panel hover:text-ink-dim"
+                      title={`${edge.src} -> ${edge.dst}`}
+                    >
+                      {other?.label ?? otherId}
+                      {edge.type ? ` · ${edge.type}` : ""}
+                    </button>
+                  );
+                })}
               </div>
             </div>
+            <div className="mt-4">
+              <div className="text-xs font-medium text-ink-dim">
+                {text.documents} ({documents.length})
+              </div>
+              <div className="mt-2 space-y-1">
+                {documents.length > 0 ? (
+                  documents.map((doc) => {
+                    const active =
+                      activeDoc && documentKey(activeDoc) === documentKey(doc);
+                    const href = doc.reason === "binary" ? blobHref(doc) : null;
+                    return (
+                      <div
+                        key={documentKey(doc)}
+                        className={[
+                          "rounded border border-line bg-bg/40",
+                          active ? "border-accent/70" : "",
+                        ].join(" ")}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => void openDocument(doc)}
+                          className="block w-full px-2 py-1.5 text-left hover:bg-bg-panel"
+                        >
+                          <div className="truncate text-xs text-ink-dim">
+                            {doc.label}
+                          </div>
+                          <div className="mt-0.5 font-mono text-[10px] text-ink-faint">
+                            {doc.previewable
+                              ? text.previewReady
+                              : text.previewUnavailable}
+                          </div>
+                        </button>
+                        {href ? (
+                          <a
+                            className="block border-t border-line px-2 py-1 font-mono text-[10px] text-accent hover:bg-bg-panel"
+                            href={href}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            {text.openBlob}
+                          </a>
+                        ) : null}
+                      </div>
+                    );
+                  })
+                ) : (
+                  <p className="text-sm text-ink-dim">{text.noDocuments}</p>
+                )}
+              </div>
+            </div>
+            <DocumentPreview preview={preview} text={text} />
           </div>
         ) : (
           <p className="mt-2 text-sm leading-relaxed text-ink-dim">
@@ -392,6 +530,50 @@ function GraphInspector({
           <p className="mt-2 text-sm text-ink-dim">{text.noReport}</p>
         )}
       </section>
+    </div>
+  );
+}
+
+function DocumentPreview({
+  preview,
+  text,
+}: {
+  preview:
+    | { status: "idle" }
+    | { status: "loading"; doc: GraphDocument }
+    | { status: "ready"; doc: GraphDocument; content: string }
+    | { status: "unavailable"; doc: GraphDocument }
+    | { status: "error"; doc: GraphDocument; message: string };
+  text: ReturnType<typeof useLanguage>["t"]["graph"];
+}) {
+  if (preview.status === "idle") return null;
+
+  return (
+    <div className="mt-4 border-t border-line pt-4">
+      <div className="font-mono text-[11px] uppercase tracking-widest text-ink-faint">
+        {text.preview}
+      </div>
+      {preview.status === "loading" ? (
+        <p className="mt-2 text-sm text-ink-dim">{text.loadingDocument}</p>
+      ) : preview.status === "unavailable" ? (
+        <p className="mt-2 text-sm leading-relaxed text-ink-dim">
+          {text.previewUnavailable}
+        </p>
+      ) : preview.status === "error" ? (
+        <p className="mt-2 text-sm leading-relaxed text-red-300">
+          {preview.message}
+        </p>
+      ) : isMarkdownDocument(preview.doc) ? (
+        <div className="prose prose-invert mt-3 max-h-80 overflow-auto rounded border border-line bg-bg p-3 text-xs leading-relaxed">
+          <ReactMarkdown remarkPlugins={[remarkGfm]}>
+            {preview.content}
+          </ReactMarkdown>
+        </div>
+      ) : (
+        <pre className="mt-3 max-h-80 overflow-auto whitespace-pre-wrap rounded border border-line bg-bg p-3 text-[11px] leading-relaxed text-ink-dim">
+          {preview.content}
+        </pre>
+      )}
     </div>
   );
 }
