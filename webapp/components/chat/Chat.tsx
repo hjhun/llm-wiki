@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import AutoIngestBanner from "./AutoIngestBanner";
 import Composer from "./Composer";
 import MessageList from "./MessageList";
@@ -57,6 +57,8 @@ export default function Chat() {
   const [activeKind, setActiveKind] = useState<ChatKind | null>(null);
   const [attachedJobId, setAttachedJobId] = useState<string | null>(null);
   const [stopping, setStopping] = useState(false);
+  const streamAbortRef = useRef<AbortController | null>(null);
+  const streamTokenRef = useRef(0);
 
   const refreshSessions = useCallback(async () => {
     try {
@@ -95,6 +97,21 @@ export default function Chat() {
     setActive({ path, meta: j.meta, messages: j.messages });
   }, []);
 
+  function isAbortError(err: unknown): boolean {
+    return err instanceof DOMException && err.name === "AbortError";
+  }
+
+  function cancelActiveStream() {
+    streamTokenRef.current += 1;
+    streamAbortRef.current?.abort();
+    streamAbortRef.current = null;
+    setPending(false);
+    setActiveKind(null);
+    setAttachedJobId(null);
+    setProgress(null);
+    setStopping(false);
+  }
+
   // 초기: 진행 중인 job이 있으면 그 세션을 우선 열고 스트림에 다시 붙는다.
   useEffect(() => {
     (async () => {
@@ -109,10 +126,22 @@ export default function Chat() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  useEffect(() => {
+    return () => {
+      streamTokenRef.current += 1;
+      streamAbortRef.current?.abort();
+      streamAbortRef.current = null;
+    };
+  }, []);
+
   async function openSession(ref: SessionRef) {
+    cancelActiveStream();
     setError(null);
     try {
       await loadSession(ref.path);
+      const jobs = await refreshRunningJobs();
+      const job = jobs.find((candidate) => candidate.sessionPath === ref.path);
+      if (job) await attachJob(job, false);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     }
@@ -120,6 +149,7 @@ export default function Chat() {
 
   function newSessionDraft() {
     // 실제 세션 파일 생성은 첫 메시지 전송 시 send 라우트가 만든다.
+    cancelActiveStream();
     setActive(null);
     setError(null);
   }
@@ -167,6 +197,7 @@ export default function Chat() {
   async function consumeChatStream(
     res: Response,
     initialSessionPath: string | undefined,
+    token: number,
   ) {
     if (!res.body) {
       throw new Error("streaming response body is unavailable");
@@ -186,7 +217,9 @@ export default function Chat() {
     let streamError: string | null = null;
 
     function upsertStreamingAssistant(content: string) {
+      if (streamTokenRef.current !== token) return;
       setActive((current) => {
+        if (streamTokenRef.current !== token) return current;
         if (!current) return current;
         const messages = [...current.messages];
         const index = messages.findIndex(
@@ -207,7 +240,9 @@ export default function Chat() {
     }
 
     function replaceStreamingAssistant(finalMessage: ChatMessage) {
+      if (streamTokenRef.current !== token) return;
       setActive((current) => {
+        if (streamTokenRef.current !== token) return current;
         if (!current) return current;
         const messages = [...current.messages];
         const index = messages.findIndex(
@@ -230,6 +265,7 @@ export default function Chat() {
     }
 
     async function reopenSession(path: string) {
+      if (streamTokenRef.current !== token) return;
       const reopen = await fetch(
         `/api/chat/session?path=${encodeURIComponent(path)}`,
       );
@@ -238,6 +274,7 @@ export default function Chat() {
         meta: SessionRef["meta"];
         messages: ChatMessage[];
       };
+      if (streamTokenRef.current !== token) return;
       setActive({
         path,
         meta: data.meta,
@@ -246,6 +283,7 @@ export default function Chat() {
     }
 
     function handleEvent(event: ChatSendEvent) {
+      if (streamTokenRef.current !== token) return;
       if ("jobId" in event) {
         setAttachedJobId((event as SequencedChatSendEvent).jobId);
       }
@@ -263,6 +301,7 @@ export default function Chat() {
       }
       if (event.type === "progress") {
         setProgress((current) => {
+          if (streamTokenRef.current !== token) return current;
           const log: ChatProgressLog[] = current?.log ?? [];
           if (event.phase === "state") {
             return {
@@ -324,11 +363,12 @@ export default function Chat() {
       if (sessionPath) {
         await reopenSession(sessionPath);
       }
-      await refreshSessions();
+      if (streamTokenRef.current === token) await refreshSessions();
       if (failed) {
         throw new Error(streamError ?? "CLI stream failed");
       }
     } catch (err) {
+      if (isAbortError(err)) return;
       if (assistantInserted && accumulated) {
         upsertStreamingAssistant(accumulated);
       }
@@ -338,6 +378,11 @@ export default function Chat() {
 
   async function attachJob(job: ChatJobSnapshot, reopenFirst: boolean) {
     if (attachedJobId === job.id) return;
+    streamTokenRef.current += 1;
+    const token = streamTokenRef.current;
+    streamAbortRef.current?.abort();
+    const controller = new AbortController();
+    streamAbortRef.current = controller;
     setPending(true);
     setActiveKind(job.kind);
     setAttachedJobId(job.id);
@@ -347,21 +392,31 @@ export default function Chat() {
       if (reopenFirst) await loadSession(job.sessionPath);
       const u = new URL("/api/chat/stream", window.location.origin);
       u.searchParams.set("jobId", job.id);
-      const res = await fetch(u);
+      const res = await fetch(u, { signal: controller.signal });
       if (!res.ok) throw await asError(res);
-      await consumeChatStream(res, job.sessionPath);
+      await consumeChatStream(res, job.sessionPath, token);
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      if (!isAbortError(err) && streamTokenRef.current === token) {
+        setError(err instanceof Error ? err.message : String(err));
+      }
     } finally {
-      setPending(false);
-      setActiveKind(null);
-      setAttachedJobId(null);
+      if (streamTokenRef.current === token) {
+        streamAbortRef.current = null;
+        setPending(false);
+        setActiveKind(null);
+        setAttachedJobId(null);
+      }
     }
   }
 
   async function send(message: string) {
     if (pending) return;
     const kind = detectKind(message);
+    streamTokenRef.current += 1;
+    const token = streamTokenRef.current;
+    streamAbortRef.current?.abort();
+    const controller = new AbortController();
+    streamAbortRef.current = controller;
     setPending(true);
     setActiveKind(kind);
     setAttachedJobId(null);
@@ -399,6 +454,7 @@ export default function Chat() {
       const res = await fetch("/api/chat/send", {
         method: "POST",
         headers: { "content-type": "application/json" },
+        signal: controller.signal,
         body: JSON.stringify({
           sessionPath,
           message,
@@ -406,13 +462,18 @@ export default function Chat() {
         }),
       });
       if (!res.ok) throw await asError(res);
-      await consumeChatStream(res, sessionPath);
+      await consumeChatStream(res, sessionPath, token);
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      if (!isAbortError(err) && streamTokenRef.current === token) {
+        setError(err instanceof Error ? err.message : String(err));
+      }
     } finally {
-      setPending(false);
-      setActiveKind(null);
-      setAttachedJobId(null);
+      if (streamTokenRef.current === token) {
+        streamAbortRef.current = null;
+        setPending(false);
+        setActiveKind(null);
+        setAttachedJobId(null);
+      }
     }
   }
 
