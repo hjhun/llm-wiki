@@ -52,7 +52,7 @@ Options:
   --shutdown                    Stop the running web server and exit
   --no-restart                  With --start, fail if the target port is already in use
   --skip-graphify               Do not install graphify; use existing global graphify if available
-  --skip-npm-install            Do not run npm install in webapp/ (default skips if node_modules exists)
+  --skip-npm-install            Do not run npm install in webapp/ (default skips when dependencies are present)
   --skip-build                  Do not run npm run build
   --with-qmd                    Best-effort optional qmd clone into tools/qmd
   --with-marp                   Best-effort optional Marp CLI install
@@ -586,8 +586,8 @@ install_webapp() {
   require_command npm
 
   if [[ "${SKIP_NPM_INSTALL}" -eq 0 ]]; then
-    if [[ -d "${WEBAPP_DIR}/node_modules" ]]; then
-      log "webapp dependencies already installed; skipping npm install"
+    if webapp_dependencies_installed; then
+      log "webapp dependencies already present; skipping npm install"
     else
       log "installing webapp dependencies"
       (cd "${WEBAPP_DIR}" && npm install)
@@ -602,6 +602,35 @@ install_webapp() {
   else
     log "skipping webapp build"
   fi
+}
+
+webapp_dependencies_installed() {
+  [[ -d "${WEBAPP_DIR}/node_modules" ]] || return 1
+
+  (cd "${WEBAPP_DIR}" && node <<'NODE')
+const fs = require("node:fs");
+const path = require("node:path");
+
+const manifest = JSON.parse(fs.readFileSync("package.json", "utf8"));
+const dependencies = {
+  ...(manifest.dependencies || {}),
+  ...(manifest.devDependencies || {}),
+};
+
+function packagePath(name) {
+  if (name.startsWith("@")) {
+    const [scope, packageName] = name.split("/");
+    return path.join("node_modules", scope, packageName || "", "package.json");
+  }
+  return path.join("node_modules", name, "package.json");
+}
+
+for (const name of Object.keys(dependencies)) {
+  if (!fs.existsSync(packagePath(name))) {
+    process.exit(1);
+  }
+}
+NODE
 }
 
 next_bin() {

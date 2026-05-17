@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useLanguage } from "../i18n";
 import Editor from "./Editor";
 import FileTree from "./FileTree";
@@ -12,8 +13,19 @@ const WS_LIST: { key: WsKey; label: string }[] = [
   { key: "sessions", label: "sessions/" },
 ];
 
+function parseWs(value: string | null): WsKey | null {
+  if (value === "wiki" || value === "raw" || value === "sessions") {
+    return value;
+  }
+  return null;
+}
+
 export default function Explorer() {
   const { t } = useLanguage();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const linkedWs = parseWs(searchParams.get("ws"));
+  const linkedPath = searchParams.get("path")?.replace(/^\/+/, "") ?? null;
   const [ws, setWs] = useState<WsKey>("wiki");
   const [selected, setSelected] = useState<Entry | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -25,10 +37,17 @@ export default function Explorer() {
   const dirInputRef = useRef<HTMLInputElement | null>(null);
 
   const isReadOnly = ws === "sessions";
+  const focusPath = linkedWs === ws ? linkedPath : null;
 
   const refresh = useCallback(() => {
     setRefreshKey((k) => k + 1);
   }, []);
+
+  useEffect(() => {
+    if (!linkedWs || linkedWs === ws) return;
+    setWs(linkedWs);
+    setSelected(null);
+  }, [linkedWs, ws]);
 
   function action(kind: ExplorerAction, target: Entry | null) {
     setError(null);
@@ -171,6 +190,7 @@ export default function Explorer() {
               onClick={() => {
                 setWs(w.key);
                 setSelected(null);
+                router.replace("/explorer", { scroll: false });
               }}
               title={t.explorer.workspaces[w.key]}
               className={[
@@ -247,6 +267,7 @@ export default function Explorer() {
           <FileTree
             ws={ws}
             selectedPath={selected?.path ?? null}
+            focusPath={focusPath}
             refreshKey={refreshKey}
             onSelect={setSelected}
             onContextAction={action}

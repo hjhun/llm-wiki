@@ -238,7 +238,7 @@ Common `setup.sh` options:
 | `--host <addr>` | Web UI host. Default: `0.0.0.0`. Use `127.0.0.1` for local-only. |
 | `--dev` | Use the development server command. |
 | `--skip-graphify` | Do not install or upgrade graphify. |
-| `--skip-npm-install` | Skip `webapp/` dependency installation. |
+| `--skip-npm-install` | Skip `webapp/` dependency checks and installation. |
 | `--skip-build` | Skip `npm run build`. |
 | `--with-qmd` | Best-effort optional qmd setup. |
 | `--with-marp` | Best-effort optional Marp CLI setup. |

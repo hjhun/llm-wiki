@@ -22,19 +22,58 @@ type Props = {
 };
 
 const COMMUNITY_COLORS = [
-  "#7aa2ff",
-  "#6ee7b7",
-  "#f7c948",
-  "#f28f8f",
-  "#c084fc",
-  "#67e8f9",
-  "#f6ad55",
-  "#a3e635",
+  218, 162, 44, 6, 282, 187, 29, 96, 334, 256, 142, 52, 205, 312, 116, 16,
 ];
 
-function colorForCommunity(community: number | null): string {
-  if (community == null) return "#8a93a0";
-  return COMMUNITY_COLORS[Math.abs(community) % COMMUNITY_COLORS.length];
+type NodeVisual = {
+  color: string;
+  borderColor: string;
+  haloColor: string;
+  labelColor: string;
+  shape: "ellipse" | "diamond" | "round-rectangle" | "hexagon" | "tag";
+};
+
+function hashString(value: string): number {
+  let hash = 2166136261;
+  for (let i = 0; i < value.length; i += 1) {
+    hash ^= value.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+}
+
+function hsl(hue: number, saturation: number, lightness: number): string {
+  return `hsl(${Math.round(hue)} ${Math.round(saturation)}% ${Math.round(lightness)}%)`;
+}
+
+function shapeForNode(node: GraphNode): NodeVisual["shape"] {
+  const type = (node.type ?? "").toLowerCase();
+  if (type.includes("source") || type.includes("document")) return "tag";
+  if (type.includes("entity") || type.includes("person")) return "ellipse";
+  if (type.includes("concept") || type.includes("topic")) return "diamond";
+  if (type.includes("analysis") || type.includes("comparison")) {
+    return "round-rectangle";
+  }
+  return "hexagon";
+}
+
+function visualForNode(node: GraphNode): NodeVisual {
+  const hash = hashString(`${node.id}:${node.type ?? ""}`);
+  const baseHue =
+    node.community == null
+      ? hash % 360
+      : COMMUNITY_COLORS[Math.abs(node.community) % COMMUNITY_COLORS.length];
+  const hue = (baseHue + (hash % 29) - 14 + 360) % 360;
+  const saturation = 63 + (hash % 17);
+  const lightness = 52 + ((hash >> 5) % 10);
+
+  return {
+    color: hsl(hue, saturation, lightness),
+    borderColor: hsl(hue, Math.min(92, saturation + 10), 72),
+    haloColor: hsl(hue, Math.min(86, saturation + 6), 46),
+    labelColor: hsl(hue, 42, 84),
+    shape: shapeForNode(node),
+  };
 }
 
 function nodeSize(node: GraphNode): number {
@@ -55,20 +94,27 @@ function edgeId(
   return `${src}::${dst}::${type ?? "edge"}::${index}`;
 }
 
-const stylesheet: StylesheetJson = [
+const stylesheet = [
   {
     selector: "node",
     style: {
       "background-color": "data(color)",
-      "border-color": "#0b0d10",
-      "border-width": 2,
-      color: "#aeb6c2",
+      "border-color": "data(borderColor)",
+      "border-opacity": 0.86,
+      "border-width": 2.4,
+      color: "data(labelColor)",
       "font-family": "ui-monospace, SFMono-Regular, Menlo, monospace",
       "font-size": 11,
       height: "data(size)",
       label: "data(label)",
       "min-zoomed-font-size": 8,
       "overlay-opacity": 0,
+      shape: "data(shape)",
+      "shadow-blur": 16,
+      "shadow-color": "data(haloColor)",
+      "shadow-opacity": 0.36,
+      "shadow-offset-x": 0,
+      "shadow-offset-y": 0,
       "text-background-color": "#0b0d10",
       "text-background-opacity": 0.68,
       "text-background-padding": "2px",
@@ -83,10 +129,10 @@ const stylesheet: StylesheetJson = [
     selector: "edge",
     style: {
       "curve-style": "bezier",
-      "line-color": "#3a414c",
-      "line-opacity": 0.48,
+      "line-color": "data(edgeColor)",
+      "line-opacity": 0.38,
       "overlay-opacity": 0,
-      "target-arrow-color": "#3a414c",
+      "target-arrow-color": "data(edgeTargetColor)",
       width: "data(width)",
     },
   },
@@ -96,17 +142,30 @@ const stylesheet: StylesheetJson = [
       "border-color": "#e7ebf0",
       "border-width": 4,
       color: "#e7ebf0",
+      "shadow-blur": 28,
+      "shadow-opacity": 0.76,
       "text-background-opacity": 0.9,
       "z-index": 10,
     },
   },
   {
-    selector: ".related",
+    selector: "node.related",
     style: {
-      "line-color": "#7aa2ff",
-      "line-opacity": 0.82,
-      "target-arrow-color": "#7aa2ff",
+      "border-color": "data(borderColor)",
+      "border-opacity": 1,
+      "shadow-blur": 22,
+      "shadow-opacity": 0.58,
       opacity: 1,
+    },
+  },
+  {
+    selector: "edge.related",
+    style: {
+      "line-color": "data(edgeTargetColor)",
+      "line-opacity": 0.82,
+      "target-arrow-color": "data(edgeTargetColor)",
+      opacity: 1,
+      width: "mapData(width, 1, 6, 2, 8)",
     },
   },
   {
@@ -115,7 +174,7 @@ const stylesheet: StylesheetJson = [
       opacity: 0.18,
     },
   },
-];
+] as unknown as StylesheetJson;
 
 export default function GraphCanvas({
   graph,
@@ -130,20 +189,34 @@ export default function GraphCanvas({
   graphRef.current = graph;
 
   const elements = useMemo<ElementDefinition[]>(() => {
-    const nodes: ElementDefinition[] = graph.nodes.map((node) => ({
-      data: {
-        id: node.id,
-        label:
-          node.label.length > 38 ? `${node.label.slice(0, 37)}...` : node.label,
-        color: colorForCommunity(node.community),
-        size: nodeSize(node),
-      },
-    }));
+    const visualById = new Map(
+      graph.nodes.map((node) => [node.id, visualForNode(node)]),
+    );
+    const nodes: ElementDefinition[] = graph.nodes.map((node) => {
+      const visual = visualById.get(node.id) ?? visualForNode(node);
+      return {
+        data: {
+          id: node.id,
+          label:
+            node.label.length > 38
+              ? `${node.label.slice(0, 37)}...`
+              : node.label,
+          color: visual.color,
+          borderColor: visual.borderColor,
+          haloColor: visual.haloColor,
+          labelColor: visual.labelColor,
+          shape: visual.shape,
+          size: nodeSize(node),
+        },
+      };
+    });
     const edges: ElementDefinition[] = graph.edges.map((edge, index) => ({
       data: {
         id: edgeId(edge.src, edge.dst, edge.type, index),
         source: edge.src,
         target: edge.dst,
+        edgeColor: visualById.get(edge.src)?.haloColor ?? "#3a414c",
+        edgeTargetColor: visualById.get(edge.dst)?.haloColor ?? "#7aa2ff",
         width: edgeWidth(edge.weight),
       },
     }));
@@ -235,7 +308,14 @@ export default function GraphCanvas({
   }
 
   return (
-    <div className="relative h-full w-full overflow-hidden bg-bg">
+    <div
+      className="relative h-full w-full overflow-hidden bg-bg"
+      style={{
+        backgroundImage:
+          "radial-gradient(circle at 1px 1px, rgb(var(--color-line) / 0.34) 1px, transparent 0)",
+        backgroundSize: "22px 22px",
+      }}
+    >
       <div ref={containerRef} className="h-full w-full" />
       <div className="absolute right-3 top-3 flex overflow-hidden rounded border border-line bg-bg-subtle/95 shadow-lg">
         <button

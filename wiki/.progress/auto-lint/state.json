@@ -1,0 +1,16 @@
+{
+  "status": "disabled",
+  "reason": "auto-lint disabled",
+  "counter": {
+    "value": 0,
+    "threshold": 10,
+    "lastIngestAt": null,
+    "lastLintAt": null,
+    "suggested": false
+  },
+  "startedAt": null,
+  "lastRunAt": null,
+  "lastResult": null,
+  "nextRunAt": null,
+  "cronEnabled": false
+}

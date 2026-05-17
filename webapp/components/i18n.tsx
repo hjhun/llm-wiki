@@ -111,6 +111,7 @@ export const TEXT = {
       newRootFolder: "새 폴더 (루트)",
       fileButton: "+ 파일",
       folderButton: "+ 폴더",
+      pathNotFound: (path: string) => `경로를 찾을 수 없습니다: ${path}`,
       actions: {
         newFile: "새 파일",
         newFolder: "새 폴더",
@@ -159,6 +160,7 @@ export const TEXT = {
       previewReady: "preview",
       previewUnavailable: "preview unavailable",
       loadingDocument: "문서를 읽는 중입니다.",
+      openInExplorer: "Explorer에서 열기",
       openBlob: "open file",
       fitGraph: "Fit",
       zoomIn: "Zoom in",
@@ -400,6 +402,7 @@ export const TEXT = {
       newRootFolder: "New folder (root)",
       fileButton: "+ File",
       folderButton: "+ Folder",
+      pathNotFound: (path: string) => `Path not found: ${path}`,
       actions: {
         newFile: "New file",
         newFolder: "New folder",
@@ -448,6 +451,7 @@ export const TEXT = {
       previewReady: "preview",
       previewUnavailable: "preview unavailable",
       loadingDocument: "Loading document.",
+      openInExplorer: "open in Explorer",
       openBlob: "open file",
       fitGraph: "Fit",
       zoomIn: "Zoom in",

@@ -61,6 +61,12 @@ function blobHref(doc: GraphDocument): string | null {
   return `/api/files/blob?${params.toString()}`;
 }
 
+function explorerHref(doc: GraphDocument): string | null {
+  if (!doc.exists || !doc.ws || !doc.path) return null;
+  const params = new URLSearchParams({ ws: doc.ws, path: doc.path });
+  return `/explorer?${params.toString()}`;
+}
+
 export default function Graph() {
   const { t } = useLanguage();
   const [state, setState] = useState<GraphState | null>(null);
@@ -418,6 +424,7 @@ function GraphInspector({
                     const active =
                       activeDoc && documentKey(activeDoc) === documentKey(doc);
                     const href = doc.reason === "binary" ? blobHref(doc) : null;
+                    const explorer = explorerHref(doc);
                     return (
                       <div
                         key={documentKey(doc)}
@@ -440,15 +447,27 @@ function GraphInspector({
                               : text.previewUnavailable}
                           </div>
                         </button>
-                        {href ? (
-                          <a
-                            className="block border-t border-line px-2 py-1 font-mono text-[10px] text-accent hover:bg-bg-panel"
-                            href={href}
-                            target="_blank"
-                            rel="noreferrer"
-                          >
-                            {text.openBlob}
-                          </a>
+                        {explorer || href ? (
+                          <div className="flex border-t border-line">
+                            {explorer ? (
+                              <a
+                                className="min-w-0 flex-1 truncate px-2 py-1 font-mono text-[10px] text-accent hover:bg-bg-panel"
+                                href={explorer}
+                              >
+                                {text.openInExplorer}
+                              </a>
+                            ) : null}
+                            {href ? (
+                              <a
+                                className="min-w-0 flex-1 truncate border-l border-line px-2 py-1 font-mono text-[10px] text-accent hover:bg-bg-panel first:border-l-0"
+                                href={href}
+                                target="_blank"
+                                rel="noreferrer"
+                              >
+                                {text.openBlob}
+                              </a>
+                            ) : null}
+                          </div>
                         ) : null}
                       </div>
                     );

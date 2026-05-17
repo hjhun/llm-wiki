@@ -62,6 +62,41 @@ bash -n "${ROOT_DIR}/systemd/install-clio-web-service.sh"
 log "checking setup.sh help"
 "${ROOT_DIR}/setup.sh" --help >/dev/null
 
+log "checking setup.sh installs missing webapp dependencies"
+tmp_root="$(mktemp -d)"
+cleanup_tmp_root() {
+  rm -rf "${tmp_root}"
+}
+trap cleanup_tmp_root EXIT
+mkdir -p "${tmp_root}/webapp/node_modules/next" "${tmp_root}/bin"
+cp "${ROOT_DIR}/setup.sh" "${tmp_root}/setup.sh"
+cat > "${tmp_root}/webapp/package.json" <<'JSON'
+{
+  "scripts": {
+    "build": "true"
+  },
+  "dependencies": {
+    "cytoscape": "^3.33.3",
+    "next": "^15.1.0"
+  }
+}
+JSON
+cat > "${tmp_root}/webapp/node_modules/next/package.json" <<'JSON'
+{
+  "name": "next"
+}
+JSON
+cat > "${tmp_root}/bin/npm" <<'SH'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >> "${CLIO_FAKE_NPM_LOG}"
+exit 0
+SH
+chmod +x "${tmp_root}/bin/npm"
+CLIO_FAKE_NPM_LOG="${tmp_root}/npm.log" \
+  PATH="${tmp_root}/bin:${PATH}" \
+  "${tmp_root}/setup.sh" --skip-graphify --skip-build >/dev/null
+grep -qx 'install' "${tmp_root}/npm.log" || fail "setup.sh did not install missing webapp dependencies"
+
 log "checking scripts/install.sh help"
 "${ROOT_DIR}/scripts/install.sh" --help >/dev/null
 

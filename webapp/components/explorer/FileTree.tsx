@@ -16,9 +16,35 @@ async function fetchList(ws: WsKey, p: string): Promise<Entry[]> {
   return j.entries;
 }
 
+function patchNode(
+  list: Node[],
+  target: string,
+  patch: Partial<Node>,
+): Node[] {
+  return list.map((n) => {
+    if (n.path === target) return { ...n, ...patch };
+    if (n.children) {
+      return { ...n, children: patchNode(n.children, target, patch) };
+    }
+    return n;
+  });
+}
+
+function findNode(list: Node[], target: string): Node | null {
+  for (const n of list) {
+    if (n.path === target) return n;
+    if (n.children) {
+      const found = findNode(n.children, target);
+      if (found) return found;
+    }
+  }
+  return null;
+}
+
 export default function FileTree({
   ws,
   selectedPath,
+  focusPath,
   refreshKey,
   onSelect,
   onContextAction,
@@ -26,6 +52,7 @@ export default function FileTree({
 }: {
   ws: WsKey;
   selectedPath: string | null;
+  focusPath?: string | null;
   refreshKey: number;
   onSelect: (entry: Entry) => void;
   onContextAction: (action: ExplorerAction, target: Entry | null) => void;
@@ -39,6 +66,7 @@ export default function FileTree({
     x: number;
     y: number;
   } | null>(null);
+  const [lastFocused, setLastFocused] = useState<string | null>(null);
 
   const loadChildren = useCallback(
     async (parentPath: string): Promise<Node[]> => {
@@ -68,6 +96,66 @@ export default function FileTree({
   }, [ws, refreshKey, loadChildren]);
 
   useEffect(() => {
+    if (!focusPath || roots.length === 0) return;
+    const focusKey = `${ws}:${refreshKey}:${focusPath}`;
+    if (lastFocused === focusKey) return;
+
+    let cancelled = false;
+    (async () => {
+      setError(null);
+      try {
+        const parts = focusPath.split("/").filter(Boolean);
+        let tree = roots;
+        let parent = "";
+        let target: Node | null = null;
+
+        for (let i = 0; i < parts.length; i += 1) {
+          const current = parent ? `${parent}/${parts[i]}` : parts[i];
+          const node = findNode(tree, current);
+          if (!node) throw new Error(t.explorer.pathNotFound(focusPath));
+
+          if (i === parts.length - 1 || node.kind === "file") {
+            target = node;
+            break;
+          }
+
+          const children = node.children ?? (await loadChildren(node.path));
+          tree = patchNode(tree, node.path, {
+            children,
+            open: true,
+            loading: false,
+          });
+          parent = current;
+        }
+
+        if (!cancelled) {
+          setRoots(tree);
+          if (target) onSelect(target);
+          setLastFocused(focusKey);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : String(err));
+          setLastFocused(focusKey);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    focusPath,
+    lastFocused,
+    loadChildren,
+    onSelect,
+    refreshKey,
+    roots,
+    t.explorer,
+    ws,
+  ]);
+
+  useEffect(() => {
     function close() {
       setMenu(null);
     }
@@ -81,20 +169,6 @@ export default function FileTree({
       window.removeEventListener("keydown", onKey);
     };
   }, []);
-
-  function patchNode(
-    list: Node[],
-    target: string,
-    patch: Partial<Node>,
-  ): Node[] {
-    return list.map((n) => {
-      if (n.path === target) return { ...n, ...patch };
-      if (n.children) {
-        return { ...n, children: patchNode(n.children, target, patch) };
-      }
-      return n;
-    });
-  }
 
   async function toggleDir(n: Node) {
     if (n.kind !== "dir") return;
