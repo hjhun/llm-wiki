@@ -4,118 +4,233 @@
 
 # CLIO
 
-**CLIO is a local-first LLM Wiki workbench.** Drop source material into `raw/`, let a coding agent maintain a human-readable Markdown wiki in `wiki/`, and use the browser UI to ingest, query, inspect, and graph your growing knowledge base.
+**CLIO is a local-first LLM Wiki workbench.** Put source material in `raw/`, ask a coding agent to ingest it, and grow a durable Markdown wiki in `wiki/` that you can read, search, lint, graph, and improve over time.
 
-CLIO implements the LLM Wiki pattern: the LLM does the maintenance work that people usually avoid, while the user stays in the curator role. The result is not only a chat transcript or vector index. It is a durable wiki that can be read, searched, reviewed, versioned, and improved over time.
+CLIO packages Andrej Karpathy's LLM Wiki pattern into a runnable local project. The user stays in the curator role: you collect source material, decide what matters, and ask questions. The agent does the maintenance work: summarizing sources, creating concept/entity pages, updating indexes, recording logs, checking wiki health, and building graph artifacts.
 
-<table>
-<tr><td><b>Local-first knowledge base</b></td><td>Your original files live in <code>raw/</code>. CLIO writes summaries, concepts, entities, answers, indexes, and logs into <code>wiki/</code>.</td></tr>
-<tr><td><b>Agent-operated wiki</b></td><td>Codex, Claude, Gemini, or cline can run the project skills for ingest, query, lint, and graph workflows.</td></tr>
-<tr><td><b>Browser UI</b></td><td>Next.js app with Chat, Explorer, Graph, and Settings tabs for everyday operation.</td></tr>
-<tr><td><b>Incremental ingest</b></td><td>Large source trees are processed leaf-first in small chunks, then merged into a coherent wiki.</td></tr>
-<tr><td><b>Knowledge graph</b></td><td>Graph Build/Update requests go through the coding agent and the <code>wiki-graphify</code> skill, using the global <code>graphify</code> command.</td></tr>
-<tr><td><b>Reviewable outputs</b></td><td>Markdown files, append-only logs, lint reports, graph JSON, and session records make the system inspectable.</td></tr>
-</table>
+## Why CLIO?
 
----
+Most "chat with your documents" tools hide knowledge in a transcript or an opaque vector store. CLIO keeps the useful result in ordinary Markdown files.
 
-## Quick Start
+| Capability | What it means |
+|---|---|
+| Local-first source library | Your original material lives in `raw/`; agents treat it as read-only. |
+| Maintained Markdown wiki | Summaries, concepts, entities, answers, lint reports, and graph reports live in `wiki/`. |
+| Agent-operated workflows | `codex`, `claude`, `gemini`, or `cline` can run `/ingest`, `/query`, `/lint`, and graph workflows. |
+| Browser workbench | A Next.js UI provides Chat, Explorer, Graph, and Settings tabs. |
+| Incremental processing | Large folders are processed leaf-first in small chunks, then merged into a coherent wiki. |
+| Reviewable outputs | Wiki pages, logs, sessions, and graph JSON are files you can inspect and version. |
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/hjhun/llm-wiki/v0.1.0/scripts/install.sh | bash -s -- --start
+## How It Works
+
+```mermaid
+flowchart LR
+    User["You<br/>curate sources"] --> Raw["raw/<br/>original material"]
+    Raw --> Chat["Chat command<br/>/ingest-loop raw/topic"]
+    Chat --> Agent["Selected coding agent<br/>Codex, Claude, Gemini, or cline"]
+    Agent --> Skills["Project skills<br/>wiki-ingest, wiki-query, wiki-lint, wiki-graphify"]
+    Skills --> Wiki["wiki/<br/>Markdown knowledge base"]
+    Wiki --> Explorer["Explorer<br/>read and inspect"]
+    Wiki --> Query["/query<br/>cited answers"]
+    Wiki --> Graph["Graph tab<br/>knowledge graph"]
+    Wiki --> Lint["/lint<br/>health checks"]
 ```
-
-The installer downloads the `v0.1.0` release tarball into `./clio`, runs
-`setup.sh`, and starts the web app. It never overwrites an existing directory;
-choose another location with `--dir <path>` if `./clio` already exists.
-
-Open from this machine:
-
-```text
-http://127.0.0.1:7777
-```
-
-CLIO binds to `0.0.0.0` by default, so other machines on the same LAN can also
-reach it at `http://<server-ip>:7777`. Override with `--host 127.0.0.1` in the
-installer command, `setup.sh --host 127.0.0.1` inside the project, or by editing
-`server.host` in Settings if you want to restrict access.
-
-On first visit, CLIO redirects to `/setup` so you can set the administrator password. After login, open Settings and choose the default coding agent CLI.
-
-For a more detailed walkthrough, see [docs/first-run.md](./docs/first-run.md).
-
----
-
-## What CLIO Does
-
-CLIO turns a folder of source material into a maintained wiki.
-
-1. You put source files in `raw/`.
-2. You ask for an operation in the Chat tab, such as `/ingest raw/articles`.
-3. The selected coding agent reads `AGENTS.md`, `CLAUDE.md`, and the project-local skill files.
-4. The agent writes or updates pages under `wiki/`.
-5. CLIO shows the result through Explorer, Chat, and Graph.
 
 The important split is ownership:
 
 | Path | Owner | Purpose |
 |---|---|---|
-| `raw/` | User | Original source material. CLIO and agents do not modify it. |
-| `wiki/` | LLM agent | Maintained Markdown wiki. |
-| `wiki/sources/YYYY/YYYY-MM/` | LLM agent | One summary page per source, grouped by source chronology. |
-| `wiki/answers/` | LLM agent | Saved answers from query workflows. |
-| `wiki/lint/` | LLM agent | Wiki health reports. |
-| `wiki/graph/` | LLM agent + graphify | Graph JSON, graph report, partial graph state. |
+| `raw/` | You | Original source files. CLIO and agents must not edit, move, or delete them. |
+| `wiki/` | Agent | Generated and maintained Markdown wiki. |
+| `wiki/sources/YYYY/YYYY-MM/` | Agent | One source summary page per original source. |
+| `wiki/answers/` | Agent | Saved answers from query workflows. |
+| `wiki/lint/` | Agent | Wiki health reports. |
+| `wiki/graph/` | Agent + graphify | Graph JSON, graph report, partial graph state. |
 | `sessions/` | System | Chat and CLI session records. |
-| `.agents/skills/` | Project | Local agent skills that define CLIO operations. |
-| `webapp/` | Project | Next.js web UI. |
+| `.agents/skills/` | Project | Local instructions that define CLIO operations. |
+| `webapp/` | Project | Next.js browser UI. |
 
----
+## Quick Start
+
+Install the latest `v0.1.0` release into `./clio`, run setup, and start the web app:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/hjhun/llm-wiki/v0.1.0/scripts/install.sh | bash -s -- --start
+cd clio
+```
+
+Open:
+
+```text
+http://127.0.0.1:7777
+```
+
+On the first visit, CLIO redirects to `/setup`. Set the administrator password, log in, then open **Settings** and choose the default coding agent CLI.
+
+CLIO binds to `0.0.0.0` by default, so machines on the same trusted LAN can connect at `http://<server-ip>:7777`. To restrict the server to this machine:
+
+```bash
+./setup.sh --host 127.0.0.1 --start
+```
+
+## Prerequisites
+
+The release installer needs:
+
+- `bash`
+- `tar`
+- `curl` or `wget`
+
+The project setup and full workflows need:
+
+- Node.js `>=20`
+- npm
+- Python 3
+- At least one supported coding agent CLI: `codex`, `claude`, `gemini`, or `cline`
+- Optional: `graphify`, `qmd`, and Marp CLI
+
+`setup.sh` detects installed agent CLIs and writes the result to `config/cli-detected.json`. Missing CLIs can be installed manually or configured by path in Settings.
+
+## First Wiki in Five Minutes
+
+Copy the sample source into `raw/`:
+
+```bash
+mkdir -p raw/demo
+cp examples/raw/llm-wiki-demo.md raw/demo/
+```
+
+In the **Chat** tab, run:
+
+```text
+/ingest-loop raw/demo
+```
+
+Then ask:
+
+```text
+/query Why is the leaf-first merge pass necessary in LLM Wiki?
+```
+
+Expected result:
+
+- A source summary appears under `wiki/sources/YYYY/YYYY-MM/`.
+- Related concept/entity pages may be created or updated.
+- `wiki/index.md` and `wiki/log.md` are updated.
+- The query answer cites wiki/source pages.
+
+For a full walkthrough, read [docs/GUIDE.md](./docs/GUIDE.md). 한국어 안내서는 [docs/GUIDE_ko.md](./docs/GUIDE_ko.md)를 참고하세요.
 
 ## Core Workflows
 
-Run these from the Chat tab:
+Run these from the **Chat** tab:
+
+| Command | Use it for |
+|---|---|
+| `/ingest raw/<path>` | Process one ingest sub-chunk, then stop. Useful for careful manual stepping. |
+| `/ingest-loop raw/<path>` | Keep invoking ingest until the selected folder is complete. Recommended for normal use. |
+| `/ingest-loop` | Incrementally ingest all of `raw/`. |
+| `/query <question>` | Answer from the wiki first, with citations. |
+| `/lint` | Check metadata, links, contradictions, index consistency, and sensitive information. |
+| `/lint --fix` | Apply safe automatic fixes and write a lint report. |
+
+Run graph workflows from the **Graph** tab:
+
+| Button | What happens |
+|---|---|
+| Build | Requests `wiki-graphify build` through the selected coding agent. |
+| Incremental Update | Requests `wiki-graphify update` through the selected coding agent. |
+
+The web app does not execute `graphify` directly. The selected coding agent reads the `wiki-graphify` skill and uses the global `graphify` command from `PATH`, or `python3 -m graphify` when appropriate.
+
+## Adding Your Own Raw Data
+
+`raw/` is the only place you should put original material.
+
+Recommended layout:
 
 ```text
-/ingest raw/<path>
-/query <question>
-/lint
+raw/
+├── articles/
+│   └── 2026-05-llm-wiki/
+│       ├── karpathy-llm-wiki.md
+│       └── notes.md
+├── papers/
+│   └── retrieval/
+│       └── paper.pdf
+├── meetings/
+│   └── 2026-05-17-project-kickoff.md
+└── web-clips/
+    └── graphify-readme.md
 ```
 
-Graph workflows are available from the Graph tab:
+Tips:
 
-```text
-wiki-graphify build
-wiki-graphify update
-wiki-graphify query "<question>"
-```
-
-The web app does not execute `graphify` directly. It asks the selected coding agent to run the `wiki-graphify` skill, and that skill performs the leaf-first graph build/update flow.
-
-`graphify` itself should not require a separate API key in this integration.
-If a Graph Build/Update request asks for a key, it usually means the selected
-coding agent CLI is not logged in, or the webapp process was started without
-the CLI's normal `HOME`/environment. Start CLIO from the same shell where the
-CLI works, or configure the CLI credentials for the account running the webapp.
-
-For `/query`, CLIO keeps the LLM Wiki pattern wiki-first: the agent reads `wiki/index.md`, selects candidate pages, and answers from cited wiki/source pages. Optional helpers such as `qmd` and `wiki-graphify` can improve candidate search and relationship context, but they do not replace page reading.
-
----
+- Prefer clear folder names by topic, project, date, author, or source type.
+- Put related files in the same leaf folder so CLIO can summarize them together.
+- Do not put secrets, API keys, private tokens, or unnecessary personal data into `raw/`.
+- If a PDF or image is scanned and has no selectable text, OCR it first or add a companion `.md` note.
+- After adding files, run `/ingest-loop raw/<folder>` or enable Auto Ingest in Settings.
 
 ## Web UI
 
 | Tab | Purpose |
 |---|---|
-| Chat | Send `/ingest`, `/query`, `/lint`, or natural-language requests to the selected coding agent. |
-| Explorer | Browse and inspect files in the wiki workspace. |
-| Graph | View graph status, trigger graph build/update, and inspect generated graph artifacts. |
-| Settings | Configure the default coding agent, server options, graph settings, and password. |
+| Chat | Run `/ingest`, `/ingest-loop`, `/query`, `/lint`, or natural-language requests. |
+| Explorer | Browse `raw/`, `wiki/`, and generated reports. |
+| Graph | Build, update, and inspect the knowledge graph. |
+| Settings | Configure agent CLI, server host/port, graph behavior, Auto Ingest, language, and password. |
 
----
+## Setup Options
+
+The release installer downloads a GitHub source tarball and then runs `setup.sh`.
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/hjhun/llm-wiki/v0.1.0/scripts/install.sh | bash -s -- --dir ./my-clio --skip-graphify --port 7788 --start
+```
+
+Installer options:
+
+| Option | Description |
+|---|---|
+| `--dir <path>` | Install directory. Default: `./clio`. The installer never overwrites an existing path. |
+| `--ref <ref>` | GitHub tag, branch, or commit. Default: `v0.1.0`. |
+| `--repo <repo>` | GitHub repo as `owner/name` or a `github.com` URL. Default: `hjhun/llm-wiki`. |
+| `--no-setup` | Download and unpack only. |
+
+Any other arguments are passed to `setup.sh`.
+
+Inside an installed or cloned checkout:
+
+```bash
+./setup.sh --help
+```
+
+Common `setup.sh` options:
+
+| Option | Description |
+|---|---|
+| `--start` | Start the web server in the background after setup. |
+| `--shutdown` | Stop the running CLIO web server. |
+| `--no-restart` | With `--start`, fail if the target port is already in use. |
+| `--port <n>` | Web UI port. Default: `7777`. |
+| `--host <addr>` | Web UI host. Default: `0.0.0.0`. Use `127.0.0.1` for local-only. |
+| `--dev` | Use the development server command. |
+| `--skip-graphify` | Do not install or upgrade graphify. |
+| `--skip-npm-install` | Skip `webapp/` dependency installation. |
+| `--skip-build` | Skip `npm run build`. |
+| `--with-qmd` | Best-effort optional qmd setup. |
+| `--with-marp` | Best-effort optional Marp CLI setup. |
+| `--install-cli=<names>` | Best-effort CLI install for `codex`, `claude`, `gemini`, or `cline`. |
+
+Runtime files are written under `.run/`:
+
+```text
+.run/webapp.pid
+.run/webapp.log
+```
 
 ## Supported Agent CLIs
-
-CLIO is designed to work with host-installed coding agent CLIs.
 
 | CLI | Invocation shape |
 |---|---|
@@ -124,118 +239,11 @@ CLIO is designed to work with host-installed coding agent CLIs.
 | `gemini` | `gemini --prompt "<prompt>"` |
 | `cline` | `cline -y "<prompt>"` |
 
-`setup.sh` detects available CLIs and writes the result to `config/cli-detected.json`. Missing CLIs can be installed manually or configured by path in Settings.
-
-Optional best-effort install:
-
-```bash
-./setup.sh --install-cli=claude,gemini
-```
-
----
-
-## Graphify
-
-CLIO uses [safishamsi/graphify](https://github.com/safishamsi/graphify) for knowledge graph generation.
-
-`setup.sh` does not clone graphify into `tools/`. It uses the global `graphify` command. During setup it checks the installed `graphifyy` package version, upgrades to the latest package available from PyPI, logs the before/after version, and runs `graphify install` for the assistant integration.
-
-If `graphify` is missing, setup follows the graphify README installation flow:
-
-```bash
-pipx install graphifyy && graphify install
-```
-
-If `pipx` is not available and Python allows user-site installs, setup falls
-back to:
-
-```bash
-python3 -m pip install --user --upgrade graphifyy
-graphify install
-```
-
-On Debian/Ubuntu systems with an externally managed Python environment
-(PEP 668), setup skips the `pip --user` fallback and prints pipx guidance
-instead of using `--break-system-packages`.
-
-To skip graphify installation/upgrade and use an already-installed global command:
-
-```bash
-./setup.sh --skip-graphify
-```
-
----
-
-## Setup Script
-
-The release installer is the recommended installation entrypoint for new users:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/hjhun/llm-wiki/v0.1.0/scripts/install.sh | bash -s -- --start
-```
-
-Installer options:
-
-| Option | Description |
-|---|---|
-| `--dir <path>` | Install directory. Default: `./clio`. The installer fails if this path already exists. |
-| `--ref <ref>` | GitHub tag, branch, or commit to download. Default: `v0.1.0`. |
-| `--repo <repo>` | GitHub repo as `owner/name` or a `github.com` URL. Default: `hjhun/llm-wiki`. |
-| `--no-setup` | Download and unpack only; do not run `setup.sh`. |
-
-Any other arguments are passed through to `setup.sh`:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/hjhun/llm-wiki/v0.1.0/scripts/install.sh | bash -s -- --dir ./my-clio --skip-graphify --port 7788 --start
-```
-
-Prerequisites for the installer are `bash`, `tar`, and either `curl` or `wget`.
-The project setup itself requires Node.js `>=20`, npm, Python 3, and one
-supported coding agent CLI for full operation.
-
-Inside an installed or cloned checkout, `setup.sh` remains the project setup and
-runtime helper:
-
-```bash
-./setup.sh --help
-```
-
-Common options:
-
-| Option | Description |
-|---|---|
-| `--start` | Start the web server in the background after setup. |
-| `--shutdown` | Stop the running CLIO web server and exit. |
-| `--no-restart` | With `--start`, fail if the target port is already in use. |
-| `--port <n>` | Web UI port. Default: `7777`. |
-| `--host <addr>` | Web UI host. Default: `0.0.0.0` (LAN-reachable). Use `127.0.0.1` to restrict to this machine. |
-| `--dev` | Use the development server command. |
-| `--skip-graphify` | Do not install graphify. Use existing global `graphify` if available. |
-| `--skip-npm-install` | Skip `webapp/` dependency installation. |
-| `--skip-build` | Skip `npm run build`. |
-| `--with-qmd` | Best-effort optional qmd setup. |
-| `--with-marp` | Best-effort optional Marp CLI setup. |
-
-Server runtime files are written under `.run/`:
-
-```text
-.run/webapp.pid
-.run/webapp.log
-```
-
----
+Each CLI must be authenticated in the host environment where the web app runs. If Chat or Graph says that no default agent is configured, open Settings and choose one. If a Graph Build/Update request asks for an API key, it usually means the selected coding agent CLI is not logged in or the webapp process was started without the CLI's normal environment.
 
 ## Development
 
-Requirements:
-
-- Node.js `>=20`
-- npm
-- Python 3
-- One supported coding agent CLI for full operation
-- Optional: `graphify`, `qmd`, `marp`
-
-Install without starting the server:
+Clone and set up:
 
 ```bash
 git clone https://github.com/hjhun/llm-wiki.git
@@ -243,12 +251,10 @@ cd llm-wiki
 ./setup.sh
 ```
 
-Development server:
+Start development mode:
 
 ```bash
-./setup.sh --skip-build --dev
-cd webapp
-npm run dev
+./setup.sh --start --dev --skip-build
 ```
 
 Typecheck and build:
@@ -265,93 +271,49 @@ Smoke test:
 ./scripts/smoke-test.sh
 ```
 
-The smoke test checks required files, `setup.sh` syntax/help, an idempotent no-network setup path, TypeScript, and the production build.
-
----
-
 ## Project Structure
 
 ```text
 .
 ├── .agents/skills/       # Project-local agent skills
 ├── config/               # Default and local configuration
-├── docs/                 # First-run and QA documentation
+├── docs/                 # User guides, QA notes, release notes
 ├── examples/raw/         # Sample source material
 ├── raw/                  # User-owned source material
-├── scripts/              # Project utility scripts
+├── scripts/              # Installer and utility scripts
 ├── tools/                # Optional local helper tools such as qmd
 ├── webapp/               # Next.js web application
 └── wiki/                 # Agent-maintained Markdown wiki
 ```
 
-Important operating documents:
-
-| File | Purpose |
-|---|---|
-| [AGENTS.md](./AGENTS.md) | Agent operating rules for Codex, Gemini, cline, and other agents. |
-| [CLAUDE.md](./CLAUDE.md) | Claude-side mirror of the same operating rules. |
-| [IDEATION.md](./IDEATION.md) | Product and architecture notes. |
-| [docs/first-run.md](./docs/first-run.md) | First-run guide. |
-| [docs/qa.md](./docs/qa.md) | QA checklist. |
-| [tools/README.md](./tools/README.md) | Optional tool notes. |
-
----
-
-## Security Model
-
-- CLIO binds to `0.0.0.0` by default so other machines on the same LAN can connect via `http://<server-ip>:<port>`. Set `server.host` to `127.0.0.1` in Settings (or `config/local.json`) to restrict access to this machine.
-- The administrator-password gate is the only auth layer. Treat LAN exposure accordingly: only run on a trusted network.
-- First run requires an administrator password.
-- `config/local.json`, sessions, runtime logs, and generated local state are git-ignored by default.
-- `raw/` is treated as immutable source material. Agents must not edit, move, or delete it.
-- Secrets and API keys must not be written into wiki pages or graph reports.
-- Coding agent execution is routed through configured CLI adapters and project-local operating rules.
-
----
-
-## Sample Demo
-
-`raw/` is user-owned, so CLIO does not copy sample data into it automatically.
-
-```bash
-mkdir -p raw/demo
-cp examples/raw/llm-wiki-demo.md raw/demo/
-```
-
-Then run in the Chat tab:
-
-```text
-/ingest raw/demo
-/query Why is the leaf-first merge pass necessary in LLM Wiki?
-```
-
----
-
-## Documentation
+Important documents:
 
 | Document | What's covered |
 |---|---|
-| [First-run guide](./docs/first-run.md) | Install, start, login, choose agent, run demo ingest/query/graph. |
-| [QA checklist](./docs/qa.md) | Smoke tests, manual web checks, ingest/query/graph checks, sensitive file review. |
-| [Agent rules](./AGENTS.md) | Repository conventions, wiki ownership, skill routing, hard rules. |
-| [Claude mirror](./CLAUDE.md) | Same rules for Claude-based agents. |
-| [Tool notes](./tools/README.md) | graphify, qmd, and marp notes. |
+| [docs/GUIDE.md](./docs/GUIDE.md) | Complete English user guide. |
+| [docs/GUIDE_ko.md](./docs/GUIDE_ko.md) | Complete Korean user guide. |
+| [AGENTS.md](./AGENTS.md) | Repository operating rules for coding agents. |
+| [CLAUDE.md](./CLAUDE.md) | Claude-side mirror of the same operating rules. |
+| [docs/IDEATION.md](./docs/IDEATION.md) | Product and architecture notes. |
+| [tools/README.md](./tools/README.md) | graphify, qmd, and Marp notes. |
 
----
+## Security Notes
+
+- CLIO's administrator password is the only built-in authentication layer.
+- The default host is `0.0.0.0`, which is LAN-reachable. Use `127.0.0.1` on untrusted networks.
+- `config/local.json`, sessions, runtime logs, local CLI detection, and generated graph state are git-ignored by default.
+- `raw/` is immutable from the agent's perspective. Agents must not modify, delete, or move original sources.
+- Do not store credentials, API keys, or sensitive personal data in `raw/` or `wiki/`.
 
 ## References
 
-- [Andrej Karpathy, `llm-wiki.md`](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f) — the original LLM Wiki pattern that inspired this project.
-- [safishamsi/graphify](https://github.com/safishamsi/graphify) — knowledge graph generation used by CLIO's graph workflow.
-
----
+- [Andrej Karpathy, `llm-wiki.md`](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f) - the original LLM Wiki pattern.
+- [safishamsi/graphify](https://github.com/safishamsi/graphify) - knowledge graph generation used by CLIO's graph workflow.
 
 ## License
 
 This project is licensed under the Apache License 2.0. See [LICENSE](./LICENSE).
 
----
-
 ## Status
 
-CLIO is currently a local-first project scaffold and working prototype. The main surfaces are implemented, but the project is still early: expect the agent skills, graph schema, and setup ergonomics to continue evolving.
+CLIO is an early local-first workbench. The main surfaces are implemented, but the skills, graph schema, and setup ergonomics are expected to evolve.
