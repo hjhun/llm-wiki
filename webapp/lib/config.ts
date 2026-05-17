@@ -109,6 +109,18 @@ export const ConfigSchema = z.object({
       .object({
         chat: z.number().int().min(1000).nullable().default(5 * 60 * 1000),
         ingest: z.number().int().min(1000).nullable().default(null),
+        /**
+         * Per-sub-chunk timeout inside an /ingest-loop iteration. Defaults to
+         * null (no timeout) for the same reason ingest does: a single
+         * sub-chunk can legitimately take tens of minutes on large leaves.
+         * The loop itself is bounded by `cli.ingestLoop.maxIterations`.
+         */
+        "ingest-loop": z
+          .number()
+          .int()
+          .min(1000)
+          .nullable()
+          .default(null),
         query: z.number().int().min(1000).nullable().default(30 * 60 * 1000),
         lint: z.number().int().min(1000).nullable().default(30 * 60 * 1000),
         graph: z.number().int().min(1000).nullable().default(30 * 60 * 1000),
@@ -116,10 +128,28 @@ export const ConfigSchema = z.object({
       .default({
         chat: 5 * 60 * 1000,
         ingest: null,
+        "ingest-loop": null,
         query: 30 * 60 * 1000,
         lint: 30 * 60 * 1000,
         graph: 30 * 60 * 1000,
       }),
+    /**
+     * Settings that apply to the /ingest-loop driver. The loop repeatedly
+     * spawns the host CLI to process one sub-chunk at a time (per the
+     * wiki-ingest skill) until the progress state reports zero pending /
+     * in_progress / partial sub-chunks and the merge pass has completed.
+     */
+    ingestLoop: z
+      .object({
+        /**
+         * Hard upper bound on how many sub-chunk invocations a single
+         * /ingest-loop run may perform before halting. Acts as a safety net
+         * against runaway loops if the skill ever fails to advance the
+         * progress state.
+         */
+        maxIterations: z.number().int().min(1).default(200),
+      })
+      .default({ maxIterations: 200 }),
   }),
   ui: z.object({
     language: z.enum(["ko", "en"]).default("ko"),

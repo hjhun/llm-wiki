@@ -50,10 +50,19 @@ async function asError(res: Response): Promise<Error> {
   return new Error(j?.error ?? `request failed (${res.status})`);
 }
 
-type ChatKind = "chat" | "ingest" | "query" | "lint" | "graph";
+type ChatKind =
+  | "chat"
+  | "ingest"
+  | "ingest-loop"
+  | "query"
+  | "lint"
+  | "graph";
 
 function detectKind(message: string): ChatKind {
   const head = message.trimStart().toLowerCase();
+  // Match the longer prefix first so "/ingest-loop" is not classified as
+  // a plain "/ingest" call.
+  if (head.startsWith("/ingest-loop")) return "ingest-loop";
   if (head.startsWith("/ingest")) return "ingest";
   if (head.startsWith("/query")) return "query";
   if (head.startsWith("/lint")) return "lint";
@@ -69,6 +78,10 @@ export default function Chat() {
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [progress, setProgress] = useState<ChatProgress | null>(null);
+  // Tracks whether the in-flight request is an /ingest-loop run so the
+  // Composer can render the "Stop loop" button only while it would help.
+  const [activeKind, setActiveKind] = useState<ChatKind | null>(null);
+  const [stopping, setStopping] = useState(false);
 
   const refreshSessions = useCallback(async () => {
     try {
@@ -144,9 +157,24 @@ export default function Chat() {
     }
   }
 
+  async function stopIngestLoop() {
+    if (!pending || activeKind !== "ingest-loop" || stopping) return;
+    setStopping(true);
+    try {
+      const res = await fetch("/api/chat/ingest-loop/stop", { method: "POST" });
+      if (!res.ok) throw await asError(res);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setStopping(false);
+    }
+  }
+
   async function send(message: string) {
     if (pending) return;
+    const kind = detectKind(message);
     setPending(true);
+    setActiveKind(kind);
     setError(null);
     setProgress(null);
 
@@ -301,7 +329,7 @@ export default function Chat() {
         body: JSON.stringify({
           sessionPath,
           message,
-          kind: detectKind(message),
+          kind,
         }),
       });
       if (!res.ok) throw await asError(res);
@@ -348,6 +376,7 @@ export default function Chat() {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setPending(false);
+      setActiveKind(null);
     }
   }
 
@@ -395,7 +424,15 @@ export default function Chat() {
           />
         </div>
 
-        <Composer disabled={pending} onSend={send} />
+        <Composer
+          disabled={pending}
+          onSend={send}
+          loopStop={
+            pending && activeKind === "ingest-loop"
+              ? { onStop: stopIngestLoop, stopping }
+              : null
+          }
+        />
       </section>
     </div>
   );

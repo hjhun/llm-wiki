@@ -6,9 +6,16 @@ import { useLanguage } from "../i18n";
 export default function Composer({
   disabled,
   onSend,
+  loopStop,
 }: {
   disabled: boolean;
   onSend: (message: string) => void;
+  /**
+   * When the active request is an /ingest-loop run, the parent injects a
+   * stop handler here so the Composer can render a "Stop after current
+   * sub-chunk" control. The button is hidden for every other kind of call.
+   */
+  loopStop?: { onStop: () => void; stopping: boolean } | null;
 }) {
   const { t } = useLanguage();
   const [value, setValue] = useState("");
@@ -112,6 +119,17 @@ export default function Composer({
           placeholder={t.chat.placeholder}
           className="block w-full resize-none rounded-md border border-line bg-bg px-3 py-2 text-sm leading-relaxed text-ink outline-none focus:border-accent"
         />
+        {loopStop ? (
+          <button
+            type="button"
+            onClick={loopStop.onStop}
+            disabled={loopStop.stopping}
+            title={t.chat.stopLoopHint}
+            className="rounded-md border border-line bg-bg px-3 py-2 text-sm font-medium text-ink-dim hover:border-red-500/60 hover:text-red-300 disabled:opacity-40"
+          >
+            {loopStop.stopping ? t.chat.stopping : t.chat.stopLoop}
+          </button>
+        ) : null}
         <button
           type="button"
           onClick={submit}

@@ -30,9 +30,13 @@
     "timeouts": {
       "chat": 300000,
       "ingest": null,
+      "ingest-loop": null,
       "query": 1800000,
       "lint": 1800000,
       "graph": 1800000
+    },
+    "ingestLoop": {
+      "maxIterations": 200
     }
   },
   "ui": {

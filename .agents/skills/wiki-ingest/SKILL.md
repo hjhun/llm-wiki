@@ -21,7 +21,17 @@ externalized to `wiki/.progress/ingest/`.
 
 ## Triggers
 
-- `/ingest <path|URL>` — chat slash command.
+- `/ingest <path|URL>` — chat slash command. Processes **exactly one
+  sub-chunk** and exits, per the `unitPerCall: "one_subchunk"` contract. The
+  user (or the webapp) re-invokes `/ingest` to advance.
+- `/ingest-loop <path|URL>` — same skill body, but driven by the webapp's
+  backend loop in `/api/chat/send` (`kind="ingest-loop"`). The backend keeps
+  spawning a fresh CLI invocation per sub-chunk until
+  `wiki/.progress/ingest/.state.json` reports no remaining `pending`,
+  `in_progress`, or `partial` sub-chunks and `merge_pass.status === "done"`,
+  or until the user clicks "Stop loop" (which drops
+  `wiki/.progress/ingest/.stop`). Each iteration must still process exactly
+  one sub-chunk and exit — the skill never loops itself.
 - `/ingest` with no argument — incremental ingest for all of `raw/`.
 - Natural-language triggers: "summarize this material", "I added something new to raw", "ingest ...".
 - UI: chat input `+` menu -> ingest.
@@ -253,7 +263,7 @@ Regenerated from `.state.json` after every sub-chunk. Format:
 | `raw/articles/karpathy/` | done | 1/1 | — | `sessions/2026-05-17/123456_ingest_karpathy.md` |
 | `raw/notes/2026-05/` | partial | 2/3 | rate limit | `sessions/2026-05-17/123456_ingest_karpathy.md` |
 
-_Resume by running `/ingest` again — the next sub-chunk is picked from `.state.json` automatically._
+_Resume by running `/ingest` again — the next sub-chunk is picked from `.state.json` automatically. Or run `/ingest-loop` to let the webapp's backend driver keep re-spawning the CLI until every sub-chunk and the merge pass are done; click "Stop loop" in the chat UI to halt after the current sub-chunk._
 ```
 
 ## State Migration

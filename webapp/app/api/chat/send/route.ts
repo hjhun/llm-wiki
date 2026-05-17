@@ -27,13 +27,18 @@ const Body = z.object({
    * Operation hint that selects the timeout bucket in config.cli.timeouts.
    * Defaults to "chat" if omitted; the client sets "ingest"/"query"/"lint"
    * when it detects a slash command so long-running ingest jobs are not
-   * SIGTERM-ed at the 5-minute chat cap.
+   * SIGTERM-ed at the 5-minute chat cap. "ingest-loop" runs the backend
+   * loop that drives wiki-ingest one sub-chunk at a time until the
+   * progress state reports no remaining work.
    */
-  kind: z.enum(["chat", "ingest", "query", "lint", "graph"]).optional(),
+  kind: z
+    .enum(["chat", "ingest", "ingest-loop", "query", "lint", "graph"])
+    .optional(),
 });
 
 const PROGRESS_DASHBOARD_PATH = "wiki/.progress/ingest/DASHBOARD.md";
 const PROGRESS_STATE_PATH = "wiki/.progress/ingest/.state.json";
+const PROGRESS_STOP_PATH = "wiki/.progress/ingest/.stop";
 const WIKI_LOG_REL = "wiki/log.md";
 
 async function buildProgressReference(): Promise<string | null> {
@@ -75,6 +80,136 @@ async function ingestMergePassDone(): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+/**
+ * Returns the parsed StateSummary of wiki/.progress/ingest/.state.json, or
+ * null when the file is missing or unreadable. Used by the /ingest-loop
+ * driver to decide whether another iteration is needed.
+ */
+async function readIngestStateSummary(): Promise<StateSummary | null> {
+  try {
+    const raw = await fs.readFile(
+      path.join(PROJECT_ROOT, PROGRESS_STATE_PATH),
+      "utf8",
+    );
+    return summarizeIngestState(raw);
+  } catch {
+    return null;
+  }
+}
+
+async function stopFlagExists(): Promise<boolean> {
+  try {
+    await fs.access(path.join(PROJECT_ROOT, PROGRESS_STOP_PATH));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function clearStopFlag(): Promise<void> {
+  try {
+    await fs.rm(path.join(PROJECT_ROOT, PROGRESS_STOP_PATH), { force: true });
+  } catch {
+    // Best-effort cleanup; the next loop run will overwrite or re-check it.
+  }
+}
+
+type LoopDecision =
+  | { halt: false }
+  | {
+      halt: true;
+      kind: "normal" | "error" | "stopped" | "capped";
+      reason: string;
+    };
+
+/**
+ * Pure halt logic for the /ingest-loop driver. Order matters: a stop request
+ * or CLI failure takes precedence over normal completion so the user always
+ * sees the most specific cause. The "normal" branch requires the skill's
+ * merge_pass to have transitioned to "done" — without that, the loop must
+ * spawn at least one more iteration so the merge pass can run.
+ */
+function decideLoopHalt(input: {
+  exitCode: number;
+  summary: StateSummary | null;
+  mergeDone: boolean;
+  stopRequested: boolean;
+  iteration: number;
+  maxIter: number;
+}): LoopDecision {
+  // Failures take priority over a concurrent Stop request: if a sub-chunk
+  // crashed or marked itself "error", the user should see the cause rather
+  // than the (less informative) "stopped" reason.
+  if (input.exitCode !== 0) {
+    return {
+      halt: true,
+      kind: "error",
+      reason: `CLI exitCode=${input.exitCode}`,
+    };
+  }
+  if (input.summary && input.summary.error > 0) {
+    return {
+      halt: true,
+      kind: "error",
+      reason: `sub-chunk ${input.summary.error}건이 error 상태로 종료`,
+    };
+  }
+  if (input.stopRequested) {
+    return { halt: true, kind: "stopped", reason: "사용자 Stop 요청" };
+  }
+  if (input.iteration >= input.maxIter) {
+    return {
+      halt: true,
+      kind: "capped",
+      reason: `최대 반복 ${input.maxIter}회에 도달`,
+    };
+  }
+  if (
+    input.summary &&
+    input.summary.pending === 0 &&
+    input.summary.in_progress === 0 &&
+    input.summary.partial === 0 &&
+    input.mergeDone
+  ) {
+    return {
+      halt: true,
+      kind: "normal",
+      reason: `모든 leaf 완료 + merge pass done (${input.summary.done}/${input.summary.total})`,
+    };
+  }
+  return { halt: false };
+}
+
+/**
+ * Prompt used by /ingest-loop iterations after the first. The first call
+ * reuses the slim prompt built from the user's message ("/ingest-loop ...")
+ * so the wiki-ingest skill sees the user's intent. From the second
+ * iteration onward we send a fresh prompt that names the skill directly and
+ * tells it to process exactly one sub-chunk and exit, mirroring what
+ * happens when the user types `/ingest` again.
+ */
+function buildLoopContinuationPrompt(input: {
+  sessionPath: string;
+  iteration: number;
+  progressRef: string | null;
+}): string {
+  const lines: string[] = [
+    "You are operating an LLM Wiki repository.",
+    "Read CLAUDE.md/AGENTS.md in this repository and follow .agents/skills/wiki-ingest/SKILL.md.",
+    `Active session log: sessions/${input.sessionPath}`,
+  ];
+  if (input.progressRef) lines.push(input.progressRef);
+  lines.push(
+    `This is /ingest-loop iteration ${input.iteration}. Pick the next pending sub-chunk from wiki/.progress/ingest/.state.json and process exactly one sub-chunk per the wiki-ingest skill, then exit. Do not loop yourself — the backend will spawn the next iteration.`,
+    "",
+    "===== CONVERSATION =====",
+    "User: /ingest",
+    "",
+    "Respond now as the assistant.",
+  );
+  return lines.join("\n");
 }
 
 function summarizeIngestState(raw: string): StateSummary | null {
@@ -390,96 +525,255 @@ export async function POST(req: Request) {
       const kind = parsed.data.kind ?? "chat";
       const kindTimeout = cfg.cli.timeouts[kind];
       const stopWatcher = startProgressWatcher((event) => send(event));
-      try {
-        const result = await runCli(agent, prompt, {
-          safeMode: cfg.agent.safeMode,
-          // null in config means "no timeout for this operation kind" —
-          // pass undefined so runCli does not register a setTimeout that
-          // would SIGTERM the child mid-summary.
-          timeoutMs: kindTimeout ?? undefined,
-          signal: req.signal,
-          // When the operation is configured for infinite runtime (ingest),
-          // detach the HTTP request lifecycle from the CLI. An idle browser
-          // tab, WSL2/proxy idle disconnect, or Node HTTP idle timeout would
-          // otherwise fire req.signal.abort mid-chunk and re-introduce the
-          // SIGTERM we just disabled at the timer level. The CLI keeps
-          // running, persists progress to wiki/.progress/ingest/, and writes
-          // the final assistant message to the session file even if no client
-          // is listening anymore.
-          killOnAbort: kindTimeout != null,
-          onStdout: (chunk) => {
-            const text = displayChunk(chunk);
-            if (text) {
-              send({ type: "chunk", stream: "stdout", text });
-            }
-          },
-        });
-        let reply =
-          (result.stdout.trim() || result.stderr.trim()) ||
-          `(에이전트가 빈 응답을 반환했습니다. exitCode=${result.exitCode})`;
 
-        if (
-          kind === "ingest" &&
-          result.exitCode === 0 &&
-          cfg.graph.autoUpdateOnIngest &&
-          (await ingestMergePassDone())
-        ) {
-          const graphCommand = "wiki-graphify update";
+      /**
+       * After an ingest (or the final iteration of an ingest-loop) finishes
+       * cleanly and the merge pass is "done", trigger a follow-up
+       * `wiki-graphify update` via a fresh CLI invocation. Returns the note
+       * to append to the assistant reply text (may be empty). Streams the
+       * note and graph output back to the client as it goes.
+       */
+      const maybeAutoRunGraphify = async (
+        lastExitCode: number,
+      ): Promise<string> => {
+        if (lastExitCode !== 0) return "";
+        if (!cfg.graph.autoUpdateOnIngest) return "";
+        if (!(await ingestMergePassDone())) return "";
+
+        const graphCommand = "wiki-graphify update";
+        await appendMessage(
+          sessionPath,
+          "system",
+          `ingest merge pass complete; auto-running ${graphCommand}`,
+        );
+        const graphPrompt = buildGraphifyPrompt("update", sessionPath);
+        const note =
+          "\n\n---\n\n[auto graph] ingest merge pass가 완료되어 `wiki-graphify update`를 별도 CLI 호출로 실행합니다.\n";
+        send({ type: "chunk", stream: "stdout", text: note });
+
+        const graphTimeout = cfg.cli.timeouts.graph;
+        try {
+          const graphResult = await runCli(agent, graphPrompt, {
+            safeMode: cfg.agent.safeMode,
+            timeoutMs: graphTimeout ?? undefined,
+            signal: req.signal,
+            killOnAbort: graphTimeout != null,
+            onStdout: (chunk) => {
+              const text = displayChunk(chunk);
+              if (text) {
+                send({ type: "chunk", stream: "stdout", text });
+              }
+            },
+          });
+          const graphReply =
+            (graphResult.stdout.trim() || graphResult.stderr.trim()) ||
+            `(그래프 업데이트가 빈 응답을 반환했습니다. exitCode=${graphResult.exitCode})`;
+          return `${note}\n\n---\n\n[auto graph result]\n${graphReply}`;
+        } catch (err) {
+          const graphError = errorMessage(err);
           await appendMessage(
             sessionPath,
             "system",
-            `ingest merge pass complete; auto-running ${graphCommand}`,
+            `❌ 자동 그래프 업데이트 실패: ${graphError}`,
+          ).catch(() => undefined);
+          return (
+            `${note}\n\n---\n\n[auto graph blocker]\n` +
+            `ingest는 완료됐지만 자동 그래프 업데이트 호출이 실패했습니다: ${graphError}`
           );
-          const graphPrompt = buildGraphifyPrompt("update", sessionPath);
-          const note =
-            "\n\n---\n\n[auto graph] ingest merge pass가 완료되어 `wiki-graphify update`를 별도 CLI 호출로 실행합니다.\n";
-          reply += note;
-          send({ type: "chunk", stream: "stdout", text: note });
+        }
+      };
 
-          const graphTimeout = cfg.cli.timeouts.graph;
-          try {
-            const graphResult = await runCli(agent, graphPrompt, {
-              safeMode: cfg.agent.safeMode,
-              timeoutMs: graphTimeout ?? undefined,
-              signal: req.signal,
-              killOnAbort: graphTimeout != null,
-              onStdout: (chunk) => {
-                const text = displayChunk(chunk);
-                if (text) {
-                  send({ type: "chunk", stream: "stdout", text });
-                }
-              },
-            });
-            const graphReply =
-              (graphResult.stdout.trim() || graphResult.stderr.trim()) ||
-              `(그래프 업데이트가 빈 응답을 반환했습니다. exitCode=${graphResult.exitCode})`;
-            reply += `\n\n---\n\n[auto graph result]\n${graphReply}`;
-          } catch (err) {
-            const graphError = errorMessage(err);
-            reply +=
-              `\n\n---\n\n[auto graph blocker]\n` +
-              `ingest는 완료됐지만 자동 그래프 업데이트 호출이 실패했습니다: ${graphError}`;
+      try {
+        if (kind === "ingest-loop") {
+          // -------- /ingest-loop driver --------
+          // Repeatedly spawn the host CLI to process one sub-chunk at a time
+          // (per the wiki-ingest skill's `unitPerCall: "one_subchunk"`
+          // contract) until decideLoopHalt() reports the run is complete or
+          // must stop. The skill persists progress to
+          // wiki/.progress/ingest/.state.json after every sub-chunk, so the
+          // loop only needs to inspect that file between iterations — no
+          // sentinel parsing of stdout required.
+          await clearStopFlag();
+          const maxIter = cfg.cli.ingestLoop.maxIterations;
+          await appendMessage(
+            sessionPath,
+            "system",
+            `🔁 /ingest-loop 시작 (최대 ${maxIter} 반복).`,
+          ).catch(() => undefined);
+
+          let iteration = 0;
+          let lastExitCode = 0;
+          let lastDurationMs = 0;
+          let haltKind: "normal" | "error" | "stopped" | "capped" = "normal";
+          let haltReason = "loop terminated without iterations";
+          let aggregateReply = "";
+
+          while (true) {
+            // Check user-requested stop before spending another spawn.
+            if (await stopFlagExists()) {
+              haltKind = "stopped";
+              haltReason = "사용자 Stop 요청";
+              break;
+            }
+            if (iteration >= maxIter) {
+              haltKind = "capped";
+              haltReason = `최대 반복 ${maxIter}회에 도달`;
+              break;
+            }
+
+            iteration += 1;
+            const iterPrompt =
+              iteration === 1
+                ? prompt
+                : buildLoopContinuationPrompt({
+                    sessionPath,
+                    iteration,
+                    progressRef: progressRef
+                      ? progressRef
+                      : await buildProgressReference(),
+                  });
+
+            const banner = `\n\n---\n[loop iter ${iteration}/${maxIter}]\n`;
+            if (iteration > 1) {
+              send({ type: "chunk", stream: "stdout", text: banner });
+            }
+
+            let result;
+            try {
+              result = await runCli(agent, iterPrompt, {
+                safeMode: cfg.agent.safeMode,
+                timeoutMs: kindTimeout ?? undefined,
+                signal: req.signal,
+                killOnAbort: kindTimeout != null,
+                onStdout: (chunk) => {
+                  const text = displayChunk(chunk);
+                  if (text) {
+                    send({ type: "chunk", stream: "stdout", text });
+                  }
+                },
+              });
+            } catch (err) {
+              const msg = errorMessage(err);
+              await appendMessage(
+                sessionPath,
+                "system",
+                `❌ /ingest-loop iter ${iteration} 호출 실패: ${msg}`,
+              ).catch(() => undefined);
+              haltKind = "error";
+              haltReason = `CLI 호출 실패: ${msg}`;
+              break;
+            }
+
+            lastExitCode = result.exitCode;
+            lastDurationMs += result.durationMs;
+            const iterReply =
+              (result.stdout.trim() || result.stderr.trim()) ||
+              `(에이전트가 빈 응답을 반환했습니다. exitCode=${result.exitCode})`;
             await appendMessage(
               sessionPath,
-              "system",
-              `❌ 자동 그래프 업데이트 실패: ${graphError}`,
+              "assistant",
+              iterReply,
+              agent,
             ).catch(() => undefined);
-          }
-        }
+            aggregateReply +=
+              (aggregateReply ? banner : "") + iterReply;
 
-        const assistantMsg = await appendMessage(
-          sessionPath,
-          "assistant",
-          reply,
-          agent,
-        );
-        send({
-          type: "done",
-          sessionPath,
-          assistant: assistantMsg,
-          exitCode: result.exitCode,
-          durationMs: result.durationMs,
-        });
+            const summary = await readIngestStateSummary();
+            const mergeDone = await ingestMergePassDone();
+            const decision = decideLoopHalt({
+              exitCode: result.exitCode,
+              summary,
+              mergeDone,
+              stopRequested: await stopFlagExists(),
+              iteration,
+              maxIter,
+            });
+            if (decision.halt) {
+              haltKind = decision.kind;
+              haltReason = decision.reason;
+              break;
+            }
+          }
+
+          await clearStopFlag();
+
+          let finalReply =
+            aggregateReply ||
+            `(/ingest-loop 가 한 번도 실행되지 못했습니다.)`;
+          finalReply += `\n\n---\n\n[/ingest-loop ${haltKind}] ${haltReason} · iterations=${iteration}`;
+
+          if (haltKind === "normal") {
+            const graphNote = await maybeAutoRunGraphify(lastExitCode);
+            if (graphNote) finalReply += graphNote;
+          }
+
+          await appendMessage(
+            sessionPath,
+            "system",
+            `🔁 /ingest-loop 종료: ${haltReason} (iterations=${iteration}).`,
+          ).catch(() => undefined);
+
+          const finalAssistant = await appendMessage(
+            sessionPath,
+            "assistant",
+            finalReply,
+            agent,
+          );
+          send({
+            type: "done",
+            sessionPath,
+            assistant: finalAssistant,
+            exitCode: lastExitCode,
+            durationMs: lastDurationMs,
+          });
+        } else {
+          // -------- Single CLI call (chat, ingest, query, lint, graph) --------
+          const result = await runCli(agent, prompt, {
+            safeMode: cfg.agent.safeMode,
+            // null in config means "no timeout for this operation kind" —
+            // pass undefined so runCli does not register a setTimeout that
+            // would SIGTERM the child mid-summary.
+            timeoutMs: kindTimeout ?? undefined,
+            signal: req.signal,
+            // When the operation is configured for infinite runtime (ingest),
+            // detach the HTTP request lifecycle from the CLI. An idle browser
+            // tab, WSL2/proxy idle disconnect, or Node HTTP idle timeout would
+            // otherwise fire req.signal.abort mid-chunk and re-introduce the
+            // SIGTERM we just disabled at the timer level. The CLI keeps
+            // running, persists progress to wiki/.progress/ingest/, and writes
+            // the final assistant message to the session file even if no client
+            // is listening anymore.
+            killOnAbort: kindTimeout != null,
+            onStdout: (chunk) => {
+              const text = displayChunk(chunk);
+              if (text) {
+                send({ type: "chunk", stream: "stdout", text });
+              }
+            },
+          });
+          let reply =
+            (result.stdout.trim() || result.stderr.trim()) ||
+            `(에이전트가 빈 응답을 반환했습니다. exitCode=${result.exitCode})`;
+
+          if (kind === "ingest") {
+            const graphNote = await maybeAutoRunGraphify(result.exitCode);
+            if (graphNote) reply += graphNote;
+          }
+
+          const assistantMsg = await appendMessage(
+            sessionPath,
+            "assistant",
+            reply,
+            agent,
+          );
+          send({
+            type: "done",
+            sessionPath,
+            assistant: assistantMsg,
+            exitCode: result.exitCode,
+            durationMs: result.durationMs,
+          });
+        }
       } catch (err) {
         const msg = errorMessage(err);
         await appendMessage(
