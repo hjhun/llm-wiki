@@ -46,7 +46,7 @@ Each of the three operations maps to one skill. If these rules conflict with a s
 - Always follow the **leaf-directory chunks + merge pass** principle (Section 7).
 - Trigger: manual (`/ingest`, `/ingest-loop`) or **automatic** via Settings → 자동 인제스트 패널 (`raw/` 파일 이벤트 또는 주기 실행). 자동 트리거는 `webapp/lib/auto-ingest/`의 매니저가 동일한 `runIngestLoop()` 헬퍼를 호출하며, 기본 설정(`skipIfBusy: true`)에서는 `.lock` 존재 시 스킵된다.
 - Outputs:
-  - `wiki/sources/<slug>.md` summary page with YAML frontmatter
+  - `wiki/sources/<YYYY>/<YYYY-MM>/<slug>.md` summary page with YAML frontmatter
   - New or updated related entity/concept pages
   - Updated `wiki/index.md` and `wiki/log.md`
   - `wiki-graphify update` when needed
@@ -67,7 +67,7 @@ Each of the three operations maps to one skill. If these rules conflict with a s
 ### 4.1 Page Types
 - **Entity**: individual people, places, organizations, products, works, and similar targets.
 - **Concept**: topics, theories, patterns.
-- **Source**: one page per original source (`wiki/sources/`).
+- **Source**: one page per original source (`wiki/sources/<YYYY>/<YYYY-MM>/`).
 - **Answer**: fed-back query answer (`wiki/answers/`).
 - **Comparison/Analysis**: synthesis page comparing or analyzing two or more targets.
 
@@ -78,18 +78,24 @@ Each of the three operations maps to one skill. If these rules conflict with a s
 title: <page title>
 type: entity | concept | source | answer | comparison | analysis
 tags: [tag1, tag2]
-sources: [wiki/sources/<slug>.md, ...]   # source summaries supporting this page
+sources: [wiki/sources/<YYYY>/<YYYY-MM>/<slug>.md, ...]
 updated: YYYY-MM-DD
+source_date: YYYY-MM-DD | YYYY-MM        # optional, source pages only
 ---
 ```
+
+Source pages should be stored under `wiki/sources/<YYYY>/<YYYY-MM>/`. Choose
+the date by this priority: explicit `source_date` or source text date -> raw
+path/metadata date -> raw file mtime -> ingest date. If only the year is known,
+use that year with the fallback month from the next available source.
 
 ### 4.3 Writing Rules
 - Use **wikilinks** `[[Page Name]]` or relative Markdown links for all internal links.
 - Use external URLs only when the user provided them or they exist in `raw/`. **Do not guess URLs.**
-- When citing, put the source on the same line or in a footnote. Example: `... according to the source ([[wiki/sources/foo]]).`
+- When citing, put the source on the same line or in a footnote. Example: `... according to the source ([[wiki/sources/2026/2026-05/foo]]).`
 - If a contradiction is found, add a block quote to the affected page:
   ```markdown
-  > ⚠️ Conflicts with [[wiki/sources/bar]]: this source claims X. Follow-up review needed.
+  > ⚠️ Conflicts with [[wiki/sources/2026/2026-05/bar]]: this source claims X. Follow-up review needed.
   ```
 - Instead of deleting a page, move it to `wiki/archive/<original-path>` and leave a one-line reason.
 
@@ -104,7 +110,7 @@ updated: YYYY-MM-DD
 - Format, with a one-line heading and optional body:
   ```markdown
   ## [YYYY-MM-DD HH:MM] ingest | <source title or folder name>
-  - Changed files: `wiki/sources/foo.md`, `wiki/concepts/bar.md`
+  - Changed files: `wiki/sources/2026/2026-05/foo.md`, `wiki/concepts/bar.md`
   - Notes: N chunks, merge pass complete
   ```
 - Operation types: `ingest`, `query`, `lint`, `graph`.
@@ -148,6 +154,9 @@ This applies to both ingest and graphify. Never start by throwing the whole root
 - Wiki pages must not call the `graphify` binary directly. The coding agent running `wiki-graphify` chooses the execution path: global `graphify`, or `python3 -m graphify` when needed.
 - `wiki-query` may optionally use graph context from `wiki/graph/GRAPH_REPORT.md`, node adjacency, or `wiki-graphify query` as an auxiliary candidate/context source; it must still ground final answers in wiki/source pages.
 - At the end of an ingest merge pass, calling `wiki-graphify update` is recommended, depending on user settings.
+- If `/lint --fix` reorganizes existing source pages into dated source
+  directories, update affected wiki references and then run `wiki-graphify
+  update` as a separate graph operation when `wiki/graph/graph.json` exists.
 
 ## 9. Hard Rules
 
@@ -195,7 +204,7 @@ Mental checklist for one ingest run:
 
 - [ ] Did you list leaf directories from the input tree?
 - [ ] Is the chunk within the file-count and byte limits?
-- [ ] Did you write `wiki/sources/<slug>.md` for each chunk?
+- [ ] Did you write `wiki/sources/<YYYY>/<YYYY-MM>/<slug>.md` for each chunk?
 - [ ] Did you append one line to `wiki/log.md` for each chunk?
 - [ ] Did you organize parent pages and `index.md` in the merge pass?
 - [ ] Optional: did you call `wiki-graphify update`?

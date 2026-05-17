@@ -23,7 +23,8 @@ Periodically clean up decay that naturally accumulates as the wiki grows: contra
 - Optional flags:
   - `--fix` — immediately apply auto-fixable items.
   - `--scope=<glob>` — inspect only selected paths, for example `--scope=wiki/concepts/**`.
-  - `--since=<date>` — inspect only pages updated after that date.
+- `--since=<date>` — inspect only pages updated after that date.
+- `--fix` also organizes existing source pages into `wiki/sources/<YYYY>/<YYYY-MM>/` when they are not already in the chronology layout.
 
 ## Output
 
@@ -79,7 +80,14 @@ Classify each item as "auto-fixable" or "manual review needed".
 - A node exists in `wiki/graph/graph.json` without a matching wiki page, or vice versa.
 - Output: "graph <-> wiki mismatch" section and recommend `wiki-graphify update`.
 
-### I. Security (Auto Mask + Manual Follow-Up)
+### I. Source Chronology Layout (Auto With `--fix`)
+- Source pages under `wiki/sources/` should live at `wiki/sources/<YYYY>/<YYYY-MM>/<slug>.md`.
+- Detection: run `node scripts/organize-sources.mjs --json` and include the planned moves in the report.
+- Date priority: explicit `source_date` or source text date -> raw path/metadata date -> raw file mtime -> ingest date. If only the year is known, use that year with the fallback month from the next available source.
+- Auto-fix: only when `--fix` is present, run `node scripts/organize-sources.mjs --apply --json`, then include moved files and changed references in the lint report.
+- Graph follow-up: if any source moved and `wiki/graph/graph.json` exists, run `wiki-graphify update` as a separate coding-agent invocation after the lint call completes.
+
+### J. Security (Auto Mask + Manual Follow-Up)
 - API key patterns (`sk-...`, `ghp_...`), email/phone numbers, or `.env` traces appear in bodies.
 - Auto-fix: replace the string with `[REDACTED]` and add a `⚠️ Redacted by wiki-lint` comment to the page.
 - Report: list locations found.
@@ -92,13 +100,15 @@ Classify each item as "auto-fixable" or "manual review needed".
 3. Parse recent 30-day entries from `wiki/log.md`.
 
 ### Step 2 - Inspect
-- Run checks A-I in order.
+- Run checks A-J in order.
+- Treat Source Chronology Layout as auto-fixable only when `--fix` is present; otherwise report the dry-run move plan.
 - Collect findings as `{category, severity, page, evidence, suggested_fix, auto: true|false}` records.
 
 ### Step 3 - Automatic Fixes (`--fix`)
 - Apply only items with `auto: true`.
 - For each changed page, update that page's frontmatter `updated` value to today's date.
-- Security items (I) are always masked even without `--fix`, prioritizing safety.
+- For source chronology moves, call `node scripts/organize-sources.mjs --apply --json` and use its `moves` and `changedReferences` as the authoritative changed-file list.
+- Security items (J) are always masked even without `--fix`, prioritizing safety.
 
 ### Step 4 - Write the Report
 - Write `wiki/lint/<YYYY-MM-DD>.md` with this structure.
@@ -127,6 +137,9 @@ Classify each item as "auto-fixable" or "manual review needed".
   - "term" — mentioned N times, candidate slug: `wiki/concepts/<slug>.md`
   ## Graph <-> Wiki Mismatch
   ...
+  ## Source Chronology Layout
+  - `wiki/sources/foo.md` -> `wiki/sources/2026/2026-05/foo.md` — reason
+  - Graph follow-up: `wiki-graphify update` recommended|required|not needed
 
   # Security
   - [page](path) L42 — API key pattern, REDACTED

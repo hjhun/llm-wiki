@@ -111,7 +111,7 @@ This follows the same principle as `wiki-ingest`.
       "label": "Andrej Karpathy",
       "type": "entity",
       "tags": ["person", "researcher"],
-      "sources": ["wiki/sources/karpathy-llm-wiki.md"],
+      "sources": ["wiki/sources/2026/2026-05/karpathy-llm-wiki.md"],
       "community": 3,
       "centrality": 0.42,
       "aliases": ["Karpathy"]
@@ -123,7 +123,7 @@ This follows the same principle as `wiki-ingest`.
       "dst": "llm-wiki-pattern",
       "type": "authored",
       "weight": 1,
-      "sources": ["wiki/sources/karpathy-llm-wiki.md"]
+      "sources": ["wiki/sources/2026/2026-05/karpathy-llm-wiki.md"]
     }
   ],
   "communities": [
@@ -174,7 +174,7 @@ This follows the same principle as `wiki-ingest`.
 ### `query`
 1. Extract keyword/entity candidates from the question.
 2. Match candidate nodes in `graph.json`; collect 1-hop neighbors and adjacent nodes inside the community.
-3. Read the `wiki/sources/...` and `wiki/concepts/...` pages cited by the collected nodes. This follows the same page-reading rules as `wiki-query`.
+3. Read the `wiki/sources/<YYYY>/<YYYY-MM>/...` and `wiki/concepts/...` pages cited by the collected nodes. This follows the same page-reading rules as `wiki-query`.
 4. Write the answer. Cite as `(graph: community #C, node "Label")` together with wikilinks.
 5. With `--save` or user consent, feed the answer back into `wiki/answers/` using the same schema as `wiki-query`.
 
@@ -203,7 +203,7 @@ User:
 
 Skill behavior:
 1. Check graphify execution path -> global `graphify` or `python3 -m graphify` works.
-2. Find leaves: `wiki/sources/`, `wiki/entities/`, `wiki/concepts/`, `wiki/answers/`, `raw/articles/karpathy/` -> 5 chunks.
+2. Find leaves: `wiki/sources/2026/2026-05/`, `wiki/entities/`, `wiki/concepts/`, `wiki/answers/`, `raw/articles/karpathy/` -> 5 chunks.
 3. Create session Markdown and chunk checklist.
 4. Call the selected graphify CLI for each chunk -> create 5 `parts/<hash>.json` files.
 5. Merge -> `graph.json` with 38 nodes, 64 edges, 5 communities, plus `GRAPH_REPORT.md`.

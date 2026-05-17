@@ -61,7 +61,7 @@ Chat tab:
 
 Expected result:
 
-- A sample summary page is created under `wiki/sources/`.
+- A sample summary page is created under `wiki/sources/YYYY/YYYY-MM/`.
 - Related concept pages are created or updated.
 - `wiki/index.md` is updated.
 - An ingest entry is appended to `wiki/log.md`.

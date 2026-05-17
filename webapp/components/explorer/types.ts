@@ -7,3 +7,11 @@ export type Entry = {
   mtime: number;
   path: string;
 };
+
+export type ExplorerAction =
+  | "new-file"
+  | "new-dir"
+  | "rename"
+  | "delete"
+  | "upload-file"
+  | "upload-dir";

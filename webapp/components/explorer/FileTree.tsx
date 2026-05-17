@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useLanguage } from "../i18n";
-import type { Entry, WsKey } from "./types";
+import type { Entry, ExplorerAction, WsKey } from "./types";
 
 type Node = Entry & { children?: Node[]; open?: boolean; loading?: boolean };
 
@@ -22,16 +22,23 @@ export default function FileTree({
   refreshKey,
   onSelect,
   onContextAction,
+  readOnly,
 }: {
   ws: WsKey;
   selectedPath: string | null;
   refreshKey: number;
   onSelect: (entry: Entry) => void;
-  onContextAction: (action: "new-file" | "new-dir" | "delete" | "rename", target: Entry | null) => void;
+  onContextAction: (action: ExplorerAction, target: Entry | null) => void;
+  readOnly: boolean;
 }) {
   const { t } = useLanguage();
   const [roots, setRoots] = useState<Node[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [menu, setMenu] = useState<{
+    entry: Entry;
+    x: number;
+    y: number;
+  } | null>(null);
 
   const loadChildren = useCallback(
     async (parentPath: string): Promise<Node[]> => {
@@ -59,6 +66,21 @@ export default function FileTree({
       cancelled = true;
     };
   }, [ws, refreshKey, loadChildren]);
+
+  useEffect(() => {
+    function close() {
+      setMenu(null);
+    }
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape") close();
+    }
+    window.addEventListener("click", close);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("click", close);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, []);
 
   function patchNode(
     list: Node[],
@@ -113,10 +135,7 @@ export default function FileTree({
           }}
           onContextMenu={(e) => {
             e.preventDefault();
-            const action = window.prompt(t.explorer.contextAction(n.path), "");
-            if (action === "new-file" || action === "new-dir" || action === "rename" || action === "delete") {
-              onContextAction(action, n);
-            }
+            setMenu({ entry: n, x: e.clientX, y: e.clientY });
           }}
           className={[
             "flex w-full items-center gap-1 py-0.5 text-left text-[12.5px] hover:bg-bg-panel/70",
@@ -147,7 +166,8 @@ export default function FileTree({
           <button
             type="button"
             onClick={() => onContextAction("new-file", null)}
-            className="rounded px-1.5 py-0.5 text-[11px] text-ink-dim hover:bg-bg-panel hover:text-ink"
+            disabled={readOnly}
+            className="rounded px-1.5 py-0.5 text-[11px] text-ink-dim hover:bg-bg-panel hover:text-ink disabled:pointer-events-none disabled:opacity-40"
             title={t.explorer.newRootFile}
           >
             {t.explorer.fileButton}
@@ -155,7 +175,8 @@ export default function FileTree({
           <button
             type="button"
             onClick={() => onContextAction("new-dir", null)}
-            className="rounded px-1.5 py-0.5 text-[11px] text-ink-dim hover:bg-bg-panel hover:text-ink"
+            disabled={readOnly}
+            className="rounded px-1.5 py-0.5 text-[11px] text-ink-dim hover:bg-bg-panel hover:text-ink disabled:pointer-events-none disabled:opacity-40"
             title={t.explorer.newRootFolder}
           >
             {t.explorer.folderButton}
@@ -173,6 +194,67 @@ export default function FileTree({
           roots.map((n) => renderRow(n, 0))
         )}
       </div>
+      {menu ? (
+        <ContextMenu
+          x={menu.x}
+          y={menu.y}
+          entry={menu.entry}
+          readOnly={readOnly}
+          onAction={(action) => {
+            setMenu(null);
+            onContextAction(action, menu.entry);
+          }}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function ContextMenu({
+  x,
+  y,
+  entry,
+  readOnly,
+  onAction,
+}: {
+  x: number;
+  y: number;
+  entry: Entry;
+  readOnly: boolean;
+  onAction: (action: ExplorerAction) => void;
+}) {
+  const { t } = useLanguage();
+  const actions: { action: ExplorerAction; label: string }[] = [
+    { action: "new-file", label: t.explorer.actions.newFile },
+    { action: "new-dir", label: t.explorer.actions.newFolder },
+    { action: "upload-file", label: t.explorer.actions.uploadFile },
+    { action: "upload-dir", label: t.explorer.actions.uploadFolder },
+    { action: "rename", label: t.explorer.actions.rename },
+    { action: "delete", label: t.explorer.actions.delete },
+  ];
+
+  return (
+    <div
+      className="fixed z-40 w-44 overflow-hidden rounded border border-line bg-bg-subtle py-1 shadow-2xl"
+      style={{ left: x, top: y }}
+      onClick={(event) => event.stopPropagation()}
+    >
+      <div className="border-b border-line px-2 py-1.5">
+        <div className="truncate font-mono text-[10px] text-ink-faint">
+          {entry.path}
+        </div>
+      </div>
+      {actions.map(({ action, label }) => (
+        <button
+          key={action}
+          type="button"
+          disabled={readOnly}
+          onClick={() => onAction(action)}
+          className="block w-full px-2.5 py-1.5 text-left text-xs text-ink-dim hover:bg-bg-panel hover:text-ink disabled:pointer-events-none disabled:opacity-40"
+        >
+          {label}
+        </button>
+      ))}
     </div>
   );
 }

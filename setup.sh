@@ -273,6 +273,18 @@ print(site.getuserbase() + "/bin")
 PY
 }
 
+python_externally_managed() {
+  python3 - <<'PY' >/dev/null 2>&1
+import pathlib
+import sys
+import sysconfig
+
+stdlib = sysconfig.get_path("stdlib")
+marker = pathlib.Path(stdlib or "") / "EXTERNALLY-MANAGED"
+sys.exit(0 if marker.exists() else 1)
+PY
+}
+
 find_graphify_bin() {
   local path_bin=""
   path_bin="$(command -v graphify 2>/dev/null || true)"
@@ -348,6 +360,33 @@ run_graphify_install() {
   "${graphify_bin}" install || warn "graphify install failed; run it manually if the Graph workflow needs it"
 }
 
+install_graphify_with_pip_user() {
+  if python_externally_managed; then
+    warn "Python is externally managed (PEP 668); skipping 'python3 -m pip install --user'. Install pipx with your OS package manager, then rerun setup:"
+    warn "  sudo apt install pipx && pipx ensurepath"
+    warn "Or rerun './setup.sh --skip-graphify' if graphify is already installed."
+    return 0
+  fi
+
+  local err_file=""
+  err_file="$(mktemp)"
+  log "using pip: python3 -m pip install --user --upgrade graphifyy"
+  if python3 -m pip install --user --upgrade graphifyy 2>"${err_file}"; then
+    rm -f "${err_file}"
+    return 0
+  fi
+
+  if grep -q "externally-managed-environment" "${err_file}"; then
+    warn "pip refused the install because this Python environment is externally managed. Install pipx and rerun setup:"
+    warn "  sudo apt install pipx && pipx ensurepath"
+  else
+    warn "pip graphifyy install/upgrade failed; last error lines:"
+    tail -n 8 "${err_file}" >&2 || true
+    warn "try: pipx install graphifyy && graphify install"
+  fi
+  rm -f "${err_file}"
+}
+
 install_or_upgrade_graphify_global() {
   local graphify_bin=""
   local before_version=""
@@ -364,17 +403,16 @@ install_or_upgrade_graphify_global() {
     if pipx upgrade graphifyy || pipx install graphifyy; then
       :
     else
-      warn "pipx graphifyy install/upgrade failed; falling back to python3 -m pip --user"
-      python3 -m pip install --user --upgrade graphifyy || warn "pip graphifyy install/upgrade failed; try: pip install --upgrade graphifyy && graphify install"
+      warn "pipx graphifyy install/upgrade failed; trying python3 -m pip --user when allowed"
+      install_graphify_with_pip_user
     fi
   else
-    log "using pip: python3 -m pip install --user --upgrade graphifyy"
-    python3 -m pip install --user --upgrade graphifyy || warn "pip graphifyy install/upgrade failed; try: pip install --upgrade graphifyy && graphify install"
+    install_graphify_with_pip_user
   fi
 
   graphify_bin="$(find_graphify_bin || true)"
   if [[ -z "${graphify_bin}" ]]; then
-    warn "graphify was installed but the command is not on PATH. Add your Python user bin directory to PATH, or run: python3 -m graphify install"
+    warn "graphify command is still not available. Install it with pipx, add it to PATH, or rerun './setup.sh --skip-graphify'."
     return 0
   fi
 

@@ -11,7 +11,7 @@ This document walks a new user through running LLM Wiki for the first time and v
 Default behavior:
 
 - If `webapp/node_modules` already exists, `npm install` is skipped.
-- The official `graphifyy` package version is checked, upgraded to the latest available version globally, and `graphify install` is run. Use `--skip-graphify` to skip this.
+- The official `graphifyy` package version is checked, upgraded to the latest available version globally, and `graphify install` is run. Setup prefers `pipx`; on externally managed Python environments it skips unsafe `pip --user` fallback and prints pipx guidance. Use `--skip-graphify` to skip this.
 - Coding agent CLIs (`codex`, `claude`, `gemini`, `cline`) are detected and recorded in `config/cli-detected.json`.
 - The server is not started automatically.
 
@@ -78,7 +78,7 @@ Expected flow:
 
 1. The coding agent reads `AGENTS.md` and the `wiki-ingest` skill.
 2. `raw/demo` is processed as a leaf-directory chunk.
-3. A summary page is created under `wiki/sources/...`.
+3. A summary page is created under `wiki/sources/YYYY/YYYY-MM/...`.
 4. Required concept/entity pages are created or updated.
 5. `wiki/index.md` and `wiki/log.md` are updated.
 6. Depending on settings, `wiki-graphify update` is recommended or run.

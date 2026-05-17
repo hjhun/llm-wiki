@@ -60,7 +60,7 @@ The important split is ownership:
 |---|---|---|
 | `raw/` | User | Original source material. CLIO and agents do not modify it. |
 | `wiki/` | LLM agent | Maintained Markdown wiki. |
-| `wiki/sources/` | LLM agent | One summary page per source. |
+| `wiki/sources/YYYY/YYYY-MM/` | LLM agent | One summary page per source, grouped by source chronology. |
 | `wiki/answers/` | LLM agent | Saved answers from query workflows. |
 | `wiki/lint/` | LLM agent | Wiki health reports. |
 | `wiki/graph/` | LLM agent + graphify | Graph JSON, graph report, partial graph state. |
@@ -144,12 +144,17 @@ If `graphify` is missing, setup follows the graphify README installation flow:
 pipx install graphifyy && graphify install
 ```
 
-If `pipx` is not available, setup falls back to:
+If `pipx` is not available and Python allows user-site installs, setup falls
+back to:
 
 ```bash
 python3 -m pip install --user --upgrade graphifyy
 graphify install
 ```
+
+On Debian/Ubuntu systems with an externally managed Python environment
+(PEP 668), setup skips the `pip --user` fallback and prints pipx guidance
+instead of using `--break-system-packages`.
 
 To skip graphify installation/upgrade and use an already-installed global command:
 

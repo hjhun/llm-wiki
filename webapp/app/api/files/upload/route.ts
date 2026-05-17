@@ -11,6 +11,7 @@ export const dynamic = "force-dynamic";
  *   - ws: "wiki" | "raw" | "sessions"
  *   - dir: 워크스페이스 루트 기준 상대 폴더 (없으면 "")
  *   - files: 다중 파일
+ *   - paths: 선택. files와 같은 순서의 상대 경로. 폴더 업로드 구조 보존용.
  */
 export async function POST(req: Request) {
   const unauth = await requireSession();
@@ -29,12 +30,13 @@ export async function POST(req: Request) {
 
   const files = form.getAll("files").filter((v): v is File => v instanceof File);
   if (files.length === 0) return jsonError("no files", 400);
+  const paths = form.getAll("paths").map((v) => String(v));
 
   const written: { path: string; size: number; isText: boolean }[] = [];
   try {
-    for (const file of files) {
-      const safeName = path.basename(file.name).replace(/[\\/]/g, "_");
-      const target = dir ? `${dir}/${safeName}` : safeName;
+    for (const [index, file] of files.entries()) {
+      const safeRel = cleanUploadPath(paths[index], file.name);
+      const target = dir ? `${dir.replace(/\/+$/, "")}/${safeRel}` : safeRel;
       const buf = Buffer.from(await file.arrayBuffer());
       await writeBytes(ws as WsKey, target, buf);
       written.push({
@@ -47,4 +49,19 @@ export async function POST(req: Request) {
   } catch (err) {
     return jsonError(errorMessage(err), 400);
   }
+}
+
+function cleanUploadPath(rel: string | undefined, fallbackName: string): string {
+  const raw = (rel && rel.trim() ? rel : fallbackName).replace(/\\/g, "/");
+  const parts = raw
+    .split("/")
+    .filter((part) => part.length > 0 && part !== ".");
+
+  if (parts.length === 0 || parts.some((part) => part === "..")) {
+    throw new Error("invalid upload path");
+  }
+
+  return parts
+    .map((part) => path.basename(part).replace(/[\\/]/g, "_"))
+    .join("/");
 }

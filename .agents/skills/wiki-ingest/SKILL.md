@@ -10,7 +10,7 @@ allowed-cli: [codex, claude, gemini, cline]
 
 Read material newly dropped by the user into `raw/` and perform the following.
 
-1. Write one `wiki/sources/<slug>.md` summary page per original source.
+1. Write one `wiki/sources/<YYYY>/<YYYY-MM>/<slug>.md` summary page per original source.
 2. Create or update related entity/concept pages.
 3. Keep `wiki/index.md` and `wiki/log.md` consistent.
 4. Optionally call `wiki-graphify update` to synchronize the knowledge graph.
@@ -112,19 +112,20 @@ For exactly **one** sub-chunk whose `status === "pending"`:
 1. Mark the sub-chunk `status: "in_progress"`, set `started_at`, increment `leaves[<leafPath>].attempts`. Persist immediately.
 2. Open files **one at a time**, in the order recorded in the sub-chunk:
    - If the file is larger than `chunking.maxBytesPerFile`, read only `head (N/2)` + a marker + `tail (N/2)` bytes. Record `truncated: true` in the per-leaf JSON.
-   - Write `wiki/sources/<slug>.md` for that file with the required frontmatter (`title`, `type: source`, `tags`, `sources: [raw/...]`, `updated`).
+   - Write `wiki/sources/<YYYY>/<YYYY-MM>/<slug>.md` for that file with the required frontmatter (`title`, `type: source`, `tags`, `sources: [raw/...]`, `updated`) and optional source-page field `source_date: YYYY-MM-DD | YYYY-MM`.
+   - Choose `<YYYY>/<YYYY-MM>` by this priority: explicit `source_date` or source text date -> raw path/metadata date -> raw file mtime -> ingest date. If only the year is known, use that year with the fallback month from the next available source.
    - Body: one-line gist → key points (max 12 bullets) → quotes → wiki connections (`[[Entity]]`, `[[Concept]]`) → source path/URL.
-   - Update the per-leaf JSON entry: `processed: true`, `summary_page: "wiki/sources/<slug>.md"`.
+   - Update the per-leaf JSON entry: `processed: true`, `summary_page: "wiki/sources/<YYYY>/<YYYY-MM>/<slug>.md"`.
    - **Discard the file body from working memory** before opening the next file. Do not keep two file bodies in context simultaneously.
 3. Update entity/concept pages **from the takeaways only** (the per-leaf JSON), not by re-opening the raw files. If a raw file truly must be re-read, open it, read just the needed span, and close it before moving on.
 4. **Contradictions**: if a new claim disagrees with an existing wiki page, add a block quote on that page:
    ```markdown
-   > ⚠️ Conflicts with [[wiki/sources/<slug>]]: this source claims X. Follow-up review needed.
+   > ⚠️ Conflicts with [[wiki/sources/<YYYY>/<YYYY-MM>/<slug>]]: this source claims X. Follow-up review needed.
    ```
 5. Append a single chunk entry to `wiki/log.md`:
    ```markdown
    ## [YYYY-MM-DD HH:MM] ingest | <leaf path> | sub-chunk <id>
-   - Changed files: `wiki/sources/foo.md`, `wiki/entities/bar.md`
+   - Changed files: `wiki/sources/2026/2026-05/foo.md`, `wiki/entities/bar.md`
    - Notes: <files done>/<files total> in leaf
    ```
 6. Mark the sub-chunk `status: "done"`, set `ended_at`, record `source_pages_written`. If this was the leaf's last sub-chunk, set `leaves[<leafPath>].status = "done"`. Persist `.state.json`.
@@ -281,7 +282,7 @@ User:
 Skill behavior on call #1:
 1. Create session file, take the lock.
 2. Enumerate: one leaf `raw/articles/karpathy/`, one sub-chunk `c1` with one file.
-3. Step 2: read the file, write `wiki/sources/karpathy-llm-wiki.md`, update concept pages `wiki/concepts/llm-wiki-pattern.md`, `wiki/concepts/memex.md`, and entity pages `wiki/entities/andrej-karpathy.md`, `wiki/entities/vannevar-bush.md` from takeaways.
+3. Step 2: read the file, write `wiki/sources/2026/2026-05/karpathy-llm-wiki.md`, update concept pages `wiki/concepts/llm-wiki-pattern.md`, `wiki/concepts/memex.md`, and entity pages `wiki/entities/andrej-karpathy.md`, `wiki/entities/vannevar-bush.md` from takeaways.
 4. Mark sub-chunk `done`, leaf `done`. Update `.state.json`, regen DASHBOARD. Release lock. Return.
 
 Call #2 (`/ingest` again with no arg):
