@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import AutoIngestBanner from "./AutoIngestBanner";
 import Composer from "./Composer";
 import MessageList from "./MessageList";
 import SessionList from "./SessionList";
@@ -409,6 +410,8 @@ export default function Chat() {
             </div>
           ) : null}
         </header>
+
+        <AutoIngestBanner />
 
         {error ? (
           <div className="border-b border-red-900/60 bg-red-950/40 px-4 py-1 text-[11px] text-red-300">

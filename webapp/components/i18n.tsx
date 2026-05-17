@@ -195,6 +195,35 @@ export const TEXT = {
       missing: "누락",
       notDetected: "감지 안 됨",
       customPath: "수동 경로",
+      autoIngest: "자동 인제스트",
+      autoIngestDesc:
+        "raw/ 아래에 자료가 추가되거나 일정 주기가 되면 자동으로 /ingest-loop을 실행합니다.",
+      autoIngestEnabled: "자동 인제스트 사용",
+      autoIngestMode: "트리거 모드",
+      autoIngestModeWatch: "파일 변경 감지",
+      autoIngestModeSchedule: "주기적 실행",
+      autoIngestDebounce: "디바운스 (ms)",
+      autoIngestInterval: "간격 (분)",
+      autoIngestSkipIfBusy: "다른 ingest 실행 중이면 스킵",
+      autoIngestSkipIfBusyDesc:
+        "켜면 wiki/.progress/ingest/.lock 이 있을 때 트리거를 건너뛰고 다음 이벤트/주기에 다시 시도합니다.",
+      autoIngestStatus: "상태",
+      autoIngestStatusIdle: "대기 중",
+      autoIngestStatusRunning: "실행 중",
+      autoIngestStatusSkipped: "스킵됨",
+      autoIngestStatusDisabled: "비활성",
+      autoIngestLastRun: "마지막 실행",
+      autoIngestNextRun: "다음 예정",
+      autoIngestRunNow: "지금 한 번 실행",
+      autoIngestRunningNow: "실행 요청 중...",
+      autoIngestNoLastRun: "아직 실행된 적 없음",
+      autoIngestNoNextRun: "예약 없음",
+      autoIngestBannerRunning: (source: string) =>
+        `자동 인제스트가 실행 중입니다 (트리거: ${source}).`,
+      autoIngestBannerDone: (halt: string, iterations: number) =>
+        `자동 인제스트가 종료되었습니다: ${halt} · iter=${iterations}.`,
+      autoIngestBannerSkipped: (reason: string) =>
+        `자동 인제스트 건너뜀: ${reason}`,
     },
     auth: {
       setupTitle: "비밀번호 설정",
@@ -399,6 +428,35 @@ export const TEXT = {
       missing: "Missing",
       notDetected: "not detected",
       customPath: "Manual path",
+      autoIngest: "Auto-ingest",
+      autoIngestDesc:
+        "Run /ingest-loop automatically when raw/ changes or on a schedule.",
+      autoIngestEnabled: "Enable auto-ingest",
+      autoIngestMode: "Trigger mode",
+      autoIngestModeWatch: "On file change",
+      autoIngestModeSchedule: "On schedule",
+      autoIngestDebounce: "Debounce (ms)",
+      autoIngestInterval: "Interval (minutes)",
+      autoIngestSkipIfBusy: "Skip if another ingest is running",
+      autoIngestSkipIfBusyDesc:
+        "When on, the trigger is skipped if wiki/.progress/ingest/.lock exists and retried on the next event/tick.",
+      autoIngestStatus: "Status",
+      autoIngestStatusIdle: "Idle",
+      autoIngestStatusRunning: "Running",
+      autoIngestStatusSkipped: "Skipped",
+      autoIngestStatusDisabled: "Disabled",
+      autoIngestLastRun: "Last run",
+      autoIngestNextRun: "Next run",
+      autoIngestRunNow: "Run now",
+      autoIngestRunningNow: "Requesting...",
+      autoIngestNoLastRun: "No runs yet",
+      autoIngestNoNextRun: "No schedule",
+      autoIngestBannerRunning: (source: string) =>
+        `Auto-ingest is running (source: ${source}).`,
+      autoIngestBannerDone: (halt: string, iterations: number) =>
+        `Auto-ingest finished: ${halt} · iter=${iterations}.`,
+      autoIngestBannerSkipped: (reason: string) =>
+        `Auto-ingest skipped: ${reason}`,
     },
     auth: {
       setupTitle: "Set password",

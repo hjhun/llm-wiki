@@ -161,6 +161,7 @@ export async function readSettingsState() {
         passwordSet: cfg.auth.passwordHash != null,
         sessionTtlSec: cfg.auth.sessionTtlSec,
       },
+      autoIngest: cfg.autoIngest,
     },
     cli,
     tools: [graphify, qmd, marp],

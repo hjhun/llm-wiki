@@ -3,6 +3,7 @@ import { z } from "zod";
 import { requireSession, errorMessage, jsonError } from "@/lib/api";
 import { loadConfig, patchLocalConfig, type Config } from "@/lib/config";
 import { readSettingsState } from "@/lib/settings";
+import { getAutoIngestManager } from "@/lib/auto-ingest/manager";
 
 export const dynamic = "force-dynamic";
 
@@ -53,6 +54,19 @@ const Body = z.object({
         .min(60)
         .max(60 * 60 * 24 * 30)
         .nullable(),
+    })
+    .optional(),
+  autoIngest: z
+    .object({
+      enabled: z.boolean(),
+      mode: z.enum(["watch", "schedule"]),
+      watch: z.object({
+        debounceMs: z.number().int().min(1000).max(60_000),
+      }),
+      schedule: z.object({
+        intervalMinutes: z.number().int().min(1).max(1440),
+      }),
+      skipIfBusy: z.boolean(),
     })
     .optional(),
 });
@@ -110,8 +124,15 @@ export async function PUT(req: Request) {
             sessionTtlSec: parsed.data.auth.sessionTtlSec,
           }
         : undefined,
+      autoIngest: parsed.data.autoIngest,
     } satisfies Partial<Config>;
     await patchLocalConfig(patch);
+    if (parsed.data.autoIngest) {
+      // Rebooting the watcher/scheduler is cheap; do it whenever the user
+      // touches auto-ingest so the new mode / debounce / interval takes
+      // effect immediately without a server restart.
+      await getAutoIngestManager().restart();
+    }
     return NextResponse.json(await readSettingsState());
   } catch (err) {
     return jsonError(errorMessage(err), 500);

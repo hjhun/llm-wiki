@@ -165,6 +165,54 @@ export const ConfigSchema = z.object({
     /** 세션 유효 시간(초). null이면 만료 시각 없는 장기 로그인. */
     sessionTtlSec: z.number().int().min(60).nullable().default(60 * 60 * 24),
   }),
+  /**
+   * Auto-ingest trigger. When enabled, a background watcher or scheduler
+   * runs the same /ingest-loop driver used by manual ingest. Defaults to
+   * disabled so the wiki behaves exactly as before until the user opts in.
+   */
+  autoIngest: z
+    .object({
+      enabled: z.boolean().default(false),
+      mode: z.enum(["watch", "schedule"]).default("watch"),
+      watch: z
+        .object({
+          /**
+           * Time window (ms) that collapses bursty file events from a
+           * single user action (e.g. `cp -r`) into one ingest trigger.
+           */
+          debounceMs: z
+            .number()
+            .int()
+            .min(1000)
+            .max(60_000)
+            .default(5000),
+        })
+        .default({ debounceMs: 5000 }),
+      schedule: z
+        .object({
+          intervalMinutes: z
+            .number()
+            .int()
+            .min(1)
+            .max(1440)
+            .default(30),
+        })
+        .default({ intervalMinutes: 30 }),
+      /**
+       * When true, automatic triggers skip if wiki/.progress/ingest/.lock
+       * exists (another ingest is already running). The next event or
+       * scheduled tick picks the work up. When false, the trigger fires
+       * anyway and the skill's own lock acquisition decides the outcome.
+       */
+      skipIfBusy: z.boolean().default(true),
+    })
+    .default({
+      enabled: false,
+      mode: "watch",
+      watch: { debounceMs: 5000 },
+      schedule: { intervalMinutes: 30 },
+      skipIfBusy: true,
+    }),
 });
 
 export type Config = z.infer<typeof ConfigSchema>;

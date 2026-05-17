@@ -44,6 +44,7 @@ Each of the three operations maps to one skill. If these rules conflict with a s
 ### 3.1 Ingest (`/ingest`, [`.agents/skills/wiki-ingest/SKILL.md`](.agents/skills/wiki-ingest/SKILL.md))
 - Input: new material under `raw/`, either a single file, URL, or folder.
 - Always follow the **leaf-directory chunks + merge pass** principle (Section 7).
+- Trigger: manual (`/ingest`, `/ingest-loop`) or **automatic** via Settings → 자동 인제스트 패널 (`raw/` 파일 이벤트 또는 주기 실행). 자동 트리거는 `webapp/lib/auto-ingest/`의 매니저가 동일한 `runIngestLoop()` 헬퍼를 호출하며, 기본 설정(`skipIfBusy: true`)에서는 `.lock` 존재 시 스킵된다.
 - Outputs:
   - `wiki/sources/<slug>.md` summary page with YAML frontmatter
   - New or updated related entity/concept pages

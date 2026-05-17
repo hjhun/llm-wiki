@@ -41,6 +41,13 @@ export type SettingsConfig = {
     passwordSet: boolean;
     sessionTtlSec: number | null;
   };
+  autoIngest: {
+    enabled: boolean;
+    mode: "watch" | "schedule";
+    watch: { debounceMs: number };
+    schedule: { intervalMinutes: number };
+    skipIfBusy: boolean;
+  };
 };
 
 export type SettingsState = {

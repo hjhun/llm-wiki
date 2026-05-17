@@ -47,5 +47,16 @@
     "passwordHash": null,
     "sessionSecret": null,
     "sessionTtlSec": 86400
+  },
+  "autoIngest": {
+    "enabled": false,
+    "mode": "watch",
+    "watch": {
+      "debounceMs": 5000
+    },
+    "schedule": {
+      "intervalMinutes": 30
+    },
+    "skipIfBusy": true
   }
 }

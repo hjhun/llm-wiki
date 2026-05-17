@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { type Language, useLanguage } from "../i18n";
+import AutoIngestPanel from "./AutoIngestPanel";
 import type {
   CliInfo,
   CliName,
@@ -31,6 +32,11 @@ function cloneConfig(config: SettingsConfig): SettingsConfig {
     graph: { ...config.graph },
     ui: { ...config.ui },
     auth: { ...config.auth },
+    autoIngest: {
+      ...config.autoIngest,
+      watch: { ...config.autoIngest.watch },
+      schedule: { ...config.autoIngest.schedule },
+    },
   };
 }
 
@@ -103,6 +109,7 @@ export default function Settings() {
           auth: {
             sessionTtlSec: draft.auth.sessionTtlSec,
           },
+          autoIngest: draft.autoIngest,
         }),
       });
       if (!res.ok) throw await asError(res);
@@ -333,6 +340,19 @@ export default function Settings() {
                   />
                 </label>
               </Panel>
+
+              <AutoIngestPanel
+                draft={draft.autoIngest}
+                onChange={(nextAutoIngest) =>
+                  updateDraft((next) => {
+                    next.autoIngest = {
+                      ...nextAutoIngest,
+                      watch: { ...nextAutoIngest.watch },
+                      schedule: { ...nextAutoIngest.schedule },
+                    };
+                  })
+                }
+              />
             </section>
 
             <aside className="space-y-4">
