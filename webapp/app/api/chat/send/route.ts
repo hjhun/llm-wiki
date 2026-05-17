@@ -2,6 +2,8 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { z } from "zod";
 import { requireSession, errorMessage, jsonError } from "@/lib/api";
+import { createChatJob, createChatJobStream } from "@/lib/chat-jobs";
+import type { ChatSendEvent } from "@/lib/chat-events";
 import { loadConfig } from "@/lib/config";
 import { CLI_NAMES, runCli, type CliName } from "@/lib/cli";
 import { PROJECT_ROOT } from "@/lib/paths";
@@ -48,20 +50,7 @@ const Body = z.object({
 const LOG_HEADING_RE =
   /^##\s+\[([^\]]+)\]\s+(ingest|query|lint|graph)\s*\|\s*(.+?)\s*$/;
 
-type ProgressEvent =
-  | {
-      type: "progress";
-      phase: "state";
-      summary: string;
-      active: string | null;
-    }
-  | {
-      type: "progress";
-      phase: "log";
-      ts: string;
-      op: string;
-      detail: string;
-    };
+type ProgressEvent = Extract<ChatSendEvent, { type: "progress" }>;
 
 /**
  * Polling watcher that exposes ingest sub-chunk progress to the chat stream.
@@ -157,7 +146,6 @@ function startProgressWatcher(
   };
 }
 
-const encoder = new TextEncoder();
 const ANSI_RE =
   // eslint-disable-next-line no-control-regex
   /[\u001B\u009B][[\]()#;?]*(?:[a-zA-Z\d]*(?:;[a-zA-Z\d]*)*)?\u0007|(?:\d{1,4}(?:;\d{0,4})*)?[\dA-PR-TZcf-nq-uy=><~]/g;
@@ -268,138 +256,112 @@ export async function POST(req: Request) {
   );
   const prompt = promptLines.join("\n");
 
-  const stream = new ReadableStream<Uint8Array>({
-    async start(controller) {
-      let closed = false;
-      const send = (event: unknown) => {
-        if (closed || req.signal.aborted) return;
-        controller.enqueue(encoder.encode(`${JSON.stringify(event)}\n`));
-      };
-      const close = () => {
-        if (closed) return;
-        closed = true;
-        controller.close();
-      };
+  const kind = parsed.data.kind ?? "chat";
+  const job = createChatJob({ sessionPath, kind, agent });
+  const send = (event: ChatSendEvent) => job.append(event);
 
-      send({ type: "start", sessionPath });
+  void (async () => {
+    send({ type: "start", sessionPath });
 
-      const kind = parsed.data.kind ?? "chat";
-      const kindTimeout = cfg.cli.timeouts[kind];
-      const stopWatcher = startProgressWatcher((event) => send(event));
+    const kindTimeout = cfg.cli.timeouts[kind];
+    const stopWatcher = startProgressWatcher((event) => send(event));
 
-      const emitChunk = (text: string) => {
-        const rendered = displayChunk(text);
-        if (rendered) {
-          send({ type: "chunk", stream: "stdout", text: rendered });
-        }
-      };
+    const emitChunk = (text: string) => {
+      const rendered = displayChunk(text);
+      if (rendered) {
+        send({ type: "chunk", stream: "stdout", text: rendered });
+      }
+    };
 
-      try {
-        if (kind === "ingest-loop") {
-          // -------- /ingest-loop driver --------
-          // Delegates to the shared runIngestLoop helper so the same engine
-          // powers both manual /ingest-loop calls and the AutoIngestManager
-          // background trigger. The HTTP route only adapts streaming and
-          // appends the final assistant message.
-          const result = await runIngestLoop({
+    try {
+      if (kind === "ingest-loop") {
+        // -------- /ingest-loop driver --------
+        // Delegates to the shared runIngestLoop helper so the same engine
+        // powers both manual /ingest-loop calls and the AutoIngestManager
+        // background trigger. The HTTP route only adapts streaming and
+        // appends the final assistant message.
+        const result = await runIngestLoop({
+          cfg,
+          agent,
+          sessionPath,
+          initialPrompt: prompt,
+          progressRef,
+          onChunk: emitChunk,
+        });
+        const finalAssistant = await appendMessage(
+          sessionPath,
+          "assistant",
+          result.finalReply,
+          agent,
+        );
+        send({
+          type: "done",
+          sessionPath,
+          assistant: finalAssistant,
+          exitCode: result.lastExitCode,
+          durationMs: result.totalDurationMs,
+        });
+      } else {
+        // -------- Single CLI call (chat, ingest, query, lint, graph) --------
+        // For ingest, snapshot progress beforehand so the post-call graphify
+        // hook can detect whether this invocation actually advanced any
+        // sub-chunk.
+        const ingestBefore =
+          kind === "ingest" ? await readProgressSnapshot() : null;
+        const result = await runCli(agent, prompt, {
+          safeMode: cfg.agent.safeMode,
+          // null in config means "no timeout for this operation kind".
+          timeoutMs: kindTimeout ?? undefined,
+          onStdout: (chunk) => emitChunk(chunk),
+        });
+        let reply =
+          result.stdout.trim() ||
+          result.stderr.trim() ||
+          `(에이전트가 빈 응답을 반환했습니다. exitCode=${result.exitCode})`;
+
+        if (kind === "ingest" && ingestBefore) {
+          const ingestAfter = await readProgressSnapshot();
+          const incr = await maybeAutoRunGraphify({
             cfg,
             agent,
-            sessionPath: sessionPath as string,
-            initialPrompt: prompt,
-            progressRef,
-            signal: req.signal,
+            sessionPath,
+            lastExitCode: result.exitCode,
+            before: ingestBefore,
+            after: ingestAfter,
+            mode: "incremental",
             onChunk: emitChunk,
           });
-          const finalAssistant = await appendMessage(
-            sessionPath as string,
-            "assistant",
-            result.finalReply,
-            agent,
-          );
-          send({
-            type: "done",
-            sessionPath,
-            assistant: finalAssistant,
-            exitCode: result.lastExitCode,
-            durationMs: result.totalDurationMs,
-          });
-        } else {
-          // -------- Single CLI call (chat, ingest, query, lint, graph) --------
-          // For ingest, snapshot progress beforehand so the post-call
-          // graphify hook can detect whether this invocation actually
-          // advanced any sub-chunk. (The state-file diff is needed because
-          // wiki-ingest processes exactly one sub-chunk per invocation —
-          // looking only at "merge_pass.status === done" would suppress
-          // graph updates for every intermediate ingest call.)
-          const ingestBefore =
-            kind === "ingest" ? await readProgressSnapshot() : null;
-          const result = await runCli(agent, prompt, {
-            safeMode: cfg.agent.safeMode,
-            // null in config means "no timeout for this operation kind" —
-            // pass undefined so runCli does not register a setTimeout that
-            // would SIGTERM the child mid-summary.
-            timeoutMs: kindTimeout ?? undefined,
-            signal: req.signal,
-            // When the operation is configured for infinite runtime (ingest),
-            // detach the HTTP request lifecycle from the CLI. An idle browser
-            // tab, WSL2/proxy idle disconnect, or Node HTTP idle timeout would
-            // otherwise fire req.signal.abort mid-chunk and re-introduce the
-            // SIGTERM we just disabled at the timer level. The CLI keeps
-            // running, persists progress to wiki/.progress/ingest/, and writes
-            // the final assistant message to the session file even if no client
-            // is listening anymore.
-            killOnAbort: kindTimeout != null,
-            onStdout: (chunk) => emitChunk(chunk),
-          });
-          let reply =
-            result.stdout.trim() ||
-            result.stderr.trim() ||
-            `(에이전트가 빈 응답을 반환했습니다. exitCode=${result.exitCode})`;
-
-          if (kind === "ingest" && ingestBefore) {
-            const ingestAfter = await readProgressSnapshot();
-            const incr = await maybeAutoRunGraphify({
-              cfg,
-              agent,
-              sessionPath: sessionPath as string,
-              signal: req.signal,
-              lastExitCode: result.exitCode,
-              before: ingestBefore,
-              after: ingestAfter,
-              mode: "incremental",
-              onChunk: emitChunk,
-            });
-            if (incr.note) reply += incr.note;
-          }
-
-          const assistantMsg = await appendMessage(
-            sessionPath as string,
-            "assistant",
-            reply,
-            agent,
-          );
-          send({
-            type: "done",
-            sessionPath,
-            assistant: assistantMsg,
-            exitCode: result.exitCode,
-            durationMs: result.durationMs,
-          });
+          if (incr.note) reply += incr.note;
         }
-      } catch (err) {
-        const msg = errorMessage(err);
-        await appendMessage(
-          sessionPath as string,
-          "system",
-          `❌ CLI 호출 실패: ${msg}`,
-        ).catch(() => undefined);
-        send({ type: "error", sessionPath, error: msg });
-      } finally {
-        stopWatcher();
-        close();
+
+        const assistantMsg = await appendMessage(
+          sessionPath,
+          "assistant",
+          reply,
+          agent,
+        );
+        send({
+          type: "done",
+          sessionPath,
+          assistant: assistantMsg,
+          exitCode: result.exitCode,
+          durationMs: result.durationMs,
+        });
       }
-    },
-  });
+    } catch (err) {
+      const msg = errorMessage(err);
+      await appendMessage(
+        sessionPath,
+        "system",
+        `❌ CLI 호출 실패: ${msg}`,
+      ).catch(() => undefined);
+      send({ type: "error", sessionPath, error: msg });
+    } finally {
+      stopWatcher();
+    }
+  })();
+
+  const stream = createChatJobStream(job, { signal: req.signal });
 
   return new Response(stream, {
     headers: {

@@ -7,6 +7,12 @@ import MessageList from "./MessageList";
 import SessionList from "./SessionList";
 import { useLanguage } from "../i18n";
 import type {
+  ChatJobSnapshot,
+  ChatKind,
+  ChatSendEvent,
+  SequencedChatSendEvent,
+} from "@/lib/chat-events";
+import type {
   ChatMessage,
   ChatProgress,
   ChatProgressLog,
@@ -19,45 +25,12 @@ type ActiveSession = {
   messages: ChatMessage[];
 };
 
-type ChatSendEvent =
-  | { type: "start"; sessionPath: string }
-  | { type: "chunk"; stream: "stdout" | "stderr"; text: string }
-  | {
-      type: "progress";
-      phase: "state";
-      summary: string;
-      active: string | null;
-    }
-  | {
-      type: "progress";
-      phase: "log";
-      ts: string;
-      op: string;
-      detail: string;
-    }
-  | {
-      type: "done";
-      sessionPath: string;
-      assistant: ChatMessage;
-      exitCode: number;
-      durationMs: number;
-    }
-  | { type: "error"; sessionPath: string; error: string };
-
 const PROGRESS_LOG_CAP = 12;
 
 async function asError(res: Response): Promise<Error> {
   const j = (await res.json().catch(() => null)) as { error?: string } | null;
   return new Error(j?.error ?? `request failed (${res.status})`);
 }
-
-type ChatKind =
-  | "chat"
-  | "ingest"
-  | "ingest-loop"
-  | "query"
-  | "lint"
-  | "graph";
 
 function detectKind(message: string): ChatKind {
   const head = message.trimStart().toLowerCase();
@@ -82,6 +55,7 @@ export default function Chat() {
   // Tracks whether the in-flight request is an /ingest-loop run so the
   // Composer can render the "Stop loop" button only while it would help.
   const [activeKind, setActiveKind] = useState<ChatKind | null>(null);
+  const [attachedJobId, setAttachedJobId] = useState<string | null>(null);
   const [stopping, setStopping] = useState(false);
 
   const refreshSessions = useCallback(async () => {
@@ -97,11 +71,38 @@ export default function Chat() {
     }
   }, []);
 
-  // 초기: 세션 목록을 받고 가장 최근 세션을 자동 열어둔다.
+  const refreshRunningJobs = useCallback(async () => {
+    try {
+      const res = await fetch("/api/chat/jobs");
+      if (!res.ok) throw await asError(res);
+      const j = (await res.json()) as { jobs: ChatJobSnapshot[] };
+      return j.jobs;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+      return [];
+    }
+  }, []);
+
+  const loadSession = useCallback(async (path: string) => {
+    const u = new URL("/api/chat/session", window.location.origin);
+    u.searchParams.set("path", path);
+    const res = await fetch(u);
+    if (!res.ok) throw await asError(res);
+    const j = (await res.json()) as {
+      meta: SessionRef["meta"];
+      messages: ChatMessage[];
+    };
+    setActive({ path, meta: j.meta, messages: j.messages });
+  }, []);
+
+  // 초기: 진행 중인 job이 있으면 그 세션을 우선 열고 스트림에 다시 붙는다.
   useEffect(() => {
     (async () => {
       const list = await refreshSessions();
-      if (list.length > 0) {
+      const jobs = await refreshRunningJobs();
+      if (jobs.length > 0) {
+        await attachJob(jobs[0], true);
+      } else if (list.length > 0) {
         await openSession(list[0]);
       }
     })();
@@ -111,15 +112,7 @@ export default function Chat() {
   async function openSession(ref: SessionRef) {
     setError(null);
     try {
-      const u = new URL("/api/chat/session", window.location.origin);
-      u.searchParams.set("path", ref.path);
-      const res = await fetch(u);
-      if (!res.ok) throw await asError(res);
-      const j = (await res.json()) as {
-        meta: SessionRef["meta"];
-        messages: ChatMessage[];
-      };
-      setActive({ path: ref.path, meta: j.meta, messages: j.messages });
+      await loadSession(ref.path);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     }
@@ -171,47 +164,23 @@ export default function Chat() {
     }
   }
 
-  async function send(message: string) {
-    if (pending) return;
-    const kind = detectKind(message);
-    setPending(true);
-    setActiveKind(kind);
-    setError(null);
-    setProgress(null);
-
+  async function consumeChatStream(
+    res: Response,
+    initialSessionPath: string | undefined,
+  ) {
+    if (!res.body) {
+      throw new Error("streaming response body is unavailable");
+    }
     const now = new Date();
     const ts = now.toTimeString().slice(0, 8);
-
-    // 낙관적 사용자 메시지 표시
-    const optimisticUser: ChatMessage = {
-      role: "user",
-      ts,
-      content: message,
-    };
     const streamingAssistant: ChatMessage = {
       role: "assistant",
       ts,
       agent: "streaming",
       content: "",
     };
-    if (active) {
-      setActive({ ...active, messages: [...active.messages, optimisticUser] });
-    } else {
-      setActive({
-        path: "(pending)",
-        meta: {
-          title: message.slice(0, 60),
-          agent: null,
-          created: now.toISOString(),
-          updated: now.toISOString(),
-        },
-        messages: [optimisticUser],
-      });
-    }
 
-    let sessionPath = active?.path && active.path !== "(pending)"
-      ? active.path
-      : undefined;
+    let sessionPath = initialSessionPath;
     let accumulated = "";
     let assistantInserted = false;
     let streamError: string | null = null;
@@ -277,6 +246,9 @@ export default function Chat() {
     }
 
     function handleEvent(event: ChatSendEvent) {
+      if ("jobId" in event) {
+        setAttachedJobId((event as SequencedChatSendEvent).jobId);
+      }
       if (event.type === "start") {
         sessionPath = event.sessionPath;
         setActive((current) =>
@@ -324,20 +296,6 @@ export default function Chat() {
     }
 
     try {
-      const res = await fetch("/api/chat/send", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          sessionPath,
-          message,
-          kind,
-        }),
-      });
-      if (!res.ok) throw await asError(res);
-      if (!res.body) {
-        throw new Error("streaming response body is unavailable");
-      }
-
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let buffer = "";
@@ -374,10 +332,87 @@ export default function Chat() {
       if (assistantInserted && accumulated) {
         upsertStreamingAssistant(accumulated);
       }
+      throw err;
+    }
+  }
+
+  async function attachJob(job: ChatJobSnapshot, reopenFirst: boolean) {
+    if (attachedJobId === job.id) return;
+    setPending(true);
+    setActiveKind(job.kind);
+    setAttachedJobId(job.id);
+    setError(null);
+    setProgress(null);
+    try {
+      if (reopenFirst) await loadSession(job.sessionPath);
+      const u = new URL("/api/chat/stream", window.location.origin);
+      u.searchParams.set("jobId", job.id);
+      const res = await fetch(u);
+      if (!res.ok) throw await asError(res);
+      await consumeChatStream(res, job.sessionPath);
+    } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setPending(false);
       setActiveKind(null);
+      setAttachedJobId(null);
+    }
+  }
+
+  async function send(message: string) {
+    if (pending) return;
+    const kind = detectKind(message);
+    setPending(true);
+    setActiveKind(kind);
+    setAttachedJobId(null);
+    setError(null);
+    setProgress(null);
+
+    const now = new Date();
+    const ts = now.toTimeString().slice(0, 8);
+
+    // 낙관적 사용자 메시지 표시
+    const optimisticUser: ChatMessage = {
+      role: "user",
+      ts,
+      content: message,
+    };
+    if (active) {
+      setActive({ ...active, messages: [...active.messages, optimisticUser] });
+    } else {
+      setActive({
+        path: "(pending)",
+        meta: {
+          title: message.slice(0, 60),
+          agent: null,
+          created: now.toISOString(),
+          updated: now.toISOString(),
+        },
+        messages: [optimisticUser],
+      });
+    }
+
+    const sessionPath =
+      active?.path && active.path !== "(pending)" ? active.path : undefined;
+
+    try {
+      const res = await fetch("/api/chat/send", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          sessionPath,
+          message,
+          kind,
+        }),
+      });
+      if (!res.ok) throw await asError(res);
+      await consumeChatStream(res, sessionPath);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setPending(false);
+      setActiveKind(null);
+      setAttachedJobId(null);
     }
   }
 
