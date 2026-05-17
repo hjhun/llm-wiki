@@ -1,0 +1,32 @@
+# CLIO web service template.
+#
+# Install with:
+#   ./systemd/install-clio-web-service.sh
+#
+# The installer renders the __CLIO_*__ placeholders for the current checkout,
+# installs the rendered unit into the selected systemd unit directory, and runs
+# systemctl enable so multi-user.target starts CLIO after boot.
+
+[Unit]
+Description=CLIO web UI
+Documentation=https://github.com/hjhun/llm-wiki
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=__CLIO_USER__
+Group=__CLIO_GROUP__
+WorkingDirectory=__CLIO_WEBAPP_DIR__
+Environment=NODE_ENV=production
+Environment=HOME=__CLIO_HOME__
+Environment=PROJECT_ROOT=__CLIO_ROOT__
+Environment=PATH=__CLIO_PATH__
+ExecStart=/usr/bin/env npm run start
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+KillSignal=SIGINT
+
+[Install]
+WantedBy=multi-user.target

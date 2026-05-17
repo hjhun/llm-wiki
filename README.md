@@ -230,6 +230,33 @@ Runtime files are written under `.run/`:
 .run/webapp.log
 ```
 
+## Start on Boot with systemd
+
+On Ubuntu 22.04/24.04 or similar systemd hosts, install the web UI as a system service:
+
+```bash
+./systemd/install-clio-web-service.sh
+```
+
+The script prepares the web app, renders `systemd/clio-web.service` for the current checkout path and user, installs the unit, runs `systemctl daemon-reload`, enables it for `multi-user.target`, and restarts it. It uses `sudo` only for the systemd install/start steps, so Ubuntu will prompt for your password when needed.
+
+By default the unit is installed into `/etc/systemd/system`, which is the safest local-administrator location. If you intentionally want the Ubuntu vendor-style unit directory, use:
+
+```bash
+./systemd/install-clio-web-service.sh --unit-dir vendor
+```
+
+On current Ubuntu releases, `vendor` selects `/usr/lib/systemd/system` when present and falls back to `/lib/systemd/system`. In both cases `systemctl enable clio-web.service` creates the appropriate `multi-user.target.wants/` symlink.
+
+Useful commands:
+
+```bash
+sudo systemctl status clio-web.service
+sudo journalctl -u clio-web.service -f
+sudo systemctl restart clio-web.service
+sudo systemctl disable --now clio-web.service
+```
+
 ## Supported Agent CLIs
 
 | CLI | Invocation shape |

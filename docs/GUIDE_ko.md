@@ -194,6 +194,46 @@ http://127.0.0.1:7777
 
 기본 host는 `0.0.0.0`입니다. 같은 LAN의 다른 기기에서 `http://<server-ip>:7777`로 접속할 수 있습니다. 신뢰할 수 있는 네트워크에서만 이 기본값을 사용하세요.
 
+### systemd로 자동 시작하기
+
+Ubuntu 22.04/24.04 또는 다른 systemd 기반 호스트에서는 재부팅 후 또는 비정상 종료 후 CLIO가 다시 시작되도록 서비스로 등록할 수 있습니다.
+
+```bash
+./systemd/install-clio-web-service.sh
+```
+
+설치 스크립트가 하는 일:
+
+- 필요하면 `npm install`을 실행하고 `npm run build`로 웹앱을 준비합니다.
+- `systemd/clio-web.service` 템플릿을 현재 checkout 경로와 실행 사용자에 맞게 렌더링합니다.
+- 기본적으로 `/etc/systemd/system`에 unit 파일을 설치합니다.
+- `systemctl daemon-reload`를 실행합니다.
+- `systemctl enable clio-web.service`를 실행합니다.
+- 서비스를 재시작합니다.
+
+스크립트는 systemd unit 설치와 제어가 필요한 단계에서만 `sudo`를 사용합니다. Ubuntu가 필요한 시점에 sudo 비밀번호를 물어봅니다. unit에는 `WantedBy=multi-user.target`이 들어 있으므로, `systemctl enable`이 적절한 `multi-user.target.wants/` 심볼릭 링크를 만듭니다.
+
+로컬 관리자용 기본 위치가 아니라 Ubuntu vendor-style unit 위치를 쓰고 싶다면 다음처럼 실행합니다.
+
+```bash
+./systemd/install-clio-web-service.sh --unit-dir vendor
+```
+
+`vendor`는 `/usr/lib/systemd/system`이 있으면 그 경로를 사용하고, 없으면 `/lib/systemd/system`으로 fallback합니다. 절대 경로를 직접 지정할 수도 있습니다.
+
+```bash
+./systemd/install-clio-web-service.sh --unit-dir /usr/lib/systemd/system
+```
+
+자주 쓰는 서비스 명령:
+
+```bash
+sudo systemctl status clio-web.service
+sudo journalctl -u clio-web.service -f
+sudo systemctl restart clio-web.service
+sudo systemctl disable --now clio-web.service
+```
+
 ## 6. 첫 로그인
 
 1. `http://127.0.0.1:7777`을 엽니다.

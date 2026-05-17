@@ -194,6 +194,46 @@ If you want local-only access:
 
 By default, CLIO binds to `0.0.0.0`. This makes it reachable from other machines on the same LAN at `http://<server-ip>:7777`. Use this only on a trusted network.
 
+### Start Automatically with systemd
+
+On Ubuntu 22.04/24.04 or another systemd-based host, you can make CLIO start after reboot or service failure:
+
+```bash
+./systemd/install-clio-web-service.sh
+```
+
+The installer:
+
+- prepares the web app with `npm install` when needed and `npm run build`
+- renders `systemd/clio-web.service` with the current checkout path and user
+- installs the unit into `/etc/systemd/system` by default
+- runs `systemctl daemon-reload`
+- runs `systemctl enable clio-web.service`
+- restarts the service
+
+The script asks for `sudo` only when it installs or controls the systemd unit. The enabled unit has `WantedBy=multi-user.target`, so `systemctl enable` creates the appropriate `multi-user.target.wants/` symlink.
+
+If you want the Ubuntu vendor-style unit location instead of the local administrator location, run:
+
+```bash
+./systemd/install-clio-web-service.sh --unit-dir vendor
+```
+
+On Ubuntu releases where `/usr/lib/systemd/system` exists, `vendor` uses it. Otherwise it falls back to `/lib/systemd/system`. You can also pass an absolute path:
+
+```bash
+./systemd/install-clio-web-service.sh --unit-dir /usr/lib/systemd/system
+```
+
+Useful service commands:
+
+```bash
+sudo systemctl status clio-web.service
+sudo journalctl -u clio-web.service -f
+sudo systemctl restart clio-web.service
+sudo systemctl disable --now clio-web.service
+```
+
 ## 6. First Login
 
 1. Open `http://127.0.0.1:7777`.
