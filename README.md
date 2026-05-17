@@ -189,10 +189,24 @@ The release installer downloads a GitHub source tarball and then runs `setup.sh`
 curl -fsSL https://raw.githubusercontent.com/hjhun/llm-wiki/main/scripts/install.sh | bash -s -- --dir ./my-clio --skip-graphify --port 7788 --start
 ```
 
+To update an existing install without touching `raw/` or `wiki/` data:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/hjhun/llm-wiki/main/scripts/install.sh | bash -s -- update --dir ./my-clio --skip-build
+```
+
+From inside the installed CLIO directory, `--dir` is optional:
+
+```bash
+bash scripts/install.sh update --skip-build
+```
+
 Installer options:
 
 | Option | Description |
 |---|---|
+| `install` | Default command. Create a new install directory. |
+| `update`, `upgrade` | Update an existing install from the selected release/ref. Preserves `raw/`, `wiki/`, `sessions/`, `config/local.json`, `.run/`, `webapp/node_modules/`, `webapp/.next/`, and `webapp/.env*`. |
 | `--dir <path>` | Install directory. Default: `./clio`. The installer never overwrites an existing path. |
 | `--version <ver>` | GitHub release tag to install, or `latest`. Default: `latest`. |
 | `--ref <ref>` | GitHub tag, branch, or commit to install exactly. Overrides `--version`. |

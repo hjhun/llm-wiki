@@ -127,6 +127,18 @@ curl -fsSL https://raw.githubusercontent.com/hjhun/llm-wiki/main/scripts/install
 cd my-clio
 ```
 
+To update an existing install while preserving your source and wiki data:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/hjhun/llm-wiki/main/scripts/install.sh | bash -s -- update --dir ./clio --start
+```
+
+Or, from inside the installed CLIO directory:
+
+```bash
+bash scripts/install.sh update --skip-build
+```
+
 ### Install from a Git Checkout
 
 Use this when you want to develop CLIO itself or track the repository directly:
@@ -146,6 +158,8 @@ curl -fsSL https://raw.githubusercontent.com/hjhun/llm-wiki/main/scripts/install
 
 | Option | Description |
 |---|---|
+| `install` | Default command. Create a new install directory. |
+| `update`, `upgrade` | Update an existing install from the selected release/ref while preserving `raw/`, `wiki/`, `sessions/`, local config, runtime files, and webapp build/dependency outputs. |
 | `--dir <path>` | Install directory. Default: `./clio`. |
 | `--version <ver>` | GitHub release tag to install, or `latest`. Default: `latest`. |
 | `--ref <ref>` | GitHub tag, branch, or commit to install exactly. Overrides `--version`. |

@@ -7,9 +7,11 @@ DEFAULT_FALLBACK_REF="main"
 DEFAULT_DIR="clio"
 
 INSTALL_DIR="${CLIO_INSTALL_DIR:-${DEFAULT_DIR}}"
+INSTALL_DIR_SET=0
 REPO="${CLIO_REPO:-${DEFAULT_REPO}}"
 VERSION="${CLIO_VERSION:-${DEFAULT_VERSION}}"
 REF="${CLIO_REF:-}"
+COMMAND="install"
 RUN_SETUP=1
 SETUP_ARGS=()
 CLEANUP_DIR=""
@@ -35,13 +37,18 @@ cleanup() {
 
 usage() {
   cat <<'EOF'
-Usage: install.sh [installer options] [setup.sh options]
+Usage: install.sh [install|update|upgrade] [installer options] [setup.sh options]
 
-Download CLIO from a GitHub source tarball, create a local project directory,
-and run the project's setup.sh.
+Commands:
+  install           Download CLIO, create a new project directory, and run setup.sh.
+                    This is the default command.
+  update, upgrade   Update an existing CLIO directory from the selected release/ref.
+                    Preserves raw/, wiki/, sessions/, config/local.json, .run/,
+                    webapp/node_modules/, webapp/.next/, and webapp/.env*.
 
 Installer options:
   --dir <path>       Install directory (default: ./clio)
+                    For update/upgrade, defaults to . when run inside CLIO.
   --version <ver>    GitHub release tag to install, or "latest" (default: latest)
   --ref <ref>        GitHub tag, branch, or commit to install exactly.
                     Overrides --version; useful for main or a commit SHA.
@@ -54,6 +61,8 @@ Any other arguments are passed through to setup.sh.
 
 Examples:
   curl -fsSL https://raw.githubusercontent.com/hjhun/llm-wiki/main/scripts/install.sh | bash -s -- --start
+  curl -fsSL https://raw.githubusercontent.com/hjhun/llm-wiki/main/scripts/install.sh | bash -s -- update --dir ./clio --start
+  bash scripts/install.sh update --ref main --skip-build
   curl -fsSL https://raw.githubusercontent.com/hjhun/llm-wiki/main/scripts/install.sh | bash -s -- --version v0.1.0
   bash scripts/install.sh --dir ./my-clio --skip-graphify --skip-build
   bash scripts/install.sh --ref main --no-setup
@@ -153,11 +162,21 @@ resolve_version_ref() {
 }
 
 parse_args() {
+  if [[ $# -gt 0 ]]; then
+    case "$1" in
+      install|update|upgrade)
+        COMMAND="$1"
+        shift
+        ;;
+    esac
+  fi
+
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --dir)
         [[ $# -ge 2 ]] || fail "--dir requires a value"
         INSTALL_DIR="$2"
+        INSTALL_DIR_SET=1
         shift 2
         ;;
       --version)
@@ -203,6 +222,11 @@ absolute_install_dir() {
   local parent=""
   local base=""
 
+  if [[ "${requested}" == "." ]]; then
+    pwd
+    return
+  fi
+
   parent="$(dirname "${requested}")"
   base="$(basename "${requested}")"
 
@@ -212,60 +236,205 @@ absolute_install_dir() {
   printf '%s/%s\n' "${parent}" "${base}"
 }
 
+is_clio_project_dir() {
+  local dir="$1"
+  [[ -f "${dir}/setup.sh" && -f "${dir}/webapp/package.json" && -f "${dir}/llm-wiki.md" ]]
+}
+
+select_update_dir_default() {
+  if [[ "${COMMAND}" != "install" && "${INSTALL_DIR_SET}" -eq 0 ]] && is_clio_project_dir "."; then
+    INSTALL_DIR="."
+  fi
+}
+
+download_source_archive() {
+  local repo_slug="$1"
+  local ref="$2"
+  local tmp_dir="$3"
+  local archive_url="https://codeload.github.com/${repo_slug}/tar.gz/${ref}"
+  local archive_file="${tmp_dir}/source.tar.gz"
+  local extract_dir="${tmp_dir}/extract"
+  local extracted_root=""
+
+  mkdir -p "${extract_dir}"
+
+  log "downloading ${repo_slug}@${ref}" >&2
+  download_file "${archive_url}" "${archive_file}"
+
+  log "extracting source archive" >&2
+  tar -xzf "${archive_file}" -C "${extract_dir}"
+  extracted_root="$(find "${extract_dir}" -mindepth 1 -maxdepth 1 -type d | head -n 1)"
+  [[ -n "${extracted_root}" ]] || fail "downloaded archive did not contain a project directory"
+  [[ -f "${extracted_root}/setup.sh" ]] || fail "downloaded archive is missing setup.sh"
+
+  printf '%s\n' "${extracted_root}"
+}
+
+sync_path() {
+  local source_root="$1"
+  local target_root="$2"
+  local rel_path="$3"
+  local source_path="${source_root}/${rel_path}"
+  local target_path="${target_root}/${rel_path}"
+  local target_parent=""
+
+  if [[ ! -e "${source_path}" && ! -L "${source_path}" ]]; then
+    warn "source path missing in archive; skipping ${rel_path}"
+    return
+  fi
+
+  target_parent="$(dirname "${target_path}")"
+  mkdir -p "${target_parent}"
+
+  if ! command -v rsync >/dev/null 2>&1; then
+    sync_path_without_rsync "${source_path}" "${target_path}" "${rel_path}"
+    return
+  fi
+
+  if [[ -d "${source_path}" && ! -L "${source_path}" ]]; then
+    rsync -a --delete \
+      --exclude 'node_modules/' \
+      --exclude '.next/' \
+      --exclude '.env' \
+      --exclude '.env.*' \
+      "${source_path}/" "${target_path}/"
+    return
+  fi
+
+  rsync -a "${source_path}" "${target_path}"
+}
+
+sync_path_without_rsync() {
+  local source_path="$1"
+  local target_path="$2"
+  local rel_path="$3"
+
+  if [[ -d "${source_path}" && ! -L "${source_path}" ]]; then
+    mkdir -p "${target_path}"
+    if [[ "${rel_path}" == "webapp" ]]; then
+      find "${target_path}" -mindepth 1 -maxdepth 1 \
+        ! -name 'node_modules' \
+        ! -name '.next' \
+        ! -name '.env' \
+        ! -name '.env.*' \
+        -exec rm -rf {} +
+    else
+      find "${target_path}" -mindepth 1 -maxdepth 1 -exec rm -rf {} +
+    fi
+    (cd "${source_path}" && tar -cf - .) | (cd "${target_path}" && tar -xf -)
+    return
+  fi
+
+  cp -Pp "${source_path}" "${target_path}"
+}
+
+run_project_setup() {
+  local target_dir="$1"
+
+  if [[ "${RUN_SETUP}" -eq 0 ]]; then
+    log "setup skipped"
+    return
+  fi
+
+  log "running setup.sh ${SETUP_ARGS[*]:-}"
+  (cd "${target_dir}" && bash ./setup.sh "${SETUP_ARGS[@]}")
+}
+
+run_install() {
+  local repo_slug="$1"
+  local ref="$2"
+  local target_dir="$3"
+  local tmp_dir="$4"
+  local extracted_root=""
+
+  if [[ -e "${target_dir}" || -L "${target_dir}" ]]; then
+    fail "install directory already exists: ${target_dir}. Choose another path with --dir; this installer never overwrites existing data."
+  fi
+
+  extracted_root="$(download_source_archive "${repo_slug}" "${ref}" "${tmp_dir}")"
+
+  log "installing to ${target_dir}"
+  mv "${extracted_root}" "${target_dir}"
+
+  run_project_setup "${target_dir}"
+
+  log "installation complete"
+  log "project directory: ${target_dir}"
+}
+
+run_update() {
+  local repo_slug="$1"
+  local ref="$2"
+  local target_dir="$3"
+  local tmp_dir="$4"
+  local extracted_root=""
+  local update_paths=(
+    ".agents/skills"
+    "config/default.json"
+    "docs"
+    "scripts"
+    "systemd"
+    "webapp"
+    "AGENTS.md"
+    "CLAUDE.md"
+    "LICENSE"
+    "README.md"
+    "llm-wiki.md"
+    "setup.sh"
+  )
+  local rel_path=""
+
+  [[ -d "${target_dir}" ]] || fail "update target does not exist: ${target_dir}"
+  is_clio_project_dir "${target_dir}" || fail "update target does not look like a CLIO project: ${target_dir}"
+
+  extracted_root="$(download_source_archive "${repo_slug}" "${ref}" "${tmp_dir}")"
+
+  log "updating project files in ${target_dir}"
+  for rel_path in "${update_paths[@]}"; do
+    sync_path "${extracted_root}" "${target_dir}" "${rel_path}"
+  done
+
+  run_project_setup "${target_dir}"
+
+  log "update complete"
+  log "preserved data directories: raw/, wiki/, sessions/"
+  log "project directory: ${target_dir}"
+}
+
 main() {
   parse_args "$@"
+  select_update_dir_default
 
   require_command tar
   require_command mktemp
 
   local repo_slug=""
   local target_dir=""
-  local archive_url=""
   local tmp_dir=""
-  local archive_file=""
-  local extract_dir=""
-  local extracted_root=""
+
+  case "${COMMAND}" in
+    install|update|upgrade)
+      ;;
+    *)
+      fail "unknown command: ${COMMAND}"
+      ;;
+  esac
 
   repo_slug="$(normalize_repo_slug "${REPO}")"
   target_dir="$(absolute_install_dir "${INSTALL_DIR}")"
   if [[ -z "${REF}" ]]; then
     REF="$(resolve_version_ref "${repo_slug}" "${VERSION}")"
   fi
-  archive_url="https://codeload.github.com/${repo_slug}/tar.gz/${REF}"
-
-  if [[ -e "${target_dir}" || -L "${target_dir}" ]]; then
-    fail "install directory already exists: ${target_dir}. Choose another path with --dir; this installer never overwrites existing data."
-  fi
 
   tmp_dir="$(mktemp -d)"
   CLEANUP_DIR="${tmp_dir}"
   trap cleanup EXIT
-  archive_file="${tmp_dir}/source.tar.gz"
-  extract_dir="${tmp_dir}/extract"
-  mkdir -p "${extract_dir}"
 
-  log "downloading ${repo_slug}@${REF}"
-  download_file "${archive_url}" "${archive_file}"
-
-  log "extracting source archive"
-  tar -xzf "${archive_file}" -C "${extract_dir}"
-  extracted_root="$(find "${extract_dir}" -mindepth 1 -maxdepth 1 -type d | head -n 1)"
-  [[ -n "${extracted_root}" ]] || fail "downloaded archive did not contain a project directory"
-  [[ -f "${extracted_root}/setup.sh" ]] || fail "downloaded archive is missing setup.sh"
-
-  log "installing to ${target_dir}"
-  mv "${extracted_root}" "${target_dir}"
-
-  if [[ "${RUN_SETUP}" -eq 0 ]]; then
-    log "download complete; setup skipped"
-    log "project directory: ${target_dir}"
-    return 0
+  if [[ "${COMMAND}" == "install" ]]; then
+    run_install "${repo_slug}" "${REF}" "${target_dir}" "${tmp_dir}"
+  else
+    run_update "${repo_slug}" "${REF}" "${target_dir}" "${tmp_dir}"
   fi
-
-  log "running setup.sh ${SETUP_ARGS[*]:-}"
-  (cd "${target_dir}" && bash ./setup.sh "${SETUP_ARGS[@]}")
-  log "installation complete"
-  log "project directory: ${target_dir}"
 }
 
 main "$@"

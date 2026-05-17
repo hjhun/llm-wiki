@@ -127,6 +127,18 @@ curl -fsSL https://raw.githubusercontent.com/hjhun/llm-wiki/main/scripts/install
 cd my-clio
 ```
 
+기존 설치본을 업데이트하면서 원본 자료와 위키 데이터는 보존하려면 다음처럼 실행합니다.
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/hjhun/llm-wiki/main/scripts/install.sh | bash -s -- update --dir ./clio --start
+```
+
+이미 설치 디렉터리 안에 있다면 `--dir`은 생략할 수 있습니다.
+
+```bash
+bash scripts/install.sh update --skip-build
+```
+
 ### Git 체크아웃으로 설치
 
 CLIO 자체를 개발하거나 저장소를 직접 추적하고 싶을 때 사용합니다.
@@ -146,6 +158,8 @@ curl -fsSL https://raw.githubusercontent.com/hjhun/llm-wiki/main/scripts/install
 
 | 옵션 | 설명 |
 |---|---|
+| `install` | 기본 command. 새 설치 디렉터리를 만듭니다 |
+| `update`, `upgrade` | 선택한 릴리스/ref에서 기존 설치본을 업데이트합니다. `raw/`, `wiki/`, `sessions/`, 로컬 설정, 런타임 파일, 웹앱 빌드/의존성 산출물은 보존합니다 |
 | `--dir <path>` | 설치 디렉터리. 기본값은 `./clio` |
 | `--version <ver>` | 설치할 GitHub 릴리스 태그 또는 `latest`. 기본값은 `latest` |
 | `--ref <ref>` | GitHub 태그, 브랜치, 커밋을 정확히 설치. `--version`보다 우선합니다 |
