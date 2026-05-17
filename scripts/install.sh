@@ -2,12 +2,14 @@
 set -euo pipefail
 
 DEFAULT_REPO="hjhun/llm-wiki"
-DEFAULT_REF="v0.1.0"
+DEFAULT_VERSION="latest"
+DEFAULT_FALLBACK_REF="main"
 DEFAULT_DIR="clio"
 
 INSTALL_DIR="${CLIO_INSTALL_DIR:-${DEFAULT_DIR}}"
 REPO="${CLIO_REPO:-${DEFAULT_REPO}}"
-REF="${CLIO_REF:-${DEFAULT_REF}}"
+VERSION="${CLIO_VERSION:-${DEFAULT_VERSION}}"
+REF="${CLIO_REF:-}"
 RUN_SETUP=1
 SETUP_ARGS=()
 CLEANUP_DIR=""
@@ -40,7 +42,9 @@ and run the project's setup.sh.
 
 Installer options:
   --dir <path>       Install directory (default: ./clio)
-  --ref <ref>        GitHub tag, branch, or commit to install (default: v0.1.0)
+  --version <ver>    GitHub release tag to install, or "latest" (default: latest)
+  --ref <ref>        GitHub tag, branch, or commit to install exactly.
+                    Overrides --version; useful for main or a commit SHA.
   --repo <repo>      GitHub repo as owner/name or https://github.com/owner/name
                     (default: hjhun/llm-wiki)
   --no-setup         Download and unpack only; do not run setup.sh
@@ -49,7 +53,8 @@ Installer options:
 Any other arguments are passed through to setup.sh.
 
 Examples:
-  curl -fsSL https://raw.githubusercontent.com/hjhun/llm-wiki/v0.1.0/scripts/install.sh | bash -s -- --start
+  curl -fsSL https://raw.githubusercontent.com/hjhun/llm-wiki/main/scripts/install.sh | bash -s -- --start
+  curl -fsSL https://raw.githubusercontent.com/hjhun/llm-wiki/main/scripts/install.sh | bash -s -- --version v0.1.0
   bash scripts/install.sh --dir ./my-clio --skip-graphify --skip-build
   bash scripts/install.sh --ref main --no-setup
 EOF
@@ -104,6 +109,49 @@ download_file() {
   fail "curl or wget is required to download ${url}"
 }
 
+download_stdout() {
+  local url="$1"
+
+  if command -v curl >/dev/null 2>&1; then
+    curl -fsSL --retry 3 --connect-timeout 15 "${url}"
+    return
+  fi
+
+  if command -v wget >/dev/null 2>&1; then
+    wget -qO- "${url}"
+    return
+  fi
+
+  fail "curl or wget is required to download ${url}"
+}
+
+resolve_version_ref() {
+  local repo_slug="$1"
+  local version="$2"
+  local release_json=""
+  local tag=""
+
+  [[ -n "${version}" ]] || fail "--version must not be empty"
+
+  if [[ "${version}" != "latest" ]]; then
+    printf '%s\n' "${version}"
+    return
+  fi
+
+  if ! release_json="$(download_stdout "https://api.github.com/repos/${repo_slug}/releases/latest" 2>/dev/null)"; then
+    if [[ "${repo_slug}" == "${DEFAULT_REPO}" && -n "${DEFAULT_FALLBACK_REF}" ]]; then
+      warn "could not resolve latest release for ${repo_slug}; falling back to ${DEFAULT_FALLBACK_REF}"
+      printf '%s\n' "${DEFAULT_FALLBACK_REF}"
+      return
+    fi
+    fail "could not resolve the latest release for ${repo_slug}"
+  fi
+  tag="$(printf '%s\n' "${release_json}" | sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1)"
+
+  [[ -n "${tag}" ]] || fail "latest release response for ${repo_slug} did not include tag_name"
+  printf '%s\n' "${tag}"
+}
+
 parse_args() {
   while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -112,9 +160,16 @@ parse_args() {
         INSTALL_DIR="$2"
         shift 2
         ;;
+      --version)
+        [[ $# -ge 2 ]] || fail "--version requires a value"
+        VERSION="$2"
+        REF=""
+        shift 2
+        ;;
       --ref)
         [[ $# -ge 2 ]] || fail "--ref requires a value"
         REF="$2"
+        VERSION=""
         shift 2
         ;;
       --repo)
@@ -173,6 +228,9 @@ main() {
 
   repo_slug="$(normalize_repo_slug "${REPO}")"
   target_dir="$(absolute_install_dir "${INSTALL_DIR}")"
+  if [[ -z "${REF}" ]]; then
+    REF="$(resolve_version_ref "${repo_slug}" "${VERSION}")"
+  fi
   archive_url="https://codeload.github.com/${repo_slug}/tar.gz/${REF}"
 
   if [[ -e "${target_dir}" || -L "${target_dir}" ]]; then

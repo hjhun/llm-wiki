@@ -1,0 +1,100 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Release version tag, for example v0.2.0
+        required: true
+        type: string
+      prerelease:
+        description: Mark this release as a prerelease
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate version
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+
+          if [[ ! "${VERSION}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([-.][0-9A-Za-z.-]+)?$ ]]; then
+            echo "Version must look like v1.2.3, optionally with a suffix such as v1.2.3-rc.1" >&2
+            exit 2
+          fi
+
+          if git ls-remote --exit-code --tags origin "refs/tags/${VERSION}" >/dev/null 2>&1; then
+            echo "Tag already exists: ${VERSION}" >&2
+            exit 2
+          fi
+
+      - name: Verify release-critical scripts
+        run: |
+          set -euo pipefail
+
+          bash -n setup.sh
+          bash -n scripts/install.sh
+          bash -n systemd/install-clio-web-service.sh
+          scripts/install.sh --help >/dev/null
+
+      - name: Create tag
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "${VERSION}" -m "Release ${VERSION}"
+          git push origin "refs/tags/${VERSION}"
+
+      - name: Prepare release notes
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+
+          notes_path="docs/releases/${VERSION}.md"
+          if [[ -f "${notes_path}" ]]; then
+            printf '%s\n' "${notes_path}" > .release-notes-path
+          else
+            printf 'CLIO %s\n\nSee the generated changelog for commit details.\n' "${VERSION}" > .release-notes.md
+            printf '%s\n' ".release-notes.md" > .release-notes-path
+          fi
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ inputs.version }}
+          PRERELEASE: ${{ inputs.prerelease }}
+        run: |
+          set -euo pipefail
+
+          notes_file="$(cat .release-notes-path)"
+          args=(
+            "${VERSION}"
+            --title "CLIO ${VERSION}"
+            --notes-file "${notes_file}"
+            --generate-notes
+          )
+
+          if [[ "${PRERELEASE}" == "true" ]]; then
+            args+=(--prerelease)
+          fi
+
+          gh release create "${args[@]}"

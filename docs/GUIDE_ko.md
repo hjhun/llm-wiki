@@ -106,16 +106,16 @@ CLIO는 단순히 문서에 채팅하는 도구가 아닙니다. 중요한 결�
 
 ### 권장 릴리스 설치
 
-아래 명령은 `v0.1.0` 릴리스를 `./clio`에 설치하고 설정 후 웹앱을 시작합니다.
+아래 명령은 최신 GitHub 릴리스를 `./clio`에 설치하고 설정 후 웹앱을 시작합니다.
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/hjhun/llm-wiki/v0.1.0/scripts/install.sh | bash -s -- --start
+curl -fsSL https://raw.githubusercontent.com/hjhun/llm-wiki/main/scripts/install.sh | bash -s -- --start
 cd clio
 ```
 
 이 명령이 하는 일:
 
-1. GitHub에서 `v0.1.0` 소스 아카이브를 내려받습니다.
+1. 최신 GitHub 릴리스 태그를 확인하고 해당 소스 아카이브를 내려받습니다.
 2. `./clio` 디렉터리에 압축을 풉니다.
 3. `setup.sh`를 실행합니다.
 4. 웹앱을 백그라운드로 시작합니다.
@@ -123,7 +123,7 @@ cd clio
 설치 스크립트는 기존 디렉터리를 덮어쓰지 않습니다. `./clio`가 이미 있으면 다른 경로를 지정하세요.
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/hjhun/llm-wiki/v0.1.0/scripts/install.sh | bash -s -- --dir ./my-clio --start
+curl -fsSL https://raw.githubusercontent.com/hjhun/llm-wiki/main/scripts/install.sh | bash -s -- --dir ./my-clio --start
 cd my-clio
 ```
 
@@ -141,17 +141,24 @@ cd llm-wiki
 ### 자주 쓰는 설치 옵션
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/hjhun/llm-wiki/v0.1.0/scripts/install.sh | bash -s -- --dir ./research-wiki --port 7788 --skip-graphify --start
+curl -fsSL https://raw.githubusercontent.com/hjhun/llm-wiki/main/scripts/install.sh | bash -s -- --dir ./research-wiki --port 7788 --skip-graphify --start
 ```
 
 | 옵션 | 설명 |
 |---|---|
 | `--dir <path>` | 설치 디렉터리. 기본값은 `./clio` |
-| `--ref <ref>` | GitHub 태그, 브랜치, 커밋. 기본값은 `v0.1.0` |
+| `--version <ver>` | 설치할 GitHub 릴리스 태그 또는 `latest`. 기본값은 `latest` |
+| `--ref <ref>` | GitHub 태그, 브랜치, 커밋을 정확히 설치. `--version`보다 우선합니다 |
 | `--repo <repo>` | GitHub 저장소. 기본값은 `hjhun/llm-wiki` |
 | `--no-setup` | 다운로드와 압축 해제만 수행 |
 
 그 밖의 인자는 `setup.sh`로 전달됩니다.
+
+특정 릴리스를 설치하려면 다음처럼 실행합니다.
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/hjhun/llm-wiki/main/scripts/install.sh | bash -s -- --version v0.1.0
+```
 
 ## 5. 웹앱 실행과 종료
 

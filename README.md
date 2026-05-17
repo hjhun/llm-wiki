@@ -52,10 +52,10 @@ The important split is ownership:
 
 ## Quick Start
 
-Install the latest `v0.1.0` release into `./clio`, run setup, and start the web app:
+Install the latest GitHub release into `./clio`, run setup, and start the web app:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/hjhun/llm-wiki/v0.1.0/scripts/install.sh | bash -s -- --start
+curl -fsSL https://raw.githubusercontent.com/hjhun/llm-wiki/main/scripts/install.sh | bash -s -- --start
 cd clio
 ```
 
@@ -186,7 +186,7 @@ Tips:
 The release installer downloads a GitHub source tarball and then runs `setup.sh`.
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/hjhun/llm-wiki/v0.1.0/scripts/install.sh | bash -s -- --dir ./my-clio --skip-graphify --port 7788 --start
+curl -fsSL https://raw.githubusercontent.com/hjhun/llm-wiki/main/scripts/install.sh | bash -s -- --dir ./my-clio --skip-graphify --port 7788 --start
 ```
 
 Installer options:
@@ -194,11 +194,18 @@ Installer options:
 | Option | Description |
 |---|---|
 | `--dir <path>` | Install directory. Default: `./clio`. The installer never overwrites an existing path. |
-| `--ref <ref>` | GitHub tag, branch, or commit. Default: `v0.1.0`. |
+| `--version <ver>` | GitHub release tag to install, or `latest`. Default: `latest`. |
+| `--ref <ref>` | GitHub tag, branch, or commit to install exactly. Overrides `--version`. |
 | `--repo <repo>` | GitHub repo as `owner/name` or a `github.com` URL. Default: `hjhun/llm-wiki`. |
 | `--no-setup` | Download and unpack only. |
 
 Any other arguments are passed to `setup.sh`.
+
+To install a specific release:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/hjhun/llm-wiki/main/scripts/install.sh | bash -s -- --version v0.1.0
+```
 
 Inside an installed or cloned checkout:
 
@@ -298,11 +305,22 @@ Smoke test:
 ./scripts/smoke-test.sh
 ```
 
+Create a GitHub release:
+
+1. Add release notes under `docs/releases/vX.Y.Z.md`.
+2. Open **Actions** -> **Release** -> **Run workflow**.
+3. Enter a version tag such as `v0.2.0`.
+
+The workflow validates release-critical scripts, creates the Git tag, and creates
+the GitHub Release. `scripts/install.sh` installs that release when it is the
+latest release, or when users pass `--version vX.Y.Z`.
+
 ## Project Structure
 
 ```text
 .
 ├── .agents/skills/       # Project-local agent skills
+├── .github/workflows/     # GitHub Actions release automation
 ├── config/               # Default and local configuration
 ├── docs/                 # User guides, QA notes, release notes
 ├── examples/raw/         # Sample source material

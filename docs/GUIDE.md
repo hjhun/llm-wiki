@@ -109,13 +109,13 @@ The repository includes local instructions in `.agents/skills/`. These tell the 
 Run:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/hjhun/llm-wiki/v0.1.0/scripts/install.sh | bash -s -- --start
+curl -fsSL https://raw.githubusercontent.com/hjhun/llm-wiki/main/scripts/install.sh | bash -s -- --start
 cd clio
 ```
 
 What this does:
 
-1. Downloads the `v0.1.0` source archive from GitHub.
+1. Resolves the latest GitHub release and downloads its source archive.
 2. Installs it into `./clio`.
 3. Runs `setup.sh`.
 4. Starts the web app in the background.
@@ -123,7 +123,7 @@ What this does:
 The installer never overwrites an existing directory. If `./clio` already exists, choose another path:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/hjhun/llm-wiki/v0.1.0/scripts/install.sh | bash -s -- --dir ./my-clio --start
+curl -fsSL https://raw.githubusercontent.com/hjhun/llm-wiki/main/scripts/install.sh | bash -s -- --dir ./my-clio --start
 cd my-clio
 ```
 
@@ -141,17 +141,24 @@ cd llm-wiki
 ### Useful Installer Options
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/hjhun/llm-wiki/v0.1.0/scripts/install.sh | bash -s -- --dir ./research-wiki --port 7788 --skip-graphify --start
+curl -fsSL https://raw.githubusercontent.com/hjhun/llm-wiki/main/scripts/install.sh | bash -s -- --dir ./research-wiki --port 7788 --skip-graphify --start
 ```
 
 | Option | Description |
 |---|---|
 | `--dir <path>` | Install directory. Default: `./clio`. |
-| `--ref <ref>` | GitHub tag, branch, or commit. Default: `v0.1.0`. |
+| `--version <ver>` | GitHub release tag to install, or `latest`. Default: `latest`. |
+| `--ref <ref>` | GitHub tag, branch, or commit to install exactly. Overrides `--version`. |
 | `--repo <repo>` | GitHub repository. Default: `hjhun/llm-wiki`. |
 | `--no-setup` | Download and unpack only. |
 
 Any other arguments are passed through to `setup.sh`.
+
+To install a specific release:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/hjhun/llm-wiki/main/scripts/install.sh | bash -s -- --version v0.1.0
+```
 
 ## 5. Run and Stop the Web App
 
