@@ -52,6 +52,7 @@ such as `graphify.detect`, `graphify.extract`, `graphify.build`,
 - Direct commands:
   - `wiki-graphify build`
   - `wiki-graphify update`
+  - `wiki-graphify update-partial <leafPath> [<leafPath> ...]`
   - `wiki-graphify query "<question>"`
 
 ## Input / Output
@@ -60,6 +61,7 @@ such as `graphify.detect`, `graphify.extract`, `graphify.build`,
 |---|---|---|
 | `build` | Optional: `--scope=wiki|raw|wiki+raw` (default `wiki+raw`) | Agent-level full refresh of `graph.json`, `GRAPH_REPORT.md`, `parts/*`, `.state.json`; do not call a literal `graphify build` command |
 | `update` | Optional: `--since=<date>` or automatic change detection | Agent-level incremental rebuild of changed leaves -> rerun merge pass |
+| `update-partial` | One or more `<leafPath>` (POSIX, trailing `/`) | Build per-leaf partials in `wiki/graph/parts/<sha1(leafPath)>.json` for the listed leaves only. **Skip the merge pass.** Do NOT touch `graph.json`, `GRAPH_REPORT.md`, or rerun community clustering. Update `wiki/graph/.state.json` entries for the affected leaves. Used by the webapp between `/ingest-loop` iterations so partials grow in lockstep with ingest while the merge cost is paid just once at the end. |
 | `query` | One natural-language question, optional `--k=<neighbor-count>` | Graph candidate/context notes, cited nodes, and optional Markdown answer when invoked directly |
 
 ## Preflight
@@ -155,6 +157,20 @@ This follows the same principle as `wiki-ingest`.
 4. Update `GRAPH_REPORT.md` with a section for nodes added/removed/changed in this increment.
 5. Update log and index.
 
+### `update-partial`
+1. For each `<leafPath>` argument:
+   - Read only that leaf's files (apply the same per-file truncation rules as `wiki-ingest`).
+   - Build a partial graph for the leaf using the chosen graphify execution path (CLI or Python modules from §Execution Path Rules).
+   - Write/overwrite `wiki/graph/parts/<sha1(leafPath)>.json`.
+   - Update the leaf's entry in `wiki/graph/.state.json` with `built_at`, `content_hash`, and `part_file`.
+2. **Do NOT** rerun community clustering, regenerate `GRAPH_REPORT.md`, or write `wiki/graph/graph.json`. Those are reserved for the merge pass in `build` / `update`.
+3. Append a single graph entry to `wiki/log.md`:
+   ```markdown
+   ## [YYYY-MM-DD HH:MM] graph | update-partial | <leafPath>
+   - Wrote: `wiki/graph/parts/<hash>.json`
+   ```
+4. Reply with a one-line summary: which leaves got partials and their part-file paths.
+
 ### `query`
 1. Extract keyword/entity candidates from the question.
 2. Match candidate nodes in `graph.json`; collect 1-hop neighbors and adjacent nodes inside the community.
@@ -176,6 +192,7 @@ When called from `wiki-query`, return graph candidates and context first. Do not
 - Do not clone the GitHub repository into `tools/graphify/` or prefer a project-local graphify executable.
 - Do not modify `raw/`.
 - Do not overwrite `wiki/graph/graph.json` with partial results. Replace the final graph only once during the merge pass.
+- For `update-partial`: do not touch `wiki/graph/graph.json`, `wiki/graph/GRAPH_REPORT.md`, or rerun clustering. Those operations are reserved for `build` and `update`, which the webapp fires once at `/ingest-loop` end.
 - Do not leave API keys or credentials in plaintext in `GRAPH_REPORT.md` or wiki pages.
 - Do not pass all of `wiki/` + `raw/` to graphify in one call. Always use leaf chunks.
 

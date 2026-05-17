@@ -67,7 +67,30 @@ type StateSummary = {
   active_subchunk: { id: string; status: string } | null;
 };
 
-async function ingestMergePassDone(): Promise<boolean> {
+type ProgressSnapshot = {
+  leavesDone: number;
+  subChunksDone: number;
+  sourcePagesWritten: number;
+  mergeDone: boolean;
+  /** Sorted POSIX paths of leaves whose status === "done". */
+  doneLeaves: string[];
+};
+
+const EMPTY_SNAPSHOT: ProgressSnapshot = {
+  leavesDone: 0,
+  subChunksDone: 0,
+  sourcePagesWritten: 0,
+  mergeDone: false,
+  doneLeaves: [],
+};
+
+/**
+ * Reads wiki/.progress/ingest/.state.json and condenses it into a single
+ * snapshot used to decide whether and how the auto-graphify follow-up should
+ * fire. Returns EMPTY_SNAPSHOT on any I/O or parse failure so callers can
+ * treat a missing state file as "no progress yet" rather than crashing.
+ */
+async function readProgressSnapshot(): Promise<ProgressSnapshot> {
   try {
     const raw = await fs.readFile(
       path.join(PROJECT_ROOT, PROGRESS_STATE_PATH),
@@ -75,11 +98,73 @@ async function ingestMergePassDone(): Promise<boolean> {
     );
     const parsed = JSON.parse(raw) as {
       merge_pass?: { status?: unknown };
+      leaves?: Record<string, unknown>;
     };
-    return parsed.merge_pass?.status === "done";
+    const doneLeaves: string[] = [];
+    const snap: ProgressSnapshot = {
+      leavesDone: 0,
+      subChunksDone: 0,
+      sourcePagesWritten: 0,
+      mergeDone: parsed.merge_pass?.status === "done",
+      doneLeaves,
+    };
+    if (parsed.leaves && typeof parsed.leaves === "object") {
+      for (const [leafPath, value] of Object.entries(parsed.leaves)) {
+        const leaf = (value ?? {}) as Record<string, unknown>;
+        if (leaf.status === "done") {
+          snap.leavesDone += 1;
+          doneLeaves.push(leafPath);
+        }
+        if (Array.isArray(leaf.sub_chunks)) {
+          for (const sc of leaf.sub_chunks as Array<Record<string, unknown>>) {
+            if (sc && typeof sc === "object" && sc.status === "done") {
+              snap.subChunksDone += 1;
+              if (Array.isArray(sc.source_pages_written)) {
+                snap.sourcePagesWritten += sc.source_pages_written.length;
+              }
+            }
+          }
+        }
+      }
+    }
+    doneLeaves.sort();
+    return snap;
   } catch {
-    return false;
+    return { ...EMPTY_SNAPSHOT, doneLeaves: [] };
   }
+}
+
+/**
+ * Returns true if any sub-chunk transitioned to "done", a new leaf finished,
+ * a new source page was written, or the merge pass completed between `before`
+ * and `after`. Used as the "did anything happen?" gate before deciding which
+ * graphify action (if any) to fire.
+ */
+function ingestMadeProgress(
+  before: ProgressSnapshot,
+  after: ProgressSnapshot,
+): boolean {
+  return (
+    after.subChunksDone > before.subChunksDone ||
+    after.leavesDone > before.leavesDone ||
+    after.sourcePagesWritten > before.sourcePagesWritten ||
+    (after.mergeDone && !before.mergeDone)
+  );
+}
+
+/**
+ * Returns leaf paths that transitioned from any non-done status to "done"
+ * between `before` and `after`. The /ingest-loop driver fires
+ * `wiki-graphify update-partial` on these between iterations so partial
+ * graphs accumulate incrementally without paying for a merge pass per
+ * leaf — the merge runs once at loop end.
+ */
+function newlyDoneLeaves(
+  before: ProgressSnapshot,
+  after: ProgressSnapshot,
+): string[] {
+  const prev = new Set(before.doneLeaves);
+  return after.doneLeaves.filter((p) => !prev.has(p));
 }
 
 /**
@@ -527,28 +612,74 @@ export async function POST(req: Request) {
       const stopWatcher = startProgressWatcher((event) => send(event));
 
       /**
-       * After an ingest (or the final iteration of an ingest-loop) finishes
-       * cleanly and the merge pass is "done", trigger a follow-up
-       * `wiki-graphify update` via a fresh CLI invocation. Returns the note
-       * to append to the assistant reply text (may be empty). Streams the
-       * note and graph output back to the client as it goes.
+       * Auto-graphify dispatcher. Decides between three outcomes given a
+       * before/after snapshot diff and the requested mode:
+       *
+       * - "incremental" mode (fired after each /ingest call or each iter
+       *   of /ingest-loop): if merge_pass just completed, do a full
+       *   `wiki-graphify update`. Else if leaf(s) just turned done, do a
+       *   cheap `wiki-graphify update-partial` for those leaves only —
+       *   skips the merge pass so the loop pays it just once at the end.
+       *   Otherwise (only sub-chunk progress, no leaf yet) do nothing —
+       *   wait for the next leaf to land.
+       *
+       * - "final" mode (fired once at /ingest-loop end on non-error halt):
+       *   if anything progressed in the entire loop, always do a full
+       *   `wiki-graphify update` so the per-leaf partials accumulated
+       *   during the loop get merged into one connected graph.json.
+       *
+       * Returns the note appended to the assistant reply (may be empty)
+       * and streams the note + graphify output back to the client as it
+       * goes.
        */
       const maybeAutoRunGraphify = async (
         lastExitCode: number,
-      ): Promise<string> => {
-        if (lastExitCode !== 0) return "";
-        if (!cfg.graph.autoUpdateOnIngest) return "";
-        if (!(await ingestMergePassDone())) return "";
+        before: ProgressSnapshot,
+        after: ProgressSnapshot,
+        opts: { mode: "incremental" | "final" },
+      ): Promise<{ note: string; action: "update" | "update-partial" | null }> => {
+        const noop = { note: "", action: null as null };
+        if (lastExitCode !== 0) return noop;
+        if (!cfg.graph.autoUpdateOnIngest) return noop;
+        if (!ingestMadeProgress(before, after)) return noop;
 
-        const graphCommand = "wiki-graphify update";
+        const mergeJustDone = after.mergeDone && !before.mergeDone;
+        const justDoneLeaves = newlyDoneLeaves(before, after);
+
+        let action: "update" | "update-partial";
+        let leafPaths: string[] | undefined;
+        let progressLabel: string;
+
+        if (opts.mode === "final") {
+          action = "update";
+          progressLabel = mergeJustDone
+            ? "merge pass 완료 + final merge"
+            : `leaves ${after.leavesDone}/${before.leavesDone + (after.leavesDone - before.leavesDone)} · final merge`;
+        } else if (mergeJustDone) {
+          action = "update";
+          progressLabel = "merge pass 완료";
+        } else if (justDoneLeaves.length > 0) {
+          action = "update-partial";
+          leafPaths = justDoneLeaves;
+          progressLabel = `leaf 완료 ${justDoneLeaves.length}건 · partial only`;
+        } else {
+          return noop;
+        }
+
+        const commandLabel =
+          action === "update-partial" && leafPaths && leafPaths.length > 0
+            ? `wiki-graphify update-partial (${leafPaths.join(", ")})`
+            : `wiki-graphify ${action}`;
+
         await appendMessage(
           sessionPath,
           "system",
-          `ingest merge pass complete; auto-running ${graphCommand}`,
+          `ingest 진행 감지 (${progressLabel}); auto-running ${commandLabel}`,
         );
-        const graphPrompt = buildGraphifyPrompt("update", sessionPath);
-        const note =
-          "\n\n---\n\n[auto graph] ingest merge pass가 완료되어 `wiki-graphify update`를 별도 CLI 호출로 실행합니다.\n";
+        const graphPrompt = buildGraphifyPrompt(action, sessionPath, {
+          leafPaths,
+        });
+        const note = `\n\n---\n\n[auto graph · ${progressLabel}] \`${commandLabel}\`를 별도 CLI 호출로 실행합니다.\n`;
         send({ type: "chunk", stream: "stdout", text: note });
 
         const graphTimeout = cfg.cli.timeouts.graph;
@@ -568,18 +699,23 @@ export async function POST(req: Request) {
           const graphReply =
             (graphResult.stdout.trim() || graphResult.stderr.trim()) ||
             `(그래프 업데이트가 빈 응답을 반환했습니다. exitCode=${graphResult.exitCode})`;
-          return `${note}\n\n---\n\n[auto graph result]\n${graphReply}`;
+          return {
+            note: `${note}\n\n---\n\n[auto graph result · ${commandLabel}]\n${graphReply}`,
+            action,
+          };
         } catch (err) {
           const graphError = errorMessage(err);
           await appendMessage(
             sessionPath,
             "system",
-            `❌ 자동 그래프 업데이트 실패: ${graphError}`,
+            `❌ 자동 그래프 호출 실패 (${commandLabel}): ${graphError}`,
           ).catch(() => undefined);
-          return (
-            `${note}\n\n---\n\n[auto graph blocker]\n` +
-            `ingest는 완료됐지만 자동 그래프 업데이트 호출이 실패했습니다: ${graphError}`
-          );
+          return {
+            note:
+              `${note}\n\n---\n\n[auto graph blocker · ${commandLabel}]\n` +
+              `ingest는 진행됐지만 자동 그래프 호출이 실패했습니다: ${graphError}`,
+            action,
+          };
         }
       };
 
@@ -601,6 +737,22 @@ export async function POST(req: Request) {
             `🔁 /ingest-loop 시작 (최대 ${maxIter} 반복).`,
           ).catch(() => undefined);
 
+          // Snapshot the ingest progress before the first iteration so we can
+          // tell at loop end whether ANY work landed during this /ingest-loop
+          // call. The graphify follow-up below uses this baseline so partial
+          // runs (capped, user-stopped) still get a graph refresh as long as
+          // at least one sub-chunk completed. `prevSnap` is a rolling cursor
+          // used for the mid-loop incremental graphify trigger: after each
+          // iteration we diff prevSnap vs the fresh snapshot and fire
+          // `wiki-graphify update-partial` on any leaves that just landed.
+          const loopBefore = await readProgressSnapshot();
+          let prevSnap: ProgressSnapshot = loopBefore;
+          // If a mid-loop iteration triggered a full `update` (because
+          // wiki-ingest's merge_pass just completed inside that iter), we
+          // remember the snapshot at that point. The post-loop final fire
+          // then skips itself unless additional leaves have completed since,
+          // avoiding a duplicate full merge back-to-back.
+          let lastMergedSnap: ProgressSnapshot | null = null;
           let iteration = 0;
           let lastExitCode = 0;
           let lastDurationMs = 0;
@@ -679,11 +831,32 @@ export async function POST(req: Request) {
               (aggregateReply ? banner : "") + iterReply;
 
             const summary = await readIngestStateSummary();
-            const mergeDone = await ingestMergePassDone();
+            const snap = await readProgressSnapshot();
+
+            // Mid-loop incremental graphify: if a leaf just turned `done`
+            // (or merge_pass just completed inside this iter, which is rare
+            // but possible), fire `update-partial` for those leaves now so
+            // the parts/ directory grows in lockstep with ingest. The merge
+            // pass itself is normally deferred to the post-loop "final"
+            // call below so we only pay for clustering once per /ingest-loop
+            // run; the post-loop call skips itself if this branch already
+            // did a full `update` (tracked via lastMergedSnap).
+            if (result.exitCode === 0) {
+              const incr = await maybeAutoRunGraphify(
+                result.exitCode,
+                prevSnap,
+                snap,
+                { mode: "incremental" },
+              );
+              if (incr.note) aggregateReply += incr.note;
+              if (incr.action === "update") lastMergedSnap = snap;
+            }
+            prevSnap = snap;
+
             const decision = decideLoopHalt({
               exitCode: result.exitCode,
               summary,
-              mergeDone,
+              mergeDone: snap.mergeDone,
               stopRequested: await stopFlagExists(),
               iteration,
               maxIter,
@@ -702,9 +875,28 @@ export async function POST(req: Request) {
             `(/ingest-loop 가 한 번도 실행되지 못했습니다.)`;
           finalReply += `\n\n---\n\n[/ingest-loop ${haltKind}] ${haltReason} · iterations=${iteration}`;
 
-          if (haltKind === "normal") {
-            const graphNote = await maybeAutoRunGraphify(lastExitCode);
-            if (graphNote) finalReply += graphNote;
+          // Final merge: one full `wiki-graphify update` at loop end
+          // produces the connected graph.json + GRAPH_REPORT.md from the
+          // partials accumulated during the loop. Skipped on "error" halt
+          // (partial state suspect) and skipped when mid-loop already did a
+          // full update and no new leaves have completed since then.
+          if (haltKind !== "error") {
+            const loopAfter = await readProgressSnapshot();
+            const alreadyCoversLatest =
+              lastMergedSnap !== null &&
+              loopAfter.leavesDone <= lastMergedSnap.leavesDone &&
+              loopAfter.mergeDone === lastMergedSnap.mergeDone;
+            if (!alreadyCoversLatest) {
+              const final = await maybeAutoRunGraphify(
+                lastExitCode,
+                loopBefore,
+                loopAfter,
+                { mode: "final" },
+              );
+              if (final.note) finalReply += final.note;
+            } else {
+              finalReply += `\n\n---\n\n[auto graph] 루프 중에 full merge가 이미 실행되어 final merge는 생략합니다.`;
+            }
           }
 
           await appendMessage(
@@ -728,6 +920,14 @@ export async function POST(req: Request) {
           });
         } else {
           // -------- Single CLI call (chat, ingest, query, lint, graph) --------
+          // For ingest, snapshot progress beforehand so the post-call
+          // graphify hook can detect whether this invocation actually
+          // advanced any sub-chunk. (The state-file diff is needed because
+          // wiki-ingest processes exactly one sub-chunk per invocation —
+          // looking only at "merge_pass.status === done" would suppress
+          // graph updates for every intermediate ingest call.)
+          const ingestBefore =
+            kind === "ingest" ? await readProgressSnapshot() : null;
           const result = await runCli(agent, prompt, {
             safeMode: cfg.agent.safeMode,
             // null in config means "no timeout for this operation kind" —
@@ -755,9 +955,20 @@ export async function POST(req: Request) {
             (result.stdout.trim() || result.stderr.trim()) ||
             `(에이전트가 빈 응답을 반환했습니다. exitCode=${result.exitCode})`;
 
-          if (kind === "ingest") {
-            const graphNote = await maybeAutoRunGraphify(result.exitCode);
-            if (graphNote) reply += graphNote;
+          if (kind === "ingest" && ingestBefore) {
+            const ingestAfter = await readProgressSnapshot();
+            // Single /ingest uses "incremental" mode: fires `update-partial`
+            // on leaf completion (cheap, no merge), or full `update` only
+            // when wiki-ingest's own merge pass just completed. Calls that
+            // only advanced a sub-chunk produce no graph fire — the next
+            // /ingest that closes out the leaf will pick it up.
+            const incr = await maybeAutoRunGraphify(
+              result.exitCode,
+              ingestBefore,
+              ingestAfter,
+              { mode: "incremental" },
+            );
+            if (incr.note) reply += incr.note;
           }
 
           const assistantMsg = await appendMessage(

@@ -55,22 +55,72 @@ export type GraphState = {
   updatedAt: string | null;
 };
 
-export type GraphRunAction = "build" | "update";
+export type GraphRunAction = "build" | "update" | "update-partial";
+
+export type BuildGraphifyPromptOptions = {
+  /**
+   * For `update-partial`: list of leaf directory paths (POSIX, trailing `/`)
+   * whose partials should be (re)built. The agent must NOT touch leaves
+   * outside this list and must NOT run the merge pass.
+   */
+  leafPaths?: string[];
+};
 
 export function buildGraphifyPrompt(
   action: GraphRunAction,
   sessionPath: string,
+  opts: BuildGraphifyPromptOptions = {},
 ): string {
-  const command = `wiki-graphify ${action}`;
+  const leafList = (opts.leafPaths ?? []).filter(
+    (p): p is string => typeof p === "string" && p.length > 0,
+  );
+  const commandLabel =
+    action === "update-partial" && leafList.length > 0
+      ? `wiki-graphify update-partial (leaves: ${leafList.join(", ")})`
+      : `wiki-graphify ${action}`;
+
+  const actionGuidance: string =
+    action === "update-partial"
+      ? [
+          "For this `update-partial` run, build ONLY per-leaf partial graphs and SKIP the merge pass:",
+          leafList.length > 0
+            ? `- Target leaves (process exactly these, nothing else): ${leafList.map((p) => `\`${p}\``).join(", ")}.`
+            : "- Target leaves: auto-detect from wiki/.progress/ingest/.state.json (leaves whose status just turned `done`).",
+          "- Output: write or overwrite wiki/graph/parts/<sha1(leafPath)>.json for those leaves only.",
+          "- Update wiki/graph/.state.json entries for those leaves with `built_at` + `content_hash`.",
+          "- Do NOT touch wiki/graph/graph.json, wiki/graph/GRAPH_REPORT.md, or rerun community clustering. The merge pass runs as a separate `wiki-graphify update` call later (typically at /ingest-loop end).",
+          "- This is intentionally cheap: extract just the new leaf's content, write the partial, exit.",
+        ].join("\n")
+      : action === "update"
+        ? "For this `update` run, prefer reading wiki/.progress/ingest/.state.json and wiki/graph/.state.json to scope work to only the leaves whose content_hash changed since the previous build, then rerun the merge pass to produce a connected wiki/graph/graph.json + GRAPH_REPORT.md. If per-leaf partials already exist (because /ingest-loop fired `update-partial` between iterations), most leaves will be up to date — the bulk of this run is the merge pass."
+        : "For this `build` run, enumerate all leaves under wiki/ (and raw/ if relevant), build per-leaf partials, then run the merge pass.";
+
   return [
     "You are operating an LLM Wiki repository.",
     "Read CLAUDE.md/AGENTS.md and use .agents/skills/wiki-graphify/SKILL.md.",
     `Active session log: sessions/${sessionPath}`,
-    `Run exactly this graph operation: ${command}`,
-    "Follow the repository rule: use the global graphify command from PATH; if only the package is available, python3 -m graphify is acceptable.",
-    "Do not call a non-existent `graphify build` subcommand. For graphifyy 0.4.x, use the installed graphify package modules and the skill workflow to create wiki/graph/graph.json and GRAPH_REPORT.md.",
+    `Run exactly this graph operation: ${commandLabel}`,
+    "",
+    "Output path is fixed by this repository (see paths.ts and the wiki-graphify SKILL):",
+    "- wiki/graph/graph.json",
+    "- wiki/graph/GRAPH_REPORT.md",
+    "- wiki/graph/parts/<sha1(leafPath)>.json (per-leaf partials)",
+    "- wiki/graph/.state.json (leaf -> built_at/content_hash)",
+    "Do NOT write outputs to graphify-out/, the package's default location. The webapp's Graph tab and lib/graph.ts only read wiki/graph/graph.json, so any other path is invisible to the user.",
+    "",
+    "Execution path (from the SKILL):",
+    "1. Prefer the global `graphify` command from PATH; fall back to `python3 -m graphify` only if the script is missing.",
+    "2. For graphifyy 0.4.x the installed CLI exposes only code-oriented commands (`graphify update <path>` calls `_rebuild_code`, which by default writes to <path>/graphify-out/). Therefore:",
+    "   - If you do invoke `graphify update`, pass `--out wiki/graph` so output lands in the correct directory: `graphify update wiki/ --out wiki/graph`.",
+    "   - For Markdown wiki content (the common case here), `graphify update` alone will NOT extract entities/concepts — it is code-only. Use the Python package modules `graphify.detect`, `graphify.extract`, `graphify.build`, `graphify.cluster`, `graphify.report`, and `graphify.export` to assemble per-leaf partials in wiki/graph/parts/, then (for `update`/`build` only) merge into wiki/graph/graph.json. Follow the leaf-first chunk policy in §Chunk Policy of the SKILL.",
+    "3. There is no literal `graphify build` subcommand; `wiki-graphify build` is an agent-level operation name, not a CLI command.",
+    "",
+    actionGuidance,
+    "",
     "Do not ask for a graphify-specific API key. If authentication is missing, report that the selected coding agent CLI must be logged in or have its own credentials available to the webapp process.",
-    "After the operation, reply with a concise Korean summary, changed files, and any blocker.",
+    action === "update-partial"
+      ? "After the operation, reply with a one-line Korean summary: which leaves got partials, file paths under wiki/graph/parts/, and any blocker."
+      : "After the operation, reply with a concise Korean summary listing: changed files under wiki/graph/, node/edge/community counts, and any blocker.",
   ].join("\n");
 }
 
