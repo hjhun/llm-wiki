@@ -9,7 +9,7 @@ import {
 
 export const ConfigSchema = z.object({
   server: z.object({
-    port: z.number().int().min(1).max(65535).default(7777),
+    port: z.number().int().min(1).max(65535).default(9091),
     host: z.string().default("0.0.0.0"),
   }),
   agent: z.object({

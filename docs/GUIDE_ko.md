@@ -171,7 +171,7 @@ curl -fsSL https://raw.githubusercontent.com/hjhun/llm-wiki/main/scripts/install
 브라우저에서 열기:
 
 ```text
-http://127.0.0.1:7777
+http://127.0.0.1:9091
 ```
 
 종료:
@@ -199,7 +199,7 @@ http://127.0.0.1:7777
 ./setup.sh --host 127.0.0.1 --start
 ```
 
-기본 host는 `0.0.0.0`입니다. 같은 LAN의 다른 기기에서 `http://<server-ip>:7777`로 접속할 수 있습니다. 신뢰할 수 있는 네트워크에서만 이 기본값을 사용하세요.
+기본 host는 `0.0.0.0`입니다. 같은 LAN의 다른 기기에서 `http://<server-ip>:9091`로 접속할 수 있습니다. 신뢰할 수 있는 네트워크에서만 이 기본값을 사용하세요.
 
 ### systemd로 자동 시작하기
 
@@ -243,7 +243,7 @@ sudo systemctl disable --now clio-web.service
 
 ## 6. 첫 로그인
 
-1. `http://127.0.0.1:7777`을 엽니다.
+1. `http://127.0.0.1:9091`을 엽니다.
 2. 첫 실행이면 `/setup`으로 이동합니다.
 3. 관리자 비밀번호를 설정합니다. 비밀번호는 6자 이상이어야 합니다.
 4. 로그인합니다.
@@ -530,7 +530,7 @@ config/local.json
 
 | 키 | 기본값 | 의미 |
 |---|---:|---|
-| `server.port` | `7777` | 웹 UI 포트 |
+| `server.port` | `9091` | 웹 UI 포트 |
 | `server.host` | `0.0.0.0` | LAN에서 접근 가능한 host binding |
 | `chunking.maxFilesPerInvocation` | `4` | 에이전트 호출 1회당 최대 raw 파일 수 |
 | `chunking.maxBytesPerFile` | `131072` | 큰 파일은 head + tail만 읽음 |
@@ -571,7 +571,7 @@ config/local.json
 브라우저:
 
 ```text
-http://127.0.0.1:7777
+http://127.0.0.1:9091
 ```
 
 확인:

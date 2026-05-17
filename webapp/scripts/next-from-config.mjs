@@ -52,7 +52,7 @@ function deepMerge(base, over) {
 }
 
 function readServerConfig(projectRoot) {
-  const fallback = { server: { host: "0.0.0.0", port: 7777 } };
+  const fallback = { server: { host: "0.0.0.0", port: 9091 } };
   const defaultConfig = readJsonIfExists(
     path.join(projectRoot, "config", "default.json"),
   );

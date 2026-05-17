@@ -200,7 +200,7 @@ The first step of each optional skill should be: "Check whether the required bin
 ### 6.1 Basic Behavior
 - All web UI source lives in `webapp/`: `webapp/app`, `webapp/components`, `webapp/lib`, and `webapp/package.json`.
 - Wiki data (`raw/`, `wiki/`, `sessions/`, `tools/`, `config/`, `.agents/skills/`) remains at the wiki root, the parent directory. `webapp/lib/paths.ts` detects the root using the `llm-wiki.md`/`CLAUDE.md` marker, or `PROJECT_ROOT`.
-- `setup.sh` runs `npm install && npm run build` in `webapp/`, then starts `npm start` at `http://localhost:<port>`. Default port is `7777`, bound to `127.0.0.1`.
+- `setup.sh` runs `npm install && npm run build` in `webapp/`, then starts `npm start` at `http://localhost:<port>`. Default port is `9091`, bound to `127.0.0.1`.
 - Four vertical tabs on the left: **Chat / Explorer / Graph / Settings**.
 - Authentication: on first run, set the administrator password. Store a bcrypt hash and session secret in `config/local.json`. Sessions are jose HS256 JWTs issued as httpOnly cookies.
 
@@ -285,7 +285,7 @@ Order:
 
 Flags:
 
-- `--port <n>` default 7777
+- `--port <n>` default 9091
 - `--install-cli=<name>[,<name>]` opt-in install attempt for missing coding agent CLIs; default behavior is detection only
 - `--with-qmd`, `--with-marp` optional tool setup
 - `--dev` development mode using `pnpm dev` with hot reload

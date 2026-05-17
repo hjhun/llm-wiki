@@ -12,7 +12,7 @@ RUN_DIR="${ROOT_DIR}/.run"
 SERVER_PID_FILE="${RUN_DIR}/webapp.pid"
 SERVER_LOG_FILE="${RUN_DIR}/webapp.log"
 
-PORT="7777"
+PORT="9091"
 HOST="0.0.0.0"
 DEV_MODE=0
 SKIP_GRAPHIFY=0
@@ -45,7 +45,7 @@ Usage: ./setup.sh [options]
 Prepare the local LLM Wiki project.
 
 Options:
-  --port <n>                    Web UI port (default: 7777)
+  --port <n>                    Web UI port (default: 9091)
   --host <addr>                 Web UI host (default: 0.0.0.0; use 127.0.0.1 for local-only)
   --dev                         Print dev-server command instead of production command
   --start                       Start the web server in the background after setup
@@ -444,7 +444,7 @@ ensure_initial_files() {
     cat > "${CONFIG_DIR}/default.json" <<'JSON'
 {
   "server": {
-    "port": 7777,
+    "port": 9091,
     "host": "0.0.0.0"
   },
   "agent": {

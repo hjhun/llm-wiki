@@ -171,7 +171,7 @@ Start or restart:
 Open:
 
 ```text
-http://127.0.0.1:7777
+http://127.0.0.1:9091
 ```
 
 Stop:
@@ -199,7 +199,7 @@ If you want local-only access:
 ./setup.sh --host 127.0.0.1 --start
 ```
 
-By default, CLIO binds to `0.0.0.0`. This makes it reachable from other machines on the same LAN at `http://<server-ip>:7777`. Use this only on a trusted network.
+By default, CLIO binds to `0.0.0.0`. This makes it reachable from other machines on the same LAN at `http://<server-ip>:9091`. Use this only on a trusted network.
 
 ### Start Automatically with systemd
 
@@ -243,7 +243,7 @@ sudo systemctl disable --now clio-web.service
 
 ## 6. First Login
 
-1. Open `http://127.0.0.1:7777`.
+1. Open `http://127.0.0.1:9091`.
 2. CLIO redirects to `/setup` on first run.
 3. Set the administrator password. The password must be at least 6 characters.
 4. Log in.
@@ -530,7 +530,7 @@ Useful defaults:
 
 | Key | Default | Meaning |
 |---|---:|---|
-| `server.port` | `7777` | Web UI port. |
+| `server.port` | `9091` | Web UI port. |
 | `server.host` | `0.0.0.0` | LAN-reachable host binding. |
 | `chunking.maxFilesPerInvocation` | `4` | Maximum raw files per ingest agent call. |
 | `chunking.maxBytesPerFile` | `131072` | Large files are read head + tail. |
@@ -571,7 +571,7 @@ Start development mode:
 Open:
 
 ```text
-http://127.0.0.1:7777
+http://127.0.0.1:9091
 ```
 
 Check:

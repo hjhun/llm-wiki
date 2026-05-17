@@ -62,12 +62,12 @@ cd clio
 Open:
 
 ```text
-http://127.0.0.1:7777
+http://127.0.0.1:9091
 ```
 
 On the first visit, CLIO redirects to `/setup`. Set the administrator password, log in, then open **Settings** and choose the default coding agent CLI.
 
-CLIO binds to `0.0.0.0` by default, so machines on the same trusted LAN can connect at `http://<server-ip>:7777`. To restrict the server to this machine:
+CLIO binds to `0.0.0.0` by default, so machines on the same trusted LAN can connect at `http://<server-ip>:9091`. To restrict the server to this machine:
 
 ```bash
 ./setup.sh --host 127.0.0.1 --start
@@ -220,7 +220,7 @@ Common `setup.sh` options:
 | `--start` | Start the web server in the background after setup. |
 | `--shutdown` | Stop the running CLIO web server. |
 | `--no-restart` | With `--start`, fail if the target port is already in use. |
-| `--port <n>` | Web UI port. Default: `7777`. |
+| `--port <n>` | Web UI port. Default: `9091`. |
 | `--host <addr>` | Web UI host. Default: `0.0.0.0`. Use `127.0.0.1` for local-only. |
 | `--dev` | Use the development server command. |
 | `--skip-graphify` | Do not install or upgrade graphify. |
