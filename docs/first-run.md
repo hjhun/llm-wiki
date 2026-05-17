@@ -5,23 +5,40 @@ This document walks a new user through running LLM Wiki for the first time and v
 ## 1. Install
 
 ```bash
-./setup.sh
+curl -fsSL https://raw.githubusercontent.com/hjhun/llm-wiki/v0.1.0/scripts/install.sh | bash -s -- --start
+cd clio
 ```
 
-Default behavior:
+The release installer downloads CLIO into `./clio`, runs `setup.sh`, and starts
+the web app. It fails instead of overwriting if `./clio` already exists. Choose a
+different directory with `--dir <path>`:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/hjhun/llm-wiki/v0.1.0/scripts/install.sh | bash -s -- --dir ./my-clio --start
+cd my-clio
+```
+
+Setup behavior:
 
 - If `webapp/node_modules` already exists, `npm install` is skipped.
 - The official `graphifyy` package version is checked, upgraded to the latest available version globally, and `graphify install` is run. Setup prefers `pipx`; on externally managed Python environments it skips unsafe `pip --user` fallback and prints pipx guidance. Use `--skip-graphify` to skip this.
 - Coding agent CLIs (`codex`, `claude`, `gemini`, `cline`) are detected and recorded in `config/cli-detected.json`.
-- The server is not started automatically.
+- The server starts when the installer or `setup.sh` receives `--start`.
 
-To start the server immediately:
+If you already have a checkout, run setup directly:
+
+```bash
+./setup.sh
+```
+
+To start or restart the server from an installed checkout:
 
 ```bash
 ./setup.sh --start
 ```
 
-This command starts the web app in the background and exits. Logs and the PID are stored under `.run/`.
+This command starts the web app in the background and exits. Logs and the PID are
+stored under `.run/`.
 
 ```text
 .run/webapp.pid

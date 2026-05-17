@@ -28,6 +28,7 @@ require_file "AGENTS.md"
 require_file "CLAUDE.md"
 require_file "README.md"
 require_file "setup.sh"
+require_file "scripts/install.sh"
 require_file "config/default.json"
 require_file "wiki/index.md"
 require_file "wiki/log.md"
@@ -49,8 +50,14 @@ require_dir "webapp"
 log "checking setup.sh syntax"
 bash -n "${ROOT_DIR}/setup.sh"
 
+log "checking scripts/install.sh syntax"
+bash -n "${ROOT_DIR}/scripts/install.sh"
+
 log "checking setup.sh help"
 "${ROOT_DIR}/setup.sh" --help >/dev/null
+
+log "checking scripts/install.sh help"
+"${ROOT_DIR}/scripts/install.sh" --help >/dev/null
 
 log "checking setup.sh idempotent no-network path"
 "${ROOT_DIR}/setup.sh" --skip-graphify --skip-npm-install --skip-build >/dev/null

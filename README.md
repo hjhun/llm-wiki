@@ -22,11 +22,12 @@ CLIO implements the LLM Wiki pattern: the LLM does the maintenance work that peo
 ## Quick Start
 
 ```bash
-git clone <this-repo>
-cd <repo-dir>
-./setup.sh
-./setup.sh --start
+curl -fsSL https://raw.githubusercontent.com/hjhun/llm-wiki/v0.1.0/scripts/install.sh | bash -s -- --start
 ```
+
+The installer downloads the `v0.1.0` release tarball into `./clio`, runs
+`setup.sh`, and starts the web app. It never overwrites an existing directory;
+choose another location with `--dir <path>` if `./clio` already exists.
 
 Open from this machine:
 
@@ -35,8 +36,9 @@ http://127.0.0.1:7777
 ```
 
 CLIO binds to `0.0.0.0` by default, so other machines on the same LAN can also
-reach it at `http://<server-ip>:7777`. Override with `setup.sh --host 127.0.0.1`
-or by editing `server.host` in Settings if you want to restrict access.
+reach it at `http://<server-ip>:7777`. Override with `--host 127.0.0.1` in the
+installer command, `setup.sh --host 127.0.0.1` inside the project, or by editing
+`server.host` in Settings if you want to restrict access.
 
 On first visit, CLIO redirects to `/setup` so you can set the administrator password. After login, open Settings and choose the default coding agent CLI.
 
@@ -166,6 +168,34 @@ To skip graphify installation/upgrade and use an already-installed global comman
 
 ## Setup Script
 
+The release installer is the recommended installation entrypoint for new users:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/hjhun/llm-wiki/v0.1.0/scripts/install.sh | bash -s -- --start
+```
+
+Installer options:
+
+| Option | Description |
+|---|---|
+| `--dir <path>` | Install directory. Default: `./clio`. The installer fails if this path already exists. |
+| `--ref <ref>` | GitHub tag, branch, or commit to download. Default: `v0.1.0`. |
+| `--repo <repo>` | GitHub repo as `owner/name` or a `github.com` URL. Default: `hjhun/llm-wiki`. |
+| `--no-setup` | Download and unpack only; do not run `setup.sh`. |
+
+Any other arguments are passed through to `setup.sh`:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/hjhun/llm-wiki/v0.1.0/scripts/install.sh | bash -s -- --dir ./my-clio --skip-graphify --port 7788 --start
+```
+
+Prerequisites for the installer are `bash`, `tar`, and either `curl` or `wget`.
+The project setup itself requires Node.js `>=20`, npm, Python 3, and one
+supported coding agent CLI for full operation.
+
+Inside an installed or cloned checkout, `setup.sh` remains the project setup and
+runtime helper:
+
 ```bash
 ./setup.sh --help
 ```
@@ -208,6 +238,8 @@ Requirements:
 Install without starting the server:
 
 ```bash
+git clone https://github.com/hjhun/llm-wiki.git
+cd llm-wiki
 ./setup.sh
 ```
 
