@@ -334,8 +334,8 @@ export default function Settings() {
                     <span className="text-xs text-ink-faint">
                       {t.settings.uiTheme}
                     </span>
-                    <div className="mt-1 grid grid-cols-2 gap-1 rounded border border-line bg-bg-subtle p-1">
-                      {(["light", "dark"] as const).map((themeOption) => (
+                    <div className="mt-1 grid grid-cols-3 gap-1 rounded border border-line bg-bg-subtle p-1">
+                      {(["default", "light", "dark"] as const).map((themeOption) => (
                         <button
                           key={themeOption}
                           type="button"
@@ -352,9 +352,11 @@ export default function Settings() {
                               : "text-ink-dim hover:bg-bg-panel hover:text-ink",
                           ].join(" ")}
                         >
-                          {themeOption === "light"
-                            ? t.settings.lightTheme
-                            : t.settings.darkTheme}
+                          {themeOption === "default"
+                            ? t.settings.defaultTheme
+                            : themeOption === "light"
+                              ? t.settings.lightTheme
+                              : t.settings.darkTheme}
                         </button>
                       ))}
                     </div>

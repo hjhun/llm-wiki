@@ -76,10 +76,10 @@ export default function AuthCard({
   }
 
   return (
-    <div className="flex min-h-screen w-full items-center justify-center bg-bg px-6">
+    <div className="flex min-h-screen w-full items-center justify-center bg-bg/70 px-6">
       <form
         onSubmit={onSubmit}
-        className="w-full max-w-sm rounded-xl border border-line bg-bg-panel p-6 shadow-2xl"
+        className="w-full max-w-sm rounded-xl border border-line bg-bg-panel/95 p-6 shadow-2xl"
       >
         <div className="mb-1 font-mono text-[11px] uppercase tracking-widest text-ink-faint">
           {BRAND_NAME}

@@ -35,7 +35,7 @@ export type SettingsConfig = {
   };
   ui: {
     language: "ko" | "en";
-    theme: "light" | "dark";
+    theme: "default" | "light" | "dark";
     defaultTab: "chat" | "explorer" | "graph" | "automations" | "settings";
   };
   auth: {

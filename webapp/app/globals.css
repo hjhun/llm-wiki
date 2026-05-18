@@ -3,6 +3,42 @@
 @tailwind utilities;
 
 :root {
+  --color-bg: 243 246 251;
+  --color-bg-subtle: 232 238 247;
+  --color-bg-panel: 255 255 255;
+  --color-line: 202 212 226;
+  --color-ink: 18 25 38;
+  --color-ink-dim: 75 88 108;
+  --color-ink-faint: 117 132 154;
+  --color-accent: 52 89 235;
+  --color-accent-soft: 214 224 255;
+  --color-success: 16 142 105;
+  --color-warning: 190 111 10;
+  --color-danger: 210 47 86;
+  --color-info: 2 132 199;
+
+  color-scheme: light;
+}
+
+:root[data-theme="light"] {
+  --color-bg: 252 253 255;
+  --color-bg-subtle: 246 248 251;
+  --color-bg-panel: 255 255 255;
+  --color-line: 218 225 235;
+  --color-ink: 20 25 34;
+  --color-ink-dim: 82 94 112;
+  --color-ink-faint: 124 137 156;
+  --color-accent: 36 89 214;
+  --color-accent-soft: 207 220 255;
+  --color-success: 5 150 105;
+  --color-warning: 217 119 6;
+  --color-danger: 225 29 72;
+  --color-info: 2 132 199;
+
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
   --color-bg: 11 13 16;
   --color-bg-subtle: 19 22 26;
   --color-bg-panel: 24 28 34;
@@ -20,24 +56,6 @@
   color-scheme: dark;
 }
 
-:root[data-theme="light"] {
-  --color-bg: 247 249 252;
-  --color-bg-subtle: 239 243 248;
-  --color-bg-panel: 255 255 255;
-  --color-line: 208 216 226;
-  --color-ink: 24 31 42;
-  --color-ink-dim: 83 97 117;
-  --color-ink-faint: 116 130 150;
-  --color-accent: 36 89 214;
-  --color-accent-soft: 207 220 255;
-  --color-success: 5 150 105;
-  --color-warning: 217 119 6;
-  --color-danger: 225 29 72;
-  --color-info: 2 132 199;
-
-  color-scheme: light;
-}
-
 html,
 body {
   height: 100%;
@@ -46,6 +64,12 @@ body {
 body {
   @apply bg-bg text-ink antialiased;
   font-feature-settings: "ss01", "cv11";
+}
+
+:root:not([data-theme="dark"]) body {
+  background:
+    radial-gradient(circle at 16% 0%, rgb(var(--color-accent-soft) / 0.72), transparent 34rem),
+    linear-gradient(180deg, rgb(248 250 255), rgb(var(--color-bg)) 18rem);
 }
 
 button,
@@ -100,58 +124,58 @@ select {
 }
 
 .chat-message-user {
-  border-color: rgb(30 64 175 / 0.7);
-  background-color: rgb(8 47 73 / 0.35);
+  border-color: rgb(var(--color-accent) / 0.34);
+  background-color: rgb(var(--color-accent-soft) / 0.72);
 }
 
 .chat-message-assistant {
-  border-color: rgb(6 78 59 / 0.72);
-  background-color: rgb(6 78 59 / 0.28);
+  border-color: rgb(var(--color-success) / 0.34);
+  background-color: rgb(var(--color-success) / 0.12);
 }
 
 .chat-message-system {
-  border-color: rgb(127 29 29 / 0.68);
-  background-color: rgb(127 29 29 / 0.3);
-  color: rgb(254 202 202);
+  border-color: rgb(var(--color-danger) / 0.34);
+  background-color: rgb(var(--color-danger) / 0.12);
+  color: rgb(var(--color-danger));
 }
 
 .chat-progress-card {
-  border-color: rgb(146 64 14 / 0.65);
-  background-color: rgb(120 53 15 / 0.24);
-  color: rgb(254 243 199);
+  border-color: rgb(var(--color-warning) / 0.36);
+  background-color: rgb(var(--color-warning) / 0.12);
+  color: rgb(var(--color-ink));
 }
 
 .chat-progress-title,
 .chat-progress-muted {
-  color: rgb(253 230 138 / 0.78);
+  color: rgb(var(--color-warning));
 }
 
 .chat-progress-summary,
 .chat-progress-log {
-  color: rgb(254 243 199 / 0.9);
+  color: rgb(var(--color-ink-dim));
 }
 
 .chat-progress-time,
 .chat-progress-separator {
-  color: rgb(252 211 77 / 0.7);
+  color: rgb(var(--color-warning) / 0.78);
 }
 
 .status-ready {
-  border-color: rgb(6 95 70 / 0.62);
-  background-color: rgb(6 78 59 / 0.28);
-  color: rgb(110 231 183);
+  border-color: rgb(var(--color-success) / 0.36);
+  background-color: rgb(var(--color-success) / 0.12);
+  color: rgb(var(--color-success));
 }
 
 .status-warning {
-  border-color: rgb(146 64 14 / 0.62);
-  background-color: rgb(120 53 15 / 0.28);
-  color: rgb(253 230 138);
+  border-color: rgb(var(--color-warning) / 0.36);
+  background-color: rgb(var(--color-warning) / 0.12);
+  color: rgb(var(--color-warning));
 }
 
 .status-skipped {
-  border-color: rgb(133 77 14 / 0.62);
-  background-color: rgb(113 63 18 / 0.28);
-  color: rgb(254 240 138);
+  border-color: rgb(var(--color-warning) / 0.3);
+  background-color: rgb(var(--color-warning) / 0.08);
+  color: rgb(var(--color-warning));
 }
 
 .status-disabled {
@@ -172,54 +196,57 @@ select {
   color: rgb(var(--color-info));
 }
 
-:root[data-theme="light"] .chat-message-user {
-  border-color: rgb(37 99 235 / 0.38);
-  background-color: rgb(219 234 254 / 0.86);
+:root[data-theme="dark"] .chat-message-user {
+  border-color: rgb(30 64 175 / 0.7);
+  background-color: rgb(8 47 73 / 0.35);
 }
 
-:root[data-theme="light"] .chat-message-assistant {
-  border-color: rgb(5 150 105 / 0.38);
-  background-color: rgb(209 250 229 / 0.86);
+:root[data-theme="dark"] .chat-message-assistant {
+  border-color: rgb(6 78 59 / 0.72);
+  background-color: rgb(6 78 59 / 0.28);
 }
 
-:root[data-theme="light"] .chat-message-system {
-  border-color: rgb(220 38 38 / 0.36);
-  background-color: rgb(254 226 226 / 0.86);
-  color: rgb(127 29 29);
+:root[data-theme="dark"] .chat-message-system {
+  border-color: rgb(127 29 29 / 0.68);
+  background-color: rgb(127 29 29 / 0.3);
+  color: rgb(254 202 202);
 }
 
-:root[data-theme="light"] .chat-progress-card {
-  border-color: rgb(217 119 6 / 0.38);
-  background-color: rgb(254 243 199 / 0.82);
-  color: rgb(69 26 3);
+:root[data-theme="dark"] .chat-progress-card {
+  border-color: rgb(146 64 14 / 0.65);
+  background-color: rgb(120 53 15 / 0.24);
+  color: rgb(254 243 199);
 }
 
-:root[data-theme="light"] .chat-progress-title,
-:root[data-theme="light"] .chat-progress-muted,
-:root[data-theme="light"] .chat-progress-summary,
-:root[data-theme="light"] .chat-progress-log {
-  color: rgb(92 52 5);
+:root[data-theme="dark"] .chat-progress-title,
+:root[data-theme="dark"] .chat-progress-muted {
+  color: rgb(253 230 138 / 0.78);
 }
 
-:root[data-theme="light"] .chat-progress-time,
-:root[data-theme="light"] .chat-progress-separator {
-  color: rgb(146 64 14);
+:root[data-theme="dark"] .chat-progress-summary,
+:root[data-theme="dark"] .chat-progress-log {
+  color: rgb(254 243 199 / 0.9);
 }
 
-:root[data-theme="light"] .status-ready {
-  border-color: rgb(5 150 105 / 0.36);
-  background-color: rgb(209 250 229 / 0.9);
-  color: rgb(6 95 70);
+:root[data-theme="dark"] .chat-progress-time,
+:root[data-theme="dark"] .chat-progress-separator {
+  color: rgb(252 211 77 / 0.7);
 }
 
-:root[data-theme="light"] .status-warning {
-  border-color: rgb(217 119 6 / 0.38);
-  background-color: rgb(254 243 199 / 0.9);
-  color: rgb(120 53 15);
+:root[data-theme="dark"] .status-ready {
+  border-color: rgb(6 95 70 / 0.62);
+  background-color: rgb(6 78 59 / 0.28);
+  color: rgb(110 231 183);
 }
 
-:root[data-theme="light"] .status-skipped {
-  border-color: rgb(202 138 4 / 0.38);
-  background-color: rgb(254 249 195 / 0.9);
-  color: rgb(113 63 18);
+:root[data-theme="dark"] .status-warning {
+  border-color: rgb(146 64 14 / 0.62);
+  background-color: rgb(120 53 15 / 0.28);
+  color: rgb(253 230 138);
+}
+
+:root[data-theme="dark"] .status-skipped {
+  border-color: rgb(133 77 14 / 0.62);
+  background-color: rgb(113 63 18 / 0.28);
+  color: rgb(254 240 138);
 }

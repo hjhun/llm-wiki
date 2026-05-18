@@ -9,7 +9,7 @@ import {
   useState,
 } from "react";
 
-export type Theme = "light" | "dark";
+export type Theme = "default" | "light" | "dark";
 
 type ThemeContextValue = {
   theme: Theme;

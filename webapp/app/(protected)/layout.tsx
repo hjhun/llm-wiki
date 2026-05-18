@@ -29,7 +29,7 @@ export default async function ProtectedLayout({
       <LanguageProvider initialLanguage={cfg.ui.language}>
         <div className="flex h-screen w-screen overflow-hidden">
           <Sidebar />
-          <main className="flex h-screen flex-1 flex-col overflow-hidden bg-bg">
+          <main className="flex h-screen flex-1 flex-col overflow-hidden bg-bg/80">
             {children}
           </main>
         </div>

@@ -44,7 +44,7 @@
   },
   "ui": {
     "language": "ko",
-    "theme": "dark",
+    "theme": "default",
     "defaultTab": "chat"
   },
   "auth": {

@@ -66,7 +66,7 @@ function MermaidDiagram({ source }: MermaidDiagramProps) {
         setError(null);
         const mermaid = (await import("mermaid")).default;
         const theme =
-          document.documentElement.dataset.theme === "light" ? "default" : "dark";
+          document.documentElement.dataset.theme === "dark" ? "dark" : "default";
 
         mermaid.initialize({
           startOnLoad: false,
