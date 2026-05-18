@@ -48,7 +48,7 @@ type AutomationRuntime = {
       lastResult: {
         artifactRoot: string;
         mode: "plan" | "run";
-        agents: Array<{ agent: CliName; status: "success" | "error"; durationMs: number }>;
+        agents: Array<AutomationAgentResult>;
       } | null;
     }
   >;
@@ -83,6 +83,22 @@ type BuilderProposal = {
   verificationSteps: string[];
   riskNotes: string[];
   analysisNotes: string[];
+};
+
+type AutomationAgentResult = {
+  agent: CliName;
+  status: "success" | "error";
+  workspacePath?: string;
+  artifactPath: string;
+  exitCode?: number | null;
+  durationMs: number;
+  error?: string | null;
+};
+
+type AutomationResult = {
+  artifactRoot: string;
+  mode: "plan" | "run";
+  agents: AutomationAgentResult[];
 };
 
 const CLI_NAMES: CliName[] = ["codex", "claude", "gemini", "cline"];
@@ -163,7 +179,7 @@ export default function Automations() {
   const [builderAgents, setBuilderAgents] = useState<CliName[]>(["codex"]);
   const [analyzerAgent, setAnalyzerAgent] = useState<CliName | "none">("none");
   const [proposal, setProposal] = useState<BuilderProposal | null>(null);
-  const [verifyArtifact, setVerifyArtifact] = useState<string | null>(null);
+  const [verifyResult, setVerifyResult] = useState<AutomationResult | null>(null);
 
   const load = useCallback(async () => {
     setError(null);
@@ -315,7 +331,7 @@ export default function Automations() {
     setBusy("builder-analyze");
     setError(null);
     setNotice(null);
-    setVerifyArtifact(null);
+    setVerifyResult(null);
     try {
       const res = await fetch("/api/automation/builder/analyze", {
         method: "POST",
@@ -350,8 +366,8 @@ export default function Automations() {
         body: JSON.stringify(proposal.job),
       });
       if (!res.ok) throw await asError(res);
-      const json = (await res.json()) as { result: { artifactRoot: string } };
-      setVerifyArtifact(json.result.artifactRoot);
+      const json = (await res.json()) as { result: AutomationResult };
+      setVerifyResult(json.result);
       setNotice("Dry-run verification completed.");
       await load();
     } catch (err) {
@@ -671,10 +687,8 @@ export default function Automations() {
                             {busy === "builder-verify" ? "Verifying..." : "Dry-run verify"}
                           </button>
                         </div>
-                        {verifyArtifact ? (
-                          <div className="mt-2 truncate font-mono text-[11px] text-emerald-300">
-                            {verifyArtifact}
-                          </div>
+                        {verifyResult ? (
+                          <ArtifactLinks result={verifyResult} />
                         ) : null}
                       </div>
                       <div className="rounded border border-line bg-bg px-3 py-2">
@@ -974,19 +988,7 @@ export default function Automations() {
                     />
                   </dl>
                   {selectedRuntime?.lastResult ? (
-                    <div className="mt-3 space-y-1">
-                      {selectedRuntime.lastResult.agents.map((agent) => (
-                        <div
-                          key={agent.agent}
-                          className="flex items-center justify-between rounded border border-line bg-bg px-2 py-1 text-[11px]"
-                        >
-                          <span className="font-mono text-ink-dim">{agent.agent}</span>
-                          <span className={agent.status === "success" ? "text-emerald-300" : "text-red-300"}>
-                            {agent.status} · {agent.durationMs}ms
-                          </span>
-                        </div>
-                      ))}
-                    </div>
+                    <ArtifactLinks result={selectedRuntime.lastResult} />
                   ) : null}
                 </Panel>
               </aside>
@@ -1115,6 +1117,105 @@ function InfoRow({ label, value }: { label: string; value: string }) {
       <dd className="truncate font-mono text-[11px]">{value}</dd>
     </div>
   );
+}
+
+function ArtifactLinks({ result }: { result: AutomationResult }) {
+  const resultFile = result.mode === "run" ? "result.md" : "plan.md";
+  return (
+    <div className="mt-3 rounded border border-line bg-bg px-3 py-2">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-xs uppercase tracking-widest text-ink-faint">
+          artifacts
+        </span>
+        <span className="rounded border border-line px-1.5 py-0.5 font-mono text-[10px] text-ink-faint">
+          {result.mode}
+        </span>
+      </div>
+      <div className="mt-2 truncate font-mono text-[11px] text-emerald-300">
+        {result.artifactRoot}
+      </div>
+      <div className="mt-3 grid grid-cols-2 gap-2">
+        <ArtifactLink label="Folder" rawPath={result.artifactRoot} />
+        <ArtifactLink
+          label="Summary"
+          rawPath={joinRawPath(result.artifactRoot, "summary.md")}
+        />
+        <ArtifactLink
+          label="Job"
+          rawPath={joinRawPath(result.artifactRoot, "job.md")}
+        />
+        <ArtifactLink
+          label="Schedule"
+          rawPath={joinRawPath(result.artifactRoot, "schedule.md")}
+        />
+      </div>
+      <div className="mt-3 space-y-1">
+        {result.agents.map((agent) => (
+          <div
+            key={agent.agent}
+            className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded border border-line bg-bg-subtle px-2 py-1 text-[11px]"
+          >
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <span className="font-mono text-ink-dim">{agent.agent}</span>
+                <span
+                  className={
+                    agent.status === "success"
+                      ? "text-emerald-300"
+                      : "text-red-300"
+                  }
+                >
+                  {agent.status} · {agent.durationMs}ms
+                </span>
+              </div>
+              {agent.error ? (
+                <div className="truncate text-[10px] text-red-300">
+                  {agent.error}
+                </div>
+              ) : null}
+            </div>
+            <ArtifactLink
+              label={resultFile}
+              rawPath={joinRawPath(agent.artifactPath, resultFile)}
+              compact
+            />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ArtifactLink({
+  label,
+  rawPath,
+  compact = false,
+}: {
+  label: string;
+  rawPath: string;
+  compact?: boolean;
+}) {
+  return (
+    <a
+      href={explorerHref(rawPath)}
+      className={[
+        "rounded border border-line text-center text-xs font-medium text-ink-dim hover:bg-bg-panel hover:text-ink",
+        compact ? "px-2 py-1 text-[11px]" : "px-2 py-1.5",
+      ].join(" ")}
+    >
+      {label}
+    </a>
+  );
+}
+
+function joinRawPath(root: string, child: string): string {
+  return `${root.replace(/\/+$/, "")}/${child.replace(/^\/+/, "")}`;
+}
+
+function explorerHref(rawPath: string): string {
+  const pathInRaw = rawPath.replace(/^raw\/?/, "");
+  const params = new URLSearchParams({ ws: "raw", path: pathInRaw });
+  return `/explorer?${params.toString()}`;
 }
 
 function RequirementList({
