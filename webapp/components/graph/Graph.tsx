@@ -21,6 +21,11 @@ type RunResult = {
   durationMs: number;
 };
 
+type SelectionHistory = {
+  ids: string[];
+  index: number;
+};
+
 async function asError(res: Response): Promise<Error> {
   const j = (await res.json().catch(() => null)) as { error?: string } | null;
   return new Error(j?.error ?? `request failed (${res.status})`);
@@ -67,13 +72,22 @@ function explorerHref(doc: GraphDocument): string | null {
   return `/explorer?${params.toString()}`;
 }
 
+const EMPTY_SELECTION_HISTORY: SelectionHistory = { ids: [], index: -1 };
+
+function activeHistoryId(history: SelectionHistory): string | null {
+  return history.index >= 0 ? (history.ids[history.index] ?? null) : null;
+}
+
 export default function Graph() {
   const { t } = useLanguage();
   const [state, setState] = useState<GraphState | null>(null);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectionHistory, setSelectionHistory] = useState<SelectionHistory>(
+    EMPTY_SELECTION_HISTORY,
+  );
   const [busy, setBusy] = useState<"build" | "update" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [lastRun, setLastRun] = useState<RunResult | null>(null);
+  const selectedId = activeHistoryId(selectionHistory);
 
   const load = useCallback(async () => {
     setError(null);
@@ -82,23 +96,51 @@ export default function Graph() {
       if (!res.ok) throw await asError(res);
       const next = (await res.json()) as GraphState;
       setState(next);
-      if (
-        selectedId &&
-        !next.graph?.nodes.some((node) => node.id === selectedId)
-      ) {
-        setSelectedId(null);
-      }
+      setSelectionHistory((current) => {
+        if (!next.graph) return EMPTY_SELECTION_HISTORY;
+        const validIds = new Set(next.graph.nodes.map((node) => node.id));
+        const ids = current.ids.filter((id) => validIds.has(id));
+        if (ids.length === 0) return EMPTY_SELECTION_HISTORY;
+        return {
+          ids,
+          index:
+            current.index >= 0 ? Math.min(current.index, ids.length - 1) : 0,
+        };
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     }
-  }, [selectedId]);
+  }, []);
 
   useEffect(() => {
     void load();
   }, [load]);
 
+  const selectNodeId = useCallback((id: string) => {
+    setSelectionHistory((current) => {
+      if (activeHistoryId(current) === id) return current;
+      const previousIds =
+        current.index >= 0 ? current.ids.slice(0, current.index + 1) : [];
+      return { ids: [...previousIds, id], index: previousIds.length };
+    });
+  }, []);
+
   const handleNodeSelect = useCallback((node: GraphNode) => {
-    setSelectedId(node.id);
+    selectNodeId(node.id);
+  }, [selectNodeId]);
+
+  const goToPreviousSelection = useCallback(() => {
+    setSelectionHistory((current) =>
+      current.index > 0 ? { ...current, index: current.index - 1 } : current,
+    );
+  }, []);
+
+  const goToNextSelection = useCallback(() => {
+    setSelectionHistory((current) =>
+      current.index >= 0 && current.index < current.ids.length - 1
+        ? { ...current, index: current.index + 1 }
+        : current,
+    );
   }, []);
 
   async function run(action: "build" | "update") {
@@ -224,7 +266,15 @@ export default function Graph() {
               graph={graph}
               selected={selected}
               selectedEdges={selectedEdges}
-              onSelect={setSelectedId}
+              history={{
+                canGoBack: selectionHistory.index > 0,
+                canGoForward:
+                  selectionHistory.index >= 0 &&
+                  selectionHistory.index < selectionHistory.ids.length - 1,
+                onBack: goToPreviousSelection,
+                onForward: goToNextSelection,
+              }}
+              onSelect={selectNodeId}
               report={state?.report ?? null}
               reportPath={state?.reportPath ?? "wiki/graph/GRAPH_REPORT.md"}
               text={t.graph}
@@ -300,6 +350,7 @@ function GraphInspector({
   graph,
   selected,
   selectedEdges,
+  history,
   onSelect,
   report,
   reportPath,
@@ -308,6 +359,12 @@ function GraphInspector({
   graph: GraphData;
   selected: GraphNode | null;
   selectedEdges: GraphEdge[];
+  history: {
+    canGoBack: boolean;
+    canGoForward: boolean;
+    onBack: () => void;
+    onForward: () => void;
+  };
   onSelect: (id: string) => void;
   report: string | null;
   reportPath: string;
@@ -370,8 +427,30 @@ function GraphInspector({
   return (
     <div className="flex min-h-full flex-col">
       <section className="border-b border-line p-4">
-        <div className="font-mono text-[11px] uppercase tracking-widest text-ink-faint">
-          {text.selectedNode}
+        <div className="flex items-center justify-between gap-3">
+          <div className="font-mono text-[11px] uppercase tracking-widest text-ink-faint">
+            {text.selectedNode}
+          </div>
+          <div className="flex overflow-hidden rounded border border-line bg-bg/60">
+            <button
+              type="button"
+              onClick={history.onBack}
+              disabled={!history.canGoBack}
+              title={text.previousSelection}
+              className="h-7 min-w-9 border-r border-line px-2 font-mono text-[11px] text-ink-dim hover:bg-bg-panel hover:text-ink disabled:cursor-not-allowed disabled:opacity-35"
+            >
+              {text.previousSelection}
+            </button>
+            <button
+              type="button"
+              onClick={history.onForward}
+              disabled={!history.canGoForward}
+              title={text.nextSelection}
+              className="h-7 min-w-9 px-2 font-mono text-[11px] text-ink-dim hover:bg-bg-panel hover:text-ink disabled:cursor-not-allowed disabled:opacity-35"
+            >
+              {text.nextSelection}
+            </button>
+          </div>
         </div>
         {selected ? (
           <div className="mt-3">

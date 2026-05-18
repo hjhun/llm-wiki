@@ -78,7 +78,7 @@ function visualForNode(node: GraphNode): NodeVisual {
 
 function nodeSize(node: GraphNode): number {
   const centrality = node.centrality ?? 0;
-  return Math.max(22, Math.min(52, 26 + centrality * 42));
+  return Math.max(20, Math.min(46, 24 + centrality * 34));
 }
 
 function edgeWidth(weight: number): number {
@@ -104,11 +104,11 @@ const stylesheet = [
       "border-width": 2.6,
       color: "data(labelColor)",
       "font-family": "ui-monospace, SFMono-Regular, Menlo, monospace",
-      "font-size": 12,
+      "font-size": 11,
       "font-weight": 600,
       height: "data(size)",
       label: "data(label)",
-      "min-zoomed-font-size": 8,
+      "min-zoomed-font-size": 7,
       "overlay-opacity": 0,
       shape: "data(shape)",
       "shadow-blur": 16,
@@ -118,14 +118,14 @@ const stylesheet = [
       "shadow-offset-y": 0,
       "text-background-color": "#111827",
       "text-background-opacity": 0.86,
-      "text-background-padding": "3px",
+      "text-background-padding": "2.5px",
       "text-margin-x": 8,
       "text-outline-color": "#020617",
       "text-outline-opacity": 0.78,
       "text-outline-width": 1.2,
       "text-valign": "center",
       "text-wrap": "ellipsis",
-      "text-max-width": "140px",
+      "text-max-width": "128px",
       width: "data(size)",
     },
   },
