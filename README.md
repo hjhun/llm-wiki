@@ -128,7 +128,7 @@ Run these from the **Chat** tab:
 | Command | Use it for |
 |---|---|
 | `/ingest raw/<path>` | Process one ingest sub-chunk, then stop. Useful for careful manual stepping. |
-| `/ingest-loop raw/<path>` | Keep invoking ingest until the selected folder is complete. Recommended for normal use. |
+| `/ingest-loop raw/<path>` | Keep invoking ingest until the selected folder is complete. Transient CLI failures are retried and resume from saved progress. Recommended for normal use. |
 | `/ingest-loop` | Incrementally ingest all of `raw/`. |
 | `/query <question>` | Answer from the wiki first, with citations. |
 | `/lint` | Check metadata, links, contradictions, index consistency, and sensitive information. |

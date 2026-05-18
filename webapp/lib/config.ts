@@ -162,8 +162,25 @@ export const ConfigSchema = z.object({
          * progress state.
          */
         maxIterations: z.number().int().min(1).default(200),
+        /**
+         * Number of times the backend should try the same ingest-loop
+         * iteration when the host CLI throws or exits non-zero. This counts
+         * the initial call, so 3 means 1 normal attempt + 2 retries.
+         */
+        maxRetryAttempts: z.number().int().min(1).default(3),
+        /**
+         * Backoff delays before retrying failed CLI calls. If there are more
+         * retries than entries, the final delay is reused.
+         */
+        retryBackoffMs: z
+          .array(z.number().int().min(0))
+          .default([5000, 30_000]),
       })
-      .default({ maxIterations: 200 }),
+      .default({
+        maxIterations: 200,
+        maxRetryAttempts: 3,
+        retryBackoffMs: [5000, 30_000],
+      }),
   }),
   ui: z.object({
     language: z.enum(["ko", "en"]).default("ko"),

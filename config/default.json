@@ -37,7 +37,9 @@
       "graph": 1800000
     },
     "ingestLoop": {
-      "maxIterations": 200
+      "maxIterations": 200,
+      "maxRetryAttempts": 3,
+      "retryBackoffMs": [5000, 30000]
     }
   },
   "ui": {
