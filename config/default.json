@@ -62,5 +62,11 @@
       "intervalMinutes": 30
     },
     "skipIfBusy": true
+  },
+  "automation": {
+    "enabled": false,
+    "maxConcurrentJobs": 2,
+    "defaultWorkspaceBasePath": "",
+    "jobs": []
   }
 }

@@ -15,6 +15,7 @@ You collect source material in `raw/`. A coding agent reads that material and ma
 | Chat | Run `/ingest-loop`, `/query`, `/lint`, and other agent requests. |
 | Explorer | Browse and inspect source files, wiki pages, logs, and reports. |
 | Graph | Build or update the knowledge graph. |
+| Automations | Create scheduled multi-CLI jobs that write draft-only records under `raw/automation/`. |
 | Settings | Choose the default agent CLI, configure host/port, Auto Ingest, language, graph options, and password. |
 
 The core idea is simple:
@@ -529,7 +530,27 @@ Important settings:
 
 Auto Ingest uses the same ingest-loop driver as manual ingest. It does not bypass the project skills.
 
-## 14. Configuration Files
+## 14. Automations
+
+The **Automations** tab creates scheduled jobs that run one or more coding agent CLIs in isolated workspaces.
+
+Each job stores its run record under:
+
+```text
+raw/automation/<job>/<run>/
+```
+
+Use templates for YouTube summaries, GitHub/Gerrit patch review, email sync, or a custom prompt. External writes are draft-only by default: jobs may create review or email drafts, but they should not post comments, send mail, or mutate remote systems automatically.
+
+When multiple CLIs are selected, CLIO runs them concurrently and stores each agent's plan/result separately under `cli/<agent>/`.
+
+The **Build from prompt** panel is for non-developer setup. Describe the recurring task in natural language, choose preferred CLIs, and CLIO proposes a draft job with required tools, missing requirements, verification steps, and risk notes. Optional tools such as `agent-browser` are detected first; CLIO asks before running an allowlisted install command. You can also install it during setup with:
+
+```bash
+./setup.sh --with-agent-browser
+```
+
+## 15. Configuration Files
 
 Default settings live in:
 
@@ -555,10 +576,11 @@ Useful defaults:
 | `chunking.maxBytesPerFile` | `131072` | Large files are read head + tail. |
 | `graph.autoUpdateOnIngest` | `true` | Run graph update after ingest merge pass. |
 | `autoIngest.enabled` | `false` | Auto Ingest starts disabled. |
+| `automation.enabled` | `false` | Automation scheduler starts disabled. |
 
 Prefer changing settings through the UI unless you know exactly what you are editing.
 
-## 15. QA Checklist
+## 16. QA Checklist
 
 Use this after installation, before a release, or after a large change.
 
@@ -674,7 +696,7 @@ Files that normally must not be committed:
 - `webapp/node_modules/**`
 - local raw data you do not intend to publish
 
-## 16. Troubleshooting
+## 17. Troubleshooting
 
 ### Port Already in Use
 
@@ -769,7 +791,7 @@ Agents should not modify `raw/`. If anything under `raw/` changed unexpectedly:
 3. Record the incident in `wiki/log.md` by appending a new entry.
 4. Run `/lint` to check generated pages.
 
-## 17. Daily Workflow Example
+## 18. Daily Workflow Example
 
 1. Save new articles, notes, PDFs, or transcripts under a clear `raw/` folder.
 2. Run:
@@ -795,7 +817,7 @@ Agents should not modify `raw/`. If anything under `raw/` changed unexpectedly:
 7. Build or update the graph from the Graph tab.
 8. Commit or back up the wiki if this is a knowledge base you want to preserve.
 
-## 18. Where to Read Next
+## 19. Where to Read Next
 
 | Document | Purpose |
 |---|---|

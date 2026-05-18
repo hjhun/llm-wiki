@@ -36,7 +36,7 @@ export type SettingsConfig = {
   ui: {
     language: "ko" | "en";
     theme: "light" | "dark";
-    defaultTab: "chat" | "explorer" | "graph" | "settings";
+    defaultTab: "chat" | "explorer" | "graph" | "automations" | "settings";
   };
   auth: {
     passwordSet: boolean;

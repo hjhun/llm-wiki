@@ -101,6 +101,7 @@ function buildArgs(
   cli: CliName,
   prompt: string,
   safeMode: boolean,
+  projectRoot: string,
 ): string[] {
   switch (cli) {
     case "codex":
@@ -117,7 +118,7 @@ function buildArgs(
             "--prompt",
             prompt,
             "--include-directories",
-            PROJECT_ROOT,
+            projectRoot,
           ]
         : [
             "--prompt",
@@ -125,7 +126,7 @@ function buildArgs(
             "--approval-mode",
             "yolo",
             "--include-directories",
-            PROJECT_ROOT,
+            projectRoot,
           ];
     case "cline":
       return safeMode ? [prompt] : ["-y", prompt];
@@ -217,6 +218,10 @@ export async function runCli(
      * Defaults to true to preserve historical behavior for other callers.
      */
     killOnAbort?: boolean;
+    /** Working directory for this CLI process. Defaults to the wiki repo. */
+    cwd?: string;
+    /** Directory exposed to CLIs that support explicit project scopes. */
+    projectRoot?: string;
   } = {},
 ): Promise<RunResult> {
   const info = await detectCli(cli);
@@ -241,12 +246,14 @@ export async function runCli(
     );
   }
 
-  const args = buildArgs(cli, prompt, opts.safeMode ?? false);
+  const cwd = opts.cwd ?? PROJECT_ROOT;
+  const projectRoot = opts.projectRoot ?? cwd;
+  const args = buildArgs(cli, prompt, opts.safeMode ?? false, projectRoot);
   const started = Date.now();
 
   return new Promise<RunResult>((resolve, reject) => {
     const child = spawn(info.path!, args, {
-      cwd: PROJECT_ROOT,
+      cwd,
       env: { ...process.env },
       stdio: ["ignore", "pipe", "pipe"],
     });

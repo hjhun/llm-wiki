@@ -23,6 +23,7 @@ SHUTDOWN_SERVER=0
 RESTART_EXISTING=1
 WITH_QMD=0
 WITH_MARP=0
+WITH_AGENT_BROWSER=0
 INSTALL_CLI=""
 
 log() {
@@ -56,6 +57,7 @@ Options:
   --skip-build                  Do not run npm run build
   --with-qmd                    Best-effort optional qmd clone into tools/qmd
   --with-marp                   Best-effort optional Marp CLI install
+  --with-agent-browser          Best-effort optional agent-browser install
   --install-cli=<names>         Best-effort install for codex,claude,gemini,cline
   -h, --help                    Show this help
 
@@ -112,6 +114,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --with-marp)
       WITH_MARP=1
+      shift
+      ;;
+    --with-agent-browser)
+      WITH_AGENT_BROWSER=1
       shift
       ;;
     --install-cli=*)
@@ -247,6 +253,24 @@ install_cli_best_effort() {
         ;;
     esac
   done
+}
+
+install_agent_browser_best_effort() {
+  if command -v agent-browser >/dev/null 2>&1; then
+    log "agent-browser already available: $(command -v agent-browser)"
+    return
+  fi
+  require_command npm
+  log "best-effort install: agent-browser via npm package agent-browser"
+  if npm install -g agent-browser; then
+    if command -v agent-browser >/dev/null 2>&1; then
+      agent-browser install || warn "agent-browser browser install failed; run 'agent-browser install' manually if browser automation is needed"
+    else
+      warn "agent-browser installed but not found on PATH; add npm global bin to PATH"
+    fi
+  else
+    warn "agent-browser install failed; install it manually if browser automation jobs need it"
+  fi
 }
 
 clone_if_missing() {
@@ -827,6 +851,10 @@ main() {
       log "best-effort install: marp via npm package @marp-team/marp-cli"
       npm install -g @marp-team/marp-cli || warn "marp install failed; install it manually if needed"
     fi
+  fi
+
+  if [[ "${WITH_AGENT_BROWSER}" -eq 1 ]]; then
+    install_agent_browser_best_effort
   fi
 
   install_webapp

@@ -186,7 +186,7 @@ export const ConfigSchema = z.object({
     language: z.enum(["ko", "en"]).default("ko"),
     theme: z.enum(["light", "dark"]).default("dark"),
     defaultTab: z
-      .enum(["chat", "explorer", "graph", "settings"])
+      .enum(["chat", "explorer", "graph", "automations", "settings"])
       .default("chat"),
   }),
   auth: z.object({
@@ -307,6 +307,69 @@ export const ConfigSchema = z.object({
       fix: true,
       skipIfBusy: true,
     }),
+  automation: z
+    .object({
+      enabled: z.boolean().default(false),
+      maxConcurrentJobs: z.number().int().min(1).max(8).default(2),
+      defaultWorkspaceBasePath: z.string().default(""),
+      jobs: z
+        .array(
+          z.object({
+            id: z.string().min(1),
+            name: z.string().min(1).max(120),
+            enabled: z.boolean().default(false),
+            template: z
+              .enum([
+                "youtube-summary",
+                "github-gerrit-review",
+                "email-sync",
+                "custom",
+              ])
+              .default("custom"),
+            prompt: z.string().max(20_000).default(""),
+            schedule: z
+              .object({
+                mode: z.enum(["preset", "cron"]).default("preset"),
+                preset: z
+                  .enum(["hourly", "daily", "weekly", "monthly"])
+                  .default("daily"),
+                cron: z.string().default("0 9 * * *"),
+                time: z
+                  .object({
+                    hour: z.number().int().min(0).max(23).default(9),
+                    minute: z.number().int().min(0).max(59).default(0),
+                  })
+                  .default({ hour: 9, minute: 0 }),
+                dayOfWeek: z.number().int().min(0).max(6).default(1),
+                dayOfMonth: z.number().int().min(1).max(28).default(1),
+                timezone: z.string().default(""),
+              })
+              .default({
+                mode: "preset",
+                preset: "daily",
+                cron: "0 9 * * *",
+                time: { hour: 9, minute: 0 },
+                dayOfWeek: 1,
+                dayOfMonth: 1,
+                timezone: "",
+              }),
+            selectedAgents: z
+              .array(z.enum(["codex", "claude", "gemini", "cline"]))
+              .min(1)
+              .default(["codex"]),
+            workspaceBasePath: z.string().default(""),
+            externalWritePolicy: z.enum(["draft-only"]).default("draft-only"),
+            autoIngestAfterRun: z.boolean().default(false),
+          }),
+        )
+        .default([]),
+    })
+    .default({
+      enabled: false,
+      maxConcurrentJobs: 2,
+      defaultWorkspaceBasePath: "",
+      jobs: [],
+    }),
 });
 
 export type Config = z.infer<typeof ConfigSchema>;
@@ -320,6 +383,7 @@ const DEFAULT_CONFIG: Config = ConfigSchema.parse({
   cli: {},
   ui: {},
   auth: {},
+  automation: {},
 });
 
 async function readJsonIfExists<T>(p: string): Promise<Partial<T> | null> {

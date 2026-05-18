@@ -15,6 +15,7 @@ CLIO는 로컬 우선(local-first) LLM Wiki 워크벤치입니다.
 | Chat | `/ingest-loop`, `/query`, `/lint` 같은 에이전트 작업 실행 |
 | Explorer | 원본 파일, 위키 페이지, 로그, 리포트 탐색 |
 | Graph | 지식 그래프 빌드 및 업데이트 |
+| Automations | 여러 CLI로 주기 작업을 실행하고 `raw/automation/`에 draft-only 기록 저장 |
 | Settings | 기본 에이전트 CLI, 서버, 자동 인제스트, 언어, 그래프, 비밀번호 설정 |
 
 핵심 흐름은 다음과 같습니다.
@@ -529,7 +530,27 @@ wiki/lint/YYYY-MM-DD.md
 
 자동 인제스트도 수동 ingest-loop와 같은 드라이버를 사용합니다. 프로젝트 스킬을 우회하지 않습니다.
 
-## 14. 설정 파일
+## 14. Automations
+
+**Automations** 탭에서는 하나 이상의 코딩 에이전트 CLI를 독립 workspace에서 실행하는 주기 작업을 만들 수 있습니다.
+
+각 실행 기록은 다음 위치에 저장됩니다.
+
+```text
+raw/automation/<job>/<run>/
+```
+
+YouTube 요약, GitHub/Gerrit 패치 리뷰, 이메일 sync, custom prompt 템플릿을 사용할 수 있습니다. 외부 쓰기는 기본적으로 draft-only입니다. 즉 리뷰 댓글이나 이메일 초안은 만들 수 있지만, 자동으로 댓글을 업로드하거나 메일을 보내거나 외부 시스템 상태를 바꾸지 않습니다.
+
+여러 CLI를 선택하면 CLIO가 병렬로 실행하고 각 에이전트의 plan/result를 `cli/<agent>/` 아래에 따로 저장합니다.
+
+**Build from prompt** 패널은 개발자가 아닌 사용자를 위한 설정 흐름입니다. 원하는 주기 작업을 자연어로 적고 선호 CLI를 고르면 CLIO가 job 초안, 필요한 도구, 누락 요구사항, 검증 단계, 위험 메모를 제안합니다. `agent-browser` 같은 선택 도구는 먼저 감지하고, allowlist된 설치 명령을 실행하기 전에 사용자에게 확인을 받습니다. 설치 시점에 미리 준비하려면 다음 옵션을 사용할 수 있습니다.
+
+```bash
+./setup.sh --with-agent-browser
+```
+
+## 15. 설정 파일
 
 기본 설정:
 
@@ -555,10 +576,11 @@ config/local.json
 | `chunking.maxBytesPerFile` | `131072` | 큰 파일은 head + tail만 읽음 |
 | `graph.autoUpdateOnIngest` | `true` | ingest merge pass 후 graph update 실행 |
 | `autoIngest.enabled` | `false` | 자동 인제스트 기본 비활성화 |
+| `automation.enabled` | `false` | 자동화 스케줄러 기본 비활성화 |
 
 가능하면 UI에서 설정을 바꾸고, 수동 편집은 필요한 경우에만 하세요.
 
-## 15. QA 체크리스트
+## 16. QA 체크리스트
 
 설치 후, 릴리스 전, 큰 변경 후에 사용하세요.
 
@@ -672,7 +694,7 @@ git status --short
 - `webapp/node_modules/**`
 - 공개할 의도가 없는 local raw data
 
-## 16. 문제 해결
+## 17. 문제 해결
 
 ### 포트가 이미 사용 중일 때
 
@@ -767,7 +789,7 @@ wiki/.progress/ingest/.lock
 3. `wiki/log.md`에 새 entry를 append하여 상황을 기록합니다.
 4. `/lint`를 실행해 생성 페이지 상태를 점검합니다.
 
-## 17. 일상적인 사용 예시
+## 18. 일상적인 사용 예시
 
 1. 새 기사, 노트, PDF, 회의록을 명확한 `raw/` 폴더 아래에 저장합니다.
 2. Chat 탭에서 실행합니다.
@@ -793,7 +815,7 @@ wiki/.progress/ingest/.lock
 7. Graph 탭에서 그래프를 Build 또는 Incremental Update 합니다.
 8. 보존할 지식 베이스라면 `wiki/`를 커밋하거나 백업합니다.
 
-## 18. 다음 문서
+## 19. 다음 문서
 
 | 문서 | 내용 |
 |---|---|

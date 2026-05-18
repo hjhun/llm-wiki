@@ -34,6 +34,7 @@ wiki/.progress/ingest/tmp/
 # Auto-ingest runtime state is process-local — disabled status, last run
 # timestamp, next scheduled tick. None of it is useful to share across hosts.
 wiki/.progress/auto-ingest/
+wiki/.progress/automation/
 
 # ── 채팅 세션 / CLI 로그 ───────────────────────────────────────
 # 개인 기록이라 기본은 추적하지 않음. 필요 시 주석 처리하면 백업 가능.

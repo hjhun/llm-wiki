@@ -8,7 +8,7 @@ import { BRAND_NAME, type Language, useLanguage } from "./i18n";
 
 type Tab = {
   href: string;
-  key: "chat" | "explorer" | "graph" | "settings";
+  key: "chat" | "explorer" | "graph" | "automations" | "settings";
   icon: string;
 };
 
@@ -16,6 +16,7 @@ const TABS: Tab[] = [
   { href: "/chat", key: "chat", icon: "💬" },
   { href: "/explorer", key: "explorer", icon: "📁" },
   { href: "/graph", key: "graph", icon: "🕸" },
+  { href: "/automations", key: "automations", icon: "⏱" },
   { href: "/settings", key: "settings", icon: "⚙" },
 ];
 

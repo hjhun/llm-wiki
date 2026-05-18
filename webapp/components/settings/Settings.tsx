@@ -14,7 +14,7 @@ import type {
 } from "./types";
 
 const CLI_NAMES: CliName[] = ["codex", "claude", "gemini", "cline"];
-const DEFAULT_TABS = ["chat", "explorer", "graph", "settings"] as const;
+const DEFAULT_TABS = ["chat", "explorer", "graph", "automations", "settings"] as const;
 const SESSION_TTL_24H_SEC = 60 * 60 * 24;
 
 async function asError(res: Response): Promise<Error> {
