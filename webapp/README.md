@@ -54,6 +54,7 @@ On first run, set the administrator password at `/setup`. The password hash and 
 - `next`, `react`, `react-dom`
 - `bcryptjs` — password hashing
 - `jose` — session JWT (HS256)
+- `mermaid` — Explorer Markdown diagram rendering
 - `zod` — input/config validation
 - `tailwindcss` 3.4
 

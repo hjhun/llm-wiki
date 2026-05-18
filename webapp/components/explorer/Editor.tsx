@@ -1,12 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
 import { useLanguage } from "../i18n";
+import MarkdownPreview from "./MarkdownPreview";
 import type { Entry, WsKey } from "./types";
-
-type FileMode = "edit" | "preview";
 
 const TEXT_EXT_RE = /\.(md|mdx|txt|json|jsonc|yaml|yml|ts|tsx|js|jsx|css|html|csv|tsv|log|toml|ini|env|sh|py|go|rs|sql|xml|svg)$/i;
 const IMAGE_EXT_RE = /\.(png|jpe?g|gif|webp|svg)$/i;
@@ -24,7 +21,6 @@ export default function Editor({
   onSaved?: () => void;
 }) {
   const { t } = useLanguage();
-  const [mode, setMode] = useState<FileMode>("edit");
   const [original, setOriginal] = useState<string>("");
   const [content, setContent] = useState<string>("");
   const [loading, setLoading] = useState(false);
@@ -149,34 +145,6 @@ export default function Editor({
           </div>
         </div>
         <div className="flex items-center gap-1">
-          {isMd ? (
-            <div className="mr-2 flex overflow-hidden rounded border border-line">
-              <button
-                type="button"
-                onClick={() => setMode("edit")}
-                className={[
-                  "px-2 py-1 text-[11px]",
-                  mode === "edit"
-                    ? "bg-bg-panel text-ink"
-                    : "text-ink-dim hover:bg-bg-panel/60",
-                ].join(" ")}
-              >
-                {t.common.edit}
-              </button>
-              <button
-                type="button"
-                onClick={() => setMode("preview")}
-                className={[
-                  "px-2 py-1 text-[11px]",
-                  mode === "preview"
-                    ? "bg-bg-panel text-ink"
-                    : "text-ink-dim hover:bg-bg-panel/60",
-                ].join(" ")}
-              >
-                {t.common.preview}
-              </button>
-            </div>
-          ) : null}
           <button
             type="button"
             onClick={onSave}
@@ -229,9 +197,29 @@ export default function Editor({
               {t.common.download}
             </a>
           </div>
-        ) : mode === "preview" && isMd ? (
-          <div className="prose prose-invert max-w-none px-6 py-4 text-sm leading-relaxed">
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
+        ) : isMd ? (
+          <div className="grid h-full min-w-0 grid-cols-1 md:grid-cols-2">
+            <section className="flex min-h-0 flex-col border-b border-line md:border-b-0 md:border-r">
+              <div className="shrink-0 border-b border-line bg-bg-subtle px-3 py-1.5 font-mono text-[10px] uppercase tracking-widest text-ink-faint">
+                {t.common.edit}
+              </div>
+              <textarea
+                value={content}
+                readOnly={readOnly}
+                spellCheck={false}
+                onChange={(e) => setContent(e.target.value)}
+                className="block min-h-72 flex-1 resize-none bg-bg px-4 py-3 font-mono text-[12.5px] leading-relaxed text-ink outline-none md:min-h-0"
+              />
+            </section>
+            <section className="flex min-h-0 flex-col">
+              <div className="shrink-0 border-b border-line bg-bg-subtle px-3 py-1.5 font-mono text-[10px] uppercase tracking-widest text-ink-faint">
+                {t.common.preview}
+              </div>
+              <MarkdownPreview
+                content={content}
+                className="prose prose-theme min-h-0 max-w-none flex-1 overflow-auto px-6 py-4 text-sm leading-relaxed"
+              />
+            </section>
           </div>
         ) : (
           <textarea
