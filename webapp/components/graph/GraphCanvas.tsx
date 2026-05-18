@@ -43,7 +43,7 @@ function hashString(value: string): number {
 }
 
 function hsl(hue: number, saturation: number, lightness: number): string {
-  return `hsl(${Math.round(hue)} ${Math.round(saturation)}% ${Math.round(lightness)}%)`;
+  return `hsl(${Math.round(hue)}, ${Math.round(saturation)}%, ${Math.round(lightness)}%)`;
 }
 
 function shapeForNode(node: GraphNode): NodeVisual["shape"] {
@@ -69,9 +69,9 @@ function visualForNode(node: GraphNode): NodeVisual {
 
   return {
     color: hsl(hue, saturation, lightness),
-    borderColor: hsl(hue, Math.min(92, saturation + 10), 72),
-    haloColor: hsl(hue, Math.min(86, saturation + 6), 46),
-    labelColor: hsl(hue, 42, 84),
+    borderColor: hsl(hue, Math.min(94, saturation + 12), 78),
+    haloColor: hsl(hue, Math.min(88, saturation + 8), 62),
+    labelColor: "#f8fafc",
     shape: shapeForNode(node),
   };
 }
@@ -100,11 +100,12 @@ const stylesheet = [
     style: {
       "background-color": "data(color)",
       "border-color": "data(borderColor)",
-      "border-opacity": 0.86,
-      "border-width": 2.4,
+      "border-opacity": 0.95,
+      "border-width": 2.6,
       color: "data(labelColor)",
       "font-family": "ui-monospace, SFMono-Regular, Menlo, monospace",
-      "font-size": 11,
+      "font-size": 12,
+      "font-weight": 600,
       height: "data(size)",
       label: "data(label)",
       "min-zoomed-font-size": 8,
@@ -112,13 +113,16 @@ const stylesheet = [
       shape: "data(shape)",
       "shadow-blur": 16,
       "shadow-color": "data(haloColor)",
-      "shadow-opacity": 0.36,
+      "shadow-opacity": 0.42,
       "shadow-offset-x": 0,
       "shadow-offset-y": 0,
-      "text-background-color": "#0b0d10",
-      "text-background-opacity": 0.68,
-      "text-background-padding": "2px",
+      "text-background-color": "#111827",
+      "text-background-opacity": 0.86,
+      "text-background-padding": "3px",
       "text-margin-x": 8,
+      "text-outline-color": "#020617",
+      "text-outline-opacity": 0.78,
+      "text-outline-width": 1.2,
       "text-valign": "center",
       "text-wrap": "ellipsis",
       "text-max-width": "140px",
@@ -130,7 +134,7 @@ const stylesheet = [
     style: {
       "curve-style": "bezier",
       "line-color": "data(edgeColor)",
-      "line-opacity": 0.38,
+      "line-opacity": 0.54,
       "overlay-opacity": 0,
       "target-arrow-color": "data(edgeTargetColor)",
       width: "data(width)",
@@ -140,11 +144,12 @@ const stylesheet = [
     selector: ".selected",
     style: {
       "border-color": "#e7ebf0",
-      "border-width": 4,
-      color: "#e7ebf0",
+      "border-width": 4.5,
+      color: "#ffffff",
       "shadow-blur": 28,
       "shadow-opacity": 0.76,
-      "text-background-opacity": 0.9,
+      "text-background-color": "#020617",
+      "text-background-opacity": 0.95,
       "z-index": 10,
     },
   },
@@ -171,7 +176,7 @@ const stylesheet = [
   {
     selector: ".dimmed",
     style: {
-      opacity: 0.18,
+      opacity: 0.26,
     },
   },
 ] as unknown as StylesheetJson;
@@ -312,8 +317,9 @@ export default function GraphCanvas({
       className="relative h-full w-full overflow-hidden bg-bg"
       style={{
         backgroundImage:
-          "radial-gradient(circle at 1px 1px, rgb(var(--color-line) / 0.34) 1px, transparent 0)",
-        backgroundSize: "22px 22px",
+          "radial-gradient(circle at 1px 1px, rgb(64 72 86 / 0.52) 1px, transparent 0), linear-gradient(135deg, rgb(15 18 24), rgb(21 25 32))",
+        backgroundRepeat: "repeat, no-repeat",
+        backgroundSize: "22px 22px, auto",
       }}
     >
       <div ref={containerRef} className="h-full w-full" />

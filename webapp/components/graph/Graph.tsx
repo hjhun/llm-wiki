@@ -376,7 +376,7 @@ function GraphInspector({
         {selected ? (
           <div className="mt-3">
             <h2 className="text-sm font-semibold text-ink">{selected.label}</h2>
-            <p className="mt-1 break-all font-mono text-[11px] text-ink-faint">
+            <p className="mt-1 break-all font-mono text-[11px] text-ink-dim">
               {selected.id}
             </p>
             <div className="mt-3 flex flex-wrap gap-1.5">
@@ -404,7 +404,7 @@ function GraphInspector({
                       key={`${edge.src}-${edge.dst}-${index}`}
                       type="button"
                       onClick={() => onSelect(otherId)}
-                      className="block w-full truncate rounded px-2 py-1 text-left font-mono text-[11px] text-ink-faint hover:bg-bg-panel hover:text-ink-dim"
+                      className="block w-full truncate rounded px-2 py-1 text-left font-mono text-[11px] text-ink-dim hover:bg-bg-panel hover:text-ink"
                       title={`${edge.src} -> ${edge.dst}`}
                     >
                       {other?.label ?? otherId}
@@ -441,7 +441,7 @@ function GraphInspector({
                           <div className="truncate text-xs text-ink-dim">
                             {doc.label}
                           </div>
-                          <div className="mt-0.5 font-mono text-[10px] text-ink-faint">
+                          <div className="mt-0.5 font-mono text-[10px] text-ink-dim">
                             {doc.previewable
                               ? text.previewReady
                               : text.previewUnavailable}
@@ -520,10 +520,10 @@ function GraphInspector({
                 key={community.id}
                 className="flex items-center justify-between gap-3 rounded px-2 py-1 text-xs"
               >
-                <span className="truncate text-ink-dim">
+                <span className="truncate text-ink">
                   C{community.id} · {community.label}
                 </span>
-                <span className="font-mono text-ink-faint">
+                <span className="font-mono text-ink-dim">
                   {community.size}
                 </span>
               </div>
