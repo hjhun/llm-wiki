@@ -31,7 +31,7 @@
       "chat": 300000,
       "ingest": null,
       "ingest-loop": null,
-      "preprocess": 1800000,
+      "preprocess": 3600000,
       "query": 1800000,
       "lint": 1800000,
       "graph": 1800000

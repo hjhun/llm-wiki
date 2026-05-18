@@ -124,7 +124,7 @@ export const ConfigSchema = z.object({
         /**
          * /preprocess runs the deterministic scripts/preprocess-raw.mjs in
          * dry-run or apply mode. Both invocations are short relative to
-         * /ingest; 30 minutes is plenty even when iterating leaf-by-leaf on
+         * /ingest; 60 minutes is plenty even when iterating leaf-by-leaf on
          * a large raw/ tree, while still preventing a runaway from holding
          * the lock forever.
          */
@@ -133,7 +133,7 @@ export const ConfigSchema = z.object({
           .int()
           .min(1000)
           .nullable()
-          .default(30 * 60 * 1000),
+          .default(60 * 60 * 1000),
         query: z.number().int().min(1000).nullable().default(30 * 60 * 1000),
         lint: z.number().int().min(1000).nullable().default(30 * 60 * 1000),
         graph: z.number().int().min(1000).nullable().default(30 * 60 * 1000),
@@ -142,7 +142,7 @@ export const ConfigSchema = z.object({
         chat: 5 * 60 * 1000,
         ingest: null,
         "ingest-loop": null,
-        preprocess: 30 * 60 * 1000,
+        preprocess: 60 * 60 * 1000,
         query: 30 * 60 * 1000,
         lint: 30 * 60 * 1000,
         graph: 30 * 60 * 1000,
