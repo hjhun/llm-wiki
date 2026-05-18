@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { Command, Plus, Send, StopCircle } from "lucide-react";
 import { useLanguage } from "../i18n";
+import { Button, IconButton } from "../ui";
 
 export default function Composer({
   disabled,
@@ -55,9 +57,10 @@ export default function Composer({
   return (
     <div className="relative border-t border-line bg-bg-subtle px-4 py-3">
       {showPlus ? (
-        <div className="absolute bottom-full left-4 mb-2 w-72 rounded-md border border-line bg-bg-panel p-2 shadow-xl">
-          <div className="mb-1 px-2 text-[10px] uppercase tracking-widest text-ink-faint">
-            {t.chat.commands}
+        <div className="absolute bottom-full left-4 mb-2 w-80 rounded-md border border-line bg-bg-panel p-2 shadow-2xl">
+          <div className="mb-1 flex items-center gap-1.5 px-2 text-[10px] uppercase tracking-widest text-ink-faint">
+            <Command aria-hidden className="h-3 w-3" />
+            <span>{t.chat.commands}</span>
           </div>
           {t.chat.slashCommands.map((c) => (
             <button
@@ -96,14 +99,12 @@ export default function Composer({
       ) : null}
 
       <div className="flex items-end gap-2">
-        <button
-          type="button"
+        <IconButton
           onClick={() => setShowPlus((v) => !v)}
-          className="rounded-md border border-line bg-bg px-2.5 py-2 text-sm text-ink-dim hover:bg-bg-panel hover:text-ink"
-          title={t.chat.commandMenu}
-        >
-          +
-        </button>
+          label={t.chat.commandMenu}
+          icon={Plus}
+          className="h-10 w-10"
+        />
         <textarea
           ref={taRef}
           rows={1}
@@ -117,27 +118,29 @@ export default function Composer({
             if (e.key === "Escape") setShowPlus(false);
           }}
           placeholder={t.chat.placeholder}
-          className="block w-full resize-none rounded-md border border-line bg-bg px-3 py-2 text-sm leading-relaxed text-ink outline-none focus:border-accent"
+          className="block w-full resize-none rounded-md border border-line bg-bg px-3 py-2.5 text-sm leading-relaxed text-ink outline-none transition-colors placeholder:text-ink-faint focus:border-accent"
         />
         {loopStop ? (
-          <button
-            type="button"
+          <Button
             onClick={loopStop.onStop}
             disabled={loopStop.stopping}
             title={t.chat.stopLoopHint}
-            className="rounded-md border border-line bg-bg px-3 py-2 text-sm font-medium text-ink-dim hover:border-red-500/60 hover:text-red-300 disabled:opacity-40"
+            variant="danger"
+            size="md"
+            icon={StopCircle}
           >
             {loopStop.stopping ? t.chat.stopping : t.chat.stopLoop}
-          </button>
+          </Button>
         ) : null}
-        <button
-          type="button"
+        <Button
           onClick={submit}
           disabled={disabled || !value.trim()}
-          className="rounded-md bg-accent px-3 py-2 text-sm font-medium text-bg disabled:opacity-40"
+          variant="primary"
+          size="md"
+          icon={Send}
         >
           {t.chat.send}
-        </button>
+        </Button>
       </div>
       <div className="mt-1 px-1 text-[10px] text-ink-faint">
         {t.chat.hint}

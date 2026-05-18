@@ -12,6 +12,10 @@
   --color-ink-faint: 91 100 112;
   --color-accent: 122 162 255;
   --color-accent-soft: 59 74 122;
+  --color-success: 52 211 153;
+  --color-warning: 251 191 36;
+  --color-danger: 251 113 133;
+  --color-info: 56 189 248;
 
   color-scheme: dark;
 }
@@ -26,6 +30,10 @@
   --color-ink-faint: 116 130 150;
   --color-accent: 36 89 214;
   --color-accent-soft: 207 220 255;
+  --color-success: 5 150 105;
+  --color-warning: 217 119 6;
+  --color-danger: 225 29 72;
+  --color-info: 2 132 199;
 
   color-scheme: light;
 }
@@ -38,6 +46,13 @@ body {
 body {
   @apply bg-bg text-ink antialiased;
   font-feature-settings: "ss01", "cv11";
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
 }
 
 /* thin scrollbars */
@@ -143,6 +158,18 @@ body {
   border-color: rgb(var(--color-line));
   background-color: rgb(var(--color-bg));
   color: rgb(var(--color-ink-faint));
+}
+
+.status-danger {
+  border-color: rgb(var(--color-danger) / 0.45);
+  background-color: rgb(var(--color-danger) / 0.14);
+  color: rgb(var(--color-danger));
+}
+
+.status-info {
+  border-color: rgb(var(--color-info) / 0.45);
+  background-color: rgb(var(--color-info) / 0.14);
+  color: rgb(var(--color-info));
 }
 
 :root[data-theme="light"] .chat-message-user {

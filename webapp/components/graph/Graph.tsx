@@ -1,9 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { GitBranch, Hammer, RefreshCw, RotateCw } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { useLanguage } from "../i18n";
+import { Button, EmptyState, PageHeader, StatusBadge } from "../ui";
 import GraphCanvas from "./GraphCanvas";
 import type {
   GraphData,
@@ -179,43 +181,41 @@ export default function Graph() {
 
   return (
     <div className="flex h-full w-full flex-col overflow-hidden">
-      <header className="flex shrink-0 items-center justify-between border-b border-line px-4 py-2">
-        <div className="min-w-0">
-          <h1 className="text-sm font-semibold">{t.graph.title}</h1>
-          <p className="mt-0.5 truncate font-mono text-[11px] text-ink-faint">
-            {state?.graphPath ?? "wiki/graph/graph.json"}
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => void load()}
-            disabled={busy != null}
-            className="h-8 rounded border border-line px-3 text-xs text-ink-dim hover:bg-bg-panel disabled:opacity-40"
-          >
-            {t.graph.refresh}
-          </button>
-          <button
-            type="button"
-            onClick={() => void run("update")}
-            disabled={busy != null}
-            className="h-8 rounded border border-line px-3 text-xs text-ink-dim hover:bg-bg-panel disabled:opacity-40"
-          >
-            {busy === "update" ? t.graph.updating : t.graph.update}
-          </button>
-          <button
-            type="button"
-            onClick={() => void run("build")}
-            disabled={busy != null}
-            className="h-8 rounded bg-accent px-3 text-xs font-medium text-bg disabled:opacity-40"
-          >
-            {busy === "build" ? t.graph.building : t.graph.build}
-          </button>
-        </div>
-      </header>
+      <PageHeader
+        eyebrow="knowledge graph"
+        title={t.graph.title}
+        meta={state?.graphPath ?? "wiki/graph/graph.json"}
+        actions={
+          <>
+            {busy ? <StatusBadge tone="running">{busy}</StatusBadge> : null}
+            <Button
+              onClick={() => void load()}
+              disabled={busy != null}
+              icon={RefreshCw}
+            >
+              {t.graph.refresh}
+            </Button>
+            <Button
+              onClick={() => void run("update")}
+              disabled={busy != null}
+              icon={RotateCw}
+            >
+              {busy === "update" ? t.graph.updating : t.graph.update}
+            </Button>
+            <Button
+              onClick={() => void run("build")}
+              disabled={busy != null}
+              variant="primary"
+              icon={Hammer}
+            >
+              {busy === "build" ? t.graph.building : t.graph.build}
+            </Button>
+          </>
+        }
+      />
 
       {error ? (
-        <div className="border-b border-red-900/60 bg-red-950/40 px-4 py-1 text-[11px] text-red-300">
+        <div className="border-b border-danger/50 bg-danger/10 px-4 py-1 text-[11px] text-danger">
           {error}
         </div>
       ) : null}
@@ -280,12 +280,11 @@ export default function Graph() {
               text={t.graph}
             />
           ) : (
-            <div className="p-4 text-sm text-ink-dim">
-              <div className="font-mono text-[11px] uppercase tracking-widest text-ink-faint">
-                {t.graph.waiting}
-              </div>
-              <p className="mt-2 leading-relaxed">{t.graph.waitingText}</p>
-            </div>
+            <EmptyState
+              title={t.graph.waiting}
+              description={t.graph.waitingText}
+              className="m-4 min-h-52"
+            />
           )}
         </aside>
       </section>
@@ -301,7 +300,7 @@ function Metric({
   value: number | string;
 }) {
   return (
-    <div className="border-r border-line px-4 py-3 last:border-r-0">
+    <div className="border-r border-line bg-bg-subtle/80 px-4 py-3 last:border-r-0">
       <div className="font-mono text-[10px] uppercase tracking-widest text-ink-faint">
         {label}
       </div>
@@ -323,25 +322,16 @@ function EmptyGraph({
 }) {
   return (
     <div className="flex min-h-0 flex-1 items-center justify-center px-6">
-      <div className="max-w-lg text-center">
-        <div className="font-mono text-[11px] uppercase tracking-widest text-ink-faint">
-          {loading ? text.loading : text.noGraph}
-        </div>
-        <h2 className="mt-3 text-lg font-semibold text-ink">
-          {text.emptyTitle}
-        </h2>
-        <p className="mt-2 text-sm leading-relaxed text-ink-dim">
-          {text.emptyText}
-        </p>
-        <button
-          type="button"
-          onClick={onBuild}
-          disabled={busy}
-          className="mt-5 h-9 rounded bg-accent px-4 text-sm font-medium text-bg disabled:opacity-40"
-        >
-          {busy ? text.running : text.buildGraph}
-        </button>
-      </div>
+      <EmptyState
+        title={text.emptyTitle}
+        description={`${loading ? text.loading : text.noGraph} - ${text.emptyText}`}
+        action={
+          <Button onClick={onBuild} disabled={busy} variant="primary" size="md" icon={GitBranch}>
+            {busy ? text.running : text.buildGraph}
+          </Button>
+        }
+        className="max-w-lg"
+      />
     </div>
   );
 }

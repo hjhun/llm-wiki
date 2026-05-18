@@ -1,6 +1,17 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  FileText,
+  FlaskConical,
+  Play,
+  Plus,
+  RefreshCw,
+  Save,
+  Trash2,
+  Wand2,
+} from "lucide-react";
+import { Button, EmptyState, PageHeader, StatusBadge } from "../ui";
 
 type CliName = "codex" | "claude" | "gemini" | "cline";
 type Template = "youtube-summary" | "github-gerrit-review" | "email-sync" | "custom";
@@ -162,6 +173,20 @@ function statusTone(status: AutomationRuntime["status"]) {
     case "idle":
     default:
       return "status-ready";
+  }
+}
+
+function statusBadgeTone(status: AutomationRuntime["status"]) {
+  switch (status) {
+    case "running":
+      return "running";
+    case "skipped":
+      return "skipped";
+    case "disabled":
+      return "disabled";
+    case "idle":
+    default:
+      return "ready";
   }
 }
 
@@ -411,34 +436,28 @@ export default function Automations() {
 
   return (
     <div className="flex h-full w-full flex-col overflow-hidden">
-      <header className="flex shrink-0 items-center justify-between border-b border-line px-4 py-2">
-        <div className="min-w-0">
-          <h1 className="text-sm font-semibold">Automations</h1>
-          <p className="mt-0.5 truncate font-mono text-[11px] text-ink-faint">
-            cron jobs · multi-CLI isolated workspaces · draft-only external writes
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <span
-            className={`rounded border px-1.5 py-0.5 text-[10px] ${statusTone(
-              runtime?.status ?? "disabled",
-            )}`}
-          >
-            {runtime?.status ?? "disabled"}
-          </span>
-          <button
-            type="button"
-            onClick={() => void load()}
-            disabled={busy != null}
-            className="h-8 rounded border border-line px-3 text-xs text-ink-dim hover:bg-bg-panel disabled:opacity-40"
-          >
-            Refresh
-          </button>
-        </div>
-      </header>
+      <PageHeader
+        eyebrow="scheduled agents"
+        title="Automations"
+        meta="cron jobs · multi-CLI isolated workspaces · draft-only external writes"
+        actions={
+          <>
+            <StatusBadge tone={statusBadgeTone(runtime?.status ?? "disabled")}>
+              {runtime?.status ?? "disabled"}
+            </StatusBadge>
+            <Button
+              onClick={() => void load()}
+              disabled={busy != null}
+              icon={RefreshCw}
+            >
+              Refresh
+            </Button>
+          </>
+        }
+      />
 
       {error ? (
-        <div className="border-b border-red-900/60 bg-red-950/40 px-4 py-1 text-[11px] text-red-300">
+        <div className="border-b border-danger/50 bg-danger/10 px-4 py-1 text-[11px] text-danger">
           {error}
         </div>
       ) : null}
@@ -489,16 +508,16 @@ export default function Automations() {
                     className="mt-1 block w-full rounded border border-line bg-bg px-2 py-1 font-mono text-xs text-ink outline-none focus:border-accent"
                   />
                 </label>
-                <button
-                  type="button"
+                <Button
                   onClick={() => {
                     setSelectedId(null);
                     setDraft(blankJob());
                   }}
-                  className="rounded border border-line bg-bg text-xs font-medium text-ink-dim hover:bg-bg-panel hover:text-ink"
+                  icon={Plus}
+                  className="h-full"
                 >
                   New job
-                </button>
+                </Button>
               </div>
               <label className="mt-2 block rounded border border-line bg-bg px-2 py-1.5">
                 <span className="text-[11px] text-ink-faint">
@@ -524,9 +543,11 @@ export default function Automations() {
 
             <div className="min-h-0 flex-1 overflow-auto p-2">
               {jobs.length === 0 ? (
-                <div className="rounded border border-dashed border-line p-4 text-xs leading-relaxed text-ink-faint">
-                  No automation jobs yet.
-                </div>
+                <EmptyState
+                  title="No automation jobs yet."
+                  description="Create a job from the prompt builder or start from a blank automation."
+                  className="min-h-40"
+                />
               ) : (
                 <div className="space-y-2">
                   {jobs.map((job) => {
@@ -640,22 +661,21 @@ export default function Automations() {
                     </div>
                   </div>
                   <div className="mt-3 flex flex-wrap gap-2">
-                    <button
-                      type="button"
+                    <Button
                       onClick={() => void analyzeBuilder()}
                       disabled={busy != null || !builderGoal.trim()}
-                      className="h-8 rounded bg-accent px-3 text-xs font-medium text-bg disabled:opacity-40"
+                      variant="primary"
+                      icon={Wand2}
                     >
                       {busy === "builder-analyze" ? "Analyzing..." : "Analyze prompt"}
-                    </button>
-                    <button
-                      type="button"
+                    </Button>
+                    <Button
                       onClick={() => void loadTools()}
                       disabled={busy != null}
-                      className="h-8 rounded border border-line px-3 text-xs text-ink-dim hover:bg-bg-panel disabled:opacity-40"
+                      icon={RefreshCw}
                     >
                       Refresh tools
-                    </button>
+                    </Button>
                   </div>
 
                   {proposal ? (
@@ -671,21 +691,19 @@ export default function Automations() {
                           {proposal.job.template} · {proposal.job.schedule.preset}
                         </div>
                         <div className="mt-3 flex flex-wrap gap-2">
-                          <button
-                            type="button"
+                          <Button
                             onClick={applyProposal}
-                            className="h-8 rounded border border-line px-3 text-xs font-medium text-ink-dim hover:bg-bg-panel"
+                            icon={Save}
                           >
                             Apply to editor
-                          </button>
-                          <button
-                            type="button"
+                          </Button>
+                          <Button
                             onClick={() => void verifyProposal()}
                             disabled={busy != null}
-                            className="h-8 rounded border border-line px-3 text-xs font-medium text-ink-dim hover:bg-bg-panel disabled:opacity-40"
+                            icon={FlaskConical}
                           >
                             {busy === "builder-verify" ? "Verifying..." : "Dry-run verify"}
-                          </button>
+                          </Button>
                         </div>
                         {verifyResult ? (
                           <ArtifactLinks result={verifyResult} />
@@ -942,38 +960,36 @@ export default function Automations() {
 
                 <Panel title="Actions" eyebrow="job">
                   <div className="grid gap-2">
-                    <button
-                      type="button"
+                    <Button
                       onClick={() => void saveJob()}
                       disabled={busy != null || draft.selectedAgents.length === 0}
-                      className="h-8 rounded bg-accent px-3 text-xs font-medium text-bg disabled:opacity-40"
+                      variant="primary"
+                      icon={Save}
                     >
                       {busy === "save" ? "Saving..." : "Save job"}
-                    </button>
-                    <button
-                      type="button"
+                    </Button>
+                    <Button
                       onClick={() => void trigger("plan")}
                       disabled={busy != null || !draft.id}
-                      className="h-8 rounded border border-line text-xs font-medium text-ink-dim hover:bg-bg-panel disabled:opacity-40"
+                      icon={FileText}
                     >
                       {busy === "plan" ? "Starting..." : "Generate plan"}
-                    </button>
-                    <button
-                      type="button"
+                    </Button>
+                    <Button
                       onClick={() => void trigger("run-now")}
                       disabled={busy != null || !draft.id}
-                      className="h-8 rounded border border-line text-xs font-medium text-ink-dim hover:bg-bg-panel disabled:opacity-40"
+                      icon={Play}
                     >
                       {busy === "run-now" ? "Starting..." : "Run now"}
-                    </button>
-                    <button
-                      type="button"
+                    </Button>
+                    <Button
                       onClick={() => void deleteJob()}
                       disabled={busy != null || !draft.id}
-                      className="h-8 rounded border border-red-900/60 text-xs font-medium text-red-300 hover:bg-red-950/30 disabled:opacity-40"
+                      variant="danger"
+                      icon={Trash2}
                     >
                       Delete
-                    </button>
+                    </Button>
                   </div>
                 </Panel>
 

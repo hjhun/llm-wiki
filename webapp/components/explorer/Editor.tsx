@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { Save } from "lucide-react";
 import { useLanguage } from "../i18n";
+import { Button } from "../ui";
 import MarkdownPreview from "./MarkdownPreview";
 import type { Entry, WsKey } from "./types";
 
@@ -145,15 +147,16 @@ export default function Editor({
           </div>
         </div>
         <div className="flex items-center gap-1">
-          <button
-            type="button"
+          <Button
             onClick={onSave}
             disabled={readOnly || !dirty || saving || !isText}
-            className="rounded bg-accent px-3 py-1 text-[11px] font-medium text-bg disabled:opacity-40"
+            variant="primary"
+            icon={Save}
+            className="h-7 px-2.5 text-[11px]"
             title="Ctrl/Cmd+S"
           >
             {saving ? t.common.saving : dirty ? t.common.save : t.common.saved}
-          </button>
+          </Button>
         </div>
       </header>
 

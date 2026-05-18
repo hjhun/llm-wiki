@@ -2,22 +2,36 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import {
+  Bot,
+  ChevronLeft,
+  ChevronRight,
+  Clock3,
+  FolderTree,
+  Languages,
+  LogOut,
+  MessageSquareText,
+  Network,
+  Settings,
+} from "lucide-react";
 import { useEffect, useState } from "react";
 import AutoLintBadge from "./AutoLintBadge";
 import { BRAND_NAME, type Language, useLanguage } from "./i18n";
+import { IconButton, cx } from "./ui";
+import type { LucideIcon } from "lucide-react";
 
 type Tab = {
   href: string;
   key: "chat" | "explorer" | "graph" | "automations" | "settings";
-  icon: string;
+  icon: LucideIcon;
 };
 
 const TABS: Tab[] = [
-  { href: "/chat", key: "chat", icon: "💬" },
-  { href: "/explorer", key: "explorer", icon: "📁" },
-  { href: "/graph", key: "graph", icon: "🕸" },
-  { href: "/automations", key: "automations", icon: "⏱" },
-  { href: "/settings", key: "settings", icon: "⚙" },
+  { href: "/chat", key: "chat", icon: MessageSquareText },
+  { href: "/explorer", key: "explorer", icon: FolderTree },
+  { href: "/graph", key: "graph", icon: Network },
+  { href: "/automations", key: "automations", icon: Clock3 },
+  { href: "/settings", key: "settings", icon: Settings },
 ];
 
 export default function Sidebar() {
@@ -59,31 +73,30 @@ export default function Sidebar() {
 
   return (
     <aside
-      className={[
+      className={cx(
         "flex h-screen shrink-0 flex-col border-r border-line bg-bg-subtle transition-[width]",
         collapsed ? "w-16" : "w-56",
-      ].join(" ")}
+      )}
     >
       <div className={collapsed ? "px-2 pb-3 pt-6" : "px-5 pb-3 pt-6"}>
         <div className="flex items-start justify-between gap-2">
-          <div className={collapsed ? "sr-only" : ""}>
-            <div className="font-mono text-xs uppercase tracking-widest text-ink-faint">
-              {BRAND_NAME}
+          <div className={cx("min-w-0", collapsed ? "sr-only" : "")}>
+            <div className="flex items-center gap-2">
+              <span className="flex h-7 w-7 items-center justify-center rounded-md border border-line bg-bg text-accent">
+                <Bot aria-hidden className="h-4 w-4" />
+              </span>
+              <div className="font-mono text-xs uppercase tracking-widest text-ink">
+                {BRAND_NAME}
+              </div>
             </div>
-            <div className="mt-1 text-sm text-ink-dim">{t.sidebar.local}</div>
+            <div className="mt-2 text-xs text-ink-faint">{t.sidebar.local}</div>
           </div>
-          <button
-            type="button"
+          <IconButton
             onClick={toggleCollapsed}
-            aria-label={collapsed ? t.sidebar.expand : t.sidebar.collapse}
-            title={collapsed ? t.sidebar.expand : t.sidebar.collapse}
-            className={[
-              "flex h-8 w-8 items-center justify-center rounded border border-line text-sm text-ink-dim hover:bg-bg-panel hover:text-ink",
-              collapsed ? "mx-auto" : "",
-            ].join(" ")}
-          >
-            {collapsed ? "›" : "‹"}
-          </button>
+            label={collapsed ? t.sidebar.expand : t.sidebar.collapse}
+            icon={collapsed ? ChevronRight : ChevronLeft}
+            className={collapsed ? "mx-auto" : ""}
+          />
         </div>
       </div>
 
@@ -92,28 +105,27 @@ export default function Sidebar() {
           const active =
             pathname === tab.href || pathname?.startsWith(`${tab.href}/`);
           const tabText = t.sidebar.tabs[tab.key];
+          const Icon = tab.icon;
           return (
             <Link
               key={tab.href}
               href={tab.href}
               title={collapsed ? tabText.label : undefined}
-              className={[
-                "group relative flex rounded-md transition-colors",
+              className={cx(
+                "group relative flex rounded-md border transition-colors",
                 collapsed
                   ? "h-10 items-center justify-center px-0 py-0"
-                  : "flex-col px-3 py-2",
+                  : "flex-col px-3 py-2.5",
                 active
-                  ? "bg-bg-panel text-ink"
-                  : "text-ink-dim hover:bg-bg-panel/60 hover:text-ink",
-              ].join(" ")}
+                  ? "border-line bg-bg-panel text-ink"
+                  : "border-transparent text-ink-dim hover:border-line/70 hover:bg-bg-panel/60 hover:text-ink",
+              )}
             >
               {tab.key === "settings" ? (
                 <AutoLintBadge className="absolute right-1.5 top-1.5" />
               ) : null}
               <span className="flex items-center gap-2 text-sm">
-                <span aria-hidden className="text-base leading-none">
-                  {tab.icon}
-                </span>
+                <Icon aria-hidden className="h-4 w-4 shrink-0" />
                 <span className={collapsed ? "sr-only" : "font-medium"}>
                   {tabText.label}
                 </span>
@@ -134,22 +146,23 @@ export default function Sidebar() {
       </nav>
 
       <div
-        className={[
+        className={cx(
           "mt-auto flex flex-col gap-2 pb-5 pt-3",
           collapsed ? "px-2" : "px-5",
-        ].join(" ")}
+        )}
       >
         <div
-          className={[
-            "rounded-md border border-line bg-bg/50 p-1",
+          className={cx(
+            "rounded-md border border-line bg-bg/50 p-1 shadow-[inset_0_1px_0_rgb(255_255_255_/_0.03)]",
             collapsed ? "flex flex-col gap-1" : "",
-          ].join(" ")}
+          )}
           aria-label={t.common.language}
           title={collapsed ? t.common.language : undefined}
         >
           {collapsed ? null : (
-            <div className="px-2 pb-1 font-mono text-[10px] uppercase tracking-widest text-ink-faint">
-              {t.common.language}
+            <div className="flex items-center gap-1.5 px-2 pb-1 font-mono text-[10px] uppercase tracking-widest text-ink-faint">
+              <Languages aria-hidden className="h-3 w-3" />
+              <span>{t.common.language}</span>
               {savingLanguage ? ` · ${t.sidebar.languageSaving}` : ""}
             </div>
           )}
@@ -160,12 +173,12 @@ export default function Sidebar() {
                 type="button"
                 onClick={() => void onLanguage(code)}
                 disabled={savingLanguage}
-                className={[
+                className={cx(
                   "h-7 rounded text-[11px] font-medium transition-colors disabled:opacity-50",
                   language === code
                     ? "bg-accent text-bg"
                     : "text-ink-dim hover:bg-bg-panel hover:text-ink",
-                ].join(" ")}
+                )}
                 aria-pressed={language === code}
                 title={code === "ko" ? t.common.korean : t.common.english}
               >
@@ -179,12 +192,19 @@ export default function Sidebar() {
           onClick={onLogout}
           disabled={loggingOut}
           title={collapsed ? t.sidebar.logout : undefined}
-          className={[
-            "rounded-md border border-line bg-bg/60 px-3 py-2 text-xs text-ink-dim hover:bg-bg-panel hover:text-ink disabled:opacity-50",
+          className={cx(
+            "inline-flex h-9 items-center justify-center gap-2 rounded-md border border-line bg-bg/60 px-3 text-xs text-ink-dim hover:bg-bg-panel hover:text-ink disabled:opacity-50",
             collapsed ? "px-0" : "",
-          ].join(" ")}
+          )}
         >
-          {collapsed ? "⎋" : loggingOut ? t.sidebar.loggingOut : t.sidebar.logout}
+          <LogOut aria-hidden className="h-4 w-4" />
+          {collapsed ? (
+            <span className="sr-only">{t.sidebar.logout}</span>
+          ) : loggingOut ? (
+            t.sidebar.loggingOut
+          ) : (
+            t.sidebar.logout
+          )}
         </button>
         {collapsed ? null : (
           <div className="rounded-md border border-line bg-bg/40 px-3 py-2 text-[11px] leading-snug text-ink-faint">

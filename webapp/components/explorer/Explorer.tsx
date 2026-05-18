@@ -2,9 +2,11 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { FolderUp, RefreshCw, Upload } from "lucide-react";
 import { useLanguage } from "../i18n";
 import Editor from "./Editor";
 import FileTree from "./FileTree";
+import { Button, PageHeader, SegmentControl, Toolbar, cx } from "../ui";
 import type { Entry, ExplorerAction, WsKey } from "./types";
 
 const WS_LIST: { key: WsKey; label: string }[] = [
@@ -181,46 +183,49 @@ export default function Explorer() {
 
   return (
     <div className="flex h-full w-full flex-col">
-      <header className="flex shrink-0 items-center justify-between border-b border-line px-4 py-2">
-        <div className="flex items-center gap-1">
-          {WS_LIST.map((w) => (
-            <button
-              key={w.key}
-              type="button"
-              onClick={() => {
-                setWs(w.key);
-                setSelected(null);
-                router.replace("/explorer", { scroll: false });
-              }}
-              title={t.explorer.workspaces[w.key]}
-              className={[
-                "rounded px-2.5 py-1 text-xs",
-                ws === w.key
-                  ? "bg-bg-panel text-ink"
-                  : "text-ink-dim hover:bg-bg-panel/60 hover:text-ink",
-              ].join(" ")}
+      <PageHeader
+        eyebrow="file workbench"
+        title={t.sidebar.tabs.explorer.label}
+        meta={t.explorer.workspaces[ws]}
+        actions={
+          <>
+            <Button
+              onClick={() => triggerUpload("upload-file", selected)}
+              disabled={isReadOnly}
+              icon={Upload}
             >
-              {w.label}
-            </button>
-          ))}
-        </div>
+              {t.explorer.upload}
+            </Button>
+            <Button
+              onClick={() => triggerUpload("upload-dir", selected)}
+              disabled={isReadOnly}
+              icon={FolderUp}
+            >
+              {t.explorer.uploadFolder}
+            </Button>
+            <Button onClick={refresh} icon={RefreshCw}>
+              {t.common.refresh}
+            </Button>
+            {busy ? <span className="text-[11px] text-ink-faint">{t.explorer.busy(busy)}</span> : null}
+          </>
+        }
+      />
+      <Toolbar>
+        <SegmentControl
+          value={ws}
+          onChange={(nextWs) => {
+            setWs(nextWs);
+            setSelected(null);
+            router.replace("/explorer", { scroll: false });
+          }}
+          options={WS_LIST.map((w) => ({
+            value: w.key,
+            label: w.label,
+            title: t.explorer.workspaces[w.key],
+          }))}
+          className="grid-cols-3"
+        />
         <div className="flex items-center gap-2 text-[11px] text-ink-faint">
-          <button
-            type="button"
-            onClick={() => triggerUpload("upload-file", selected)}
-            disabled={isReadOnly}
-            className="rounded border border-line px-2 py-1 hover:bg-bg-panel disabled:pointer-events-none disabled:opacity-40"
-          >
-            {t.explorer.upload}
-          </button>
-          <button
-            type="button"
-            onClick={() => triggerUpload("upload-dir", selected)}
-            disabled={isReadOnly}
-            className="rounded border border-line px-2 py-1 hover:bg-bg-panel disabled:pointer-events-none disabled:opacity-40"
-          >
-            {t.explorer.uploadFolder}
-          </button>
           <input
             ref={fileInputRef}
             type="file"
@@ -238,24 +243,15 @@ export default function Explorer() {
             disabled={isReadOnly}
             {...directoryInputProps}
           />
-          <button
-            type="button"
-            onClick={refresh}
-            className="rounded border border-line px-2 py-1 hover:bg-bg-panel"
-          >
-            {t.common.refresh}
-          </button>
-          {busy ? <span>{t.explorer.busy(busy)}</span> : null}
         </div>
-      </header>
-
+      </Toolbar>
       {error ? (
-        <div className="border-b border-red-900/60 bg-red-950/40 px-4 py-1 text-[11px] text-red-300">
+        <div className="border-b border-danger/50 bg-danger/10 px-4 py-1 text-[11px] text-danger">
           {error}
         </div>
       ) : null}
       {ws === "raw" ? (
-        <div className="border-b border-line bg-bg-subtle px-4 py-1 text-[11px] text-ink-faint">
+        <div className="border-b border-info/30 bg-info/10 px-4 py-1 text-[11px] text-info">
           {t.explorer.rawHintPrefix}{" "}
           <span className="font-mono text-ink">/ingest</span>
           <span className="ml-1">{t.explorer.rawHintSuffix}</span>
@@ -328,7 +324,7 @@ function ActionDialog({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 px-4">
-      <div className="w-full max-w-md rounded border border-line bg-bg-subtle shadow-2xl">
+      <div className="w-full max-w-md rounded-md border border-line bg-bg-subtle shadow-2xl">
         <div className="border-b border-line px-4 py-3">
           <div className="text-sm font-medium text-ink">{title}</div>
           {dialog.target ? (
@@ -356,26 +352,20 @@ function ActionDialog({
           )}
         </div>
         <div className="flex justify-end gap-2 border-t border-line px-4 py-3">
-          <button
-            type="button"
+          <Button
             onClick={onCancel}
-            className="rounded border border-line px-3 py-1.5 text-xs text-ink-dim hover:bg-bg-panel hover:text-ink"
+            variant="secondary"
           >
             {t.common.cancel}
-          </button>
-          <button
-            type="button"
+          </Button>
+          <Button
             onClick={onSubmit}
             disabled={busy || (!isDelete && dialog.value.trim().length === 0)}
-            className={[
-              "rounded px-3 py-1.5 text-xs font-medium disabled:opacity-40",
-              isDelete
-                ? "bg-red-500 text-white"
-                : "bg-accent text-bg",
-            ].join(" ")}
+            variant={isDelete ? "danger" : "primary"}
+            className={cx(isDelete ? "border-danger/60" : "")}
           >
             {isDelete ? t.common.delete : t.common.save}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

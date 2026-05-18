@@ -1,10 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { KeyRound, RefreshCw, Save } from "lucide-react";
 import { type Language, useLanguage } from "../i18n";
 import { useTheme } from "../theme";
 import AutoIngestPanel from "./AutoIngestPanel";
 import AutoLintPanel from "./AutoLintPanel";
+import { Button, PageHeader, StatusBadge } from "../ui";
 import type {
   CliInfo,
   CliName,
@@ -162,35 +164,34 @@ export default function Settings() {
 
   return (
     <div className="flex h-full w-full flex-col overflow-hidden">
-      <header className="flex shrink-0 items-center justify-between border-b border-line px-4 py-2">
-        <div className="min-w-0">
-          <h1 className="text-sm font-semibold">{t.settings.title}</h1>
-          <p className="mt-0.5 truncate font-mono text-[11px] text-ink-faint">
-            {state?.projectRoot ?? t.settings.loadingRoot}
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => void load()}
-            disabled={busy != null}
-            className="h-8 rounded border border-line px-3 text-xs text-ink-dim hover:bg-bg-panel disabled:opacity-40"
-          >
-            {t.settings.refresh}
-          </button>
-          <button
-            type="button"
-            onClick={() => void save()}
-            disabled={busy != null || !draft}
-            className="h-8 rounded bg-accent px-3 text-xs font-medium text-bg disabled:opacity-40"
-          >
-            {busy === "save" ? t.settings.saving : t.settings.save}
-          </button>
-        </div>
-      </header>
+      <PageHeader
+        eyebrow="local configuration"
+        title={t.settings.title}
+        meta={state?.projectRoot ?? t.settings.loadingRoot}
+        actions={
+          <>
+            {busy ? <StatusBadge tone="running">{busy}</StatusBadge> : null}
+            <Button
+              onClick={() => void load()}
+              disabled={busy != null}
+              icon={RefreshCw}
+            >
+              {t.settings.refresh}
+            </Button>
+            <Button
+              onClick={() => void save()}
+              disabled={busy != null || !draft}
+              variant="primary"
+              icon={Save}
+            >
+              {busy === "save" ? t.settings.saving : t.settings.save}
+            </Button>
+          </>
+        }
+      />
 
       {error ? (
-        <div className="border-b border-red-900/60 bg-red-950/40 px-4 py-1 text-[11px] text-red-300">
+        <div className="border-b border-danger/50 bg-danger/10 px-4 py-1 text-[11px] text-danger">
           {error}
         </div>
       ) : null}
@@ -505,16 +506,16 @@ export default function Settings() {
                       setPassword((next) => ({ ...next, next: value }))
                     }
                   />
-                  <button
-                    type="button"
+                  <Button
                     onClick={() => void changePassword()}
                     disabled={busy != null || !password.current || !password.next}
-                    className="h-8 w-full rounded border border-line text-xs font-medium text-ink-dim hover:bg-bg-panel disabled:opacity-40"
+                    icon={KeyRound}
+                    className="w-full"
                   >
                     {busy === "password"
                       ? t.settings.changing
                       : t.settings.changePassword}
-                  </button>
+                  </Button>
                 </div>
               </Panel>
 

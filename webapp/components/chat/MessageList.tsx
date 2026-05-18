@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { Bot, CircleDotDashed, Terminal, UserRound } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { useLanguage } from "../i18n";
+import { EmptyState } from "../ui";
 import type { ChatMessage, ChatProgress } from "./types";
 
 const ROLE_LABEL: Record<string, string> = {
@@ -42,47 +44,52 @@ export default function MessageList({
   return (
     <div className="flex flex-col gap-3 px-6 py-5">
       {messages.length === 0 && !pending ? (
-        <div className="rounded-md border border-line bg-bg-panel px-4 py-6 text-sm text-ink-dim">
-          <div className="mb-1 font-medium text-ink">{t.chat.guideTitle}</div>
-          <ul className="ml-4 list-disc text-[12.5px] leading-relaxed">
-            <li>
+        <EmptyState
+          title={t.chat.guideTitle}
+          description={
+            <span>
               {t.chat.guideFreeQuestion}{" "}
-              <span className="font-mono">/preprocess &lt;path&gt;</span>,{" "}
-              <span className="font-mono">/ingest &lt;path&gt;</span>,{" "}
-              <span className="font-mono">/query &lt;question&gt;</span>,{" "}
-              <span className="font-mono">/lint</span>
-            </li>
-            <li>{t.chat.guideSessions}</li>
-            <li>{t.chat.guideAgent}</li>
-          </ul>
-        </div>
-      ) : null}
-      {messages.map((m, i) => (
-        <article
-          key={i}
-          className={[
-            "rounded-md border px-4 py-3 text-sm leading-relaxed",
-            ROLE_STYLE[m.role] ?? "border-line",
-            "chat-message",
-          ].join(" ")}
-        >
-          <header className="mb-1 flex items-center gap-2 text-[11px] text-ink-faint">
-            <span className="font-mono uppercase tracking-widest">
-              {ROLE_LABEL[m.role] ?? m.role}
-              {m.agent ? `·${m.agent}` : ""}
+              <span className="font-mono text-ink">/preprocess</span>,{" "}
+              <span className="font-mono text-ink">/ingest</span>,{" "}
+              <span className="font-mono text-ink">/query</span>,{" "}
+              <span className="font-mono text-ink">/lint</span>
             </span>
-            <span className="font-mono">{m.ts}</span>
-          </header>
-          <div className="prose prose-theme max-w-none text-[13.5px]">
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>
-              {m.content || t.chat.empty}
-            </ReactMarkdown>
-          </div>
-        </article>
-      ))}
+          }
+          className="items-start text-left"
+        />
+      ) : null}
+      {messages.map((m, i) => {
+        const RoleIcon =
+          m.role === "user" ? UserRound : m.role === "assistant" ? Bot : Terminal;
+        return (
+          <article
+            key={i}
+            className={[
+              "rounded-md border px-4 py-3 text-sm leading-relaxed shadow-[inset_0_1px_0_rgb(255_255_255_/_0.03)]",
+              ROLE_STYLE[m.role] ?? "border-line",
+              "chat-message",
+            ].join(" ")}
+          >
+            <header className="mb-2 flex items-center gap-2 text-[11px] text-ink-faint">
+              <RoleIcon aria-hidden className="h-3.5 w-3.5" />
+              <span className="font-mono uppercase tracking-widest">
+                {ROLE_LABEL[m.role] ?? m.role}
+                {m.agent ? ` · ${m.agent}` : ""}
+              </span>
+              <span className="font-mono">{m.ts}</span>
+            </header>
+            <div className="prose prose-theme max-w-none text-[13.5px]">
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                {m.content || t.chat.empty}
+              </ReactMarkdown>
+            </div>
+          </article>
+        );
+      })}
       {showProgress ? (
-        <article className="chat-progress-card rounded-md border px-4 py-3 text-[12.5px]">
+        <article className="chat-progress-card rounded-md border px-4 py-3 text-[12.5px] shadow-[inset_0_1px_0_rgb(255_255_255_/_0.04)]">
           <header className="chat-progress-title mb-1 flex items-center gap-2 text-[11px]">
+            <CircleDotDashed aria-hidden className="h-3.5 w-3.5 animate-spin" />
             <span className="font-mono uppercase tracking-widest">
               {t.chat.progressTitle}
             </span>

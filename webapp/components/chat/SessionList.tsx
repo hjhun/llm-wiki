@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { CheckSquare, MessageSquarePlus, Trash2 } from "lucide-react";
 import { useLanguage } from "../i18n";
+import { Button, EmptyState, cx } from "../ui";
 import type { SessionRef } from "./types";
 
 export default function SessionList({
@@ -57,51 +59,56 @@ export default function SessionList({
   return (
     <div className="flex h-full flex-col overflow-hidden">
       <div className="border-b border-line p-2">
-        <button
-          type="button"
+        <Button
           onClick={onNew}
-          className="w-full rounded-md bg-accent px-3 py-2 text-xs font-medium text-bg hover:opacity-90"
+          variant="primary"
+          icon={MessageSquarePlus}
+          className="w-full"
         >
           {t.chat.newChat}
-        </button>
+        </Button>
         <div className="mt-2 grid grid-cols-[1fr_auto] gap-2">
-          <button
-            type="button"
+          <Button
             onClick={toggleAll}
             disabled={sessions.length === 0 || deleting}
-            className="h-7 rounded border border-line text-[11px] text-ink-dim hover:bg-bg-panel disabled:opacity-40"
+            variant="secondary"
+            icon={CheckSquare}
+            className="h-7 text-[11px]"
           >
             {allSelected ? t.chat.clear : t.chat.selectAll}
-          </button>
-          <button
-            type="button"
+          </Button>
+          <Button
             onClick={deleteSelected}
             disabled={selectedCount === 0 || deleting}
-            className="h-7 rounded border border-red-900/70 px-2 text-[11px] text-red-300 hover:bg-red-950/40 disabled:opacity-40"
+            variant="danger"
+            icon={Trash2}
+            className="h-7 px-2 text-[11px]"
           >
             {deleting
               ? t.chat.deleting
               : `${t.chat.delete} ${selectedCount || ""}`}
-          </button>
+          </Button>
         </div>
       </div>
       <div className="min-h-0 flex-1 overflow-auto py-1">
         {sessions.length === 0 ? (
-          <div className="px-3 py-2 text-[11px] text-ink-faint">
-            {t.chat.noSessions}
-          </div>
+          <EmptyState
+            title={t.chat.noSessions}
+            description={t.chat.guideSessions}
+            className="m-2 min-h-32 px-3 py-5"
+          />
         ) : (
           sessions.map((s) => {
             const active = activePath === s.path;
             return (
               <div
                 key={s.path}
-                className={[
+                className={cx(
                   "grid w-full grid-cols-[auto_minmax(0,1fr)] gap-2 px-3 py-2 text-left text-xs transition-colors",
                   active
-                    ? "bg-bg-panel text-ink"
+                    ? "bg-bg-panel text-ink shadow-[inset_3px_0_0_rgb(var(--color-accent))]"
                     : "text-ink-dim hover:bg-bg-panel/60 hover:text-ink",
-                ].join(" ")}
+                )}
               >
                 <span className="pt-0.5">
                   <input
