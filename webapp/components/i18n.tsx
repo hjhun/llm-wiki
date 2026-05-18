@@ -66,9 +66,14 @@ export const TEXT = {
       commandMenu: "명령 메뉴",
       send: "전송",
       placeholder:
-        "질문을 입력하거나 /ingest, /query, /lint ...  (Shift+Enter로 줄바꿈)",
+        "질문을 입력하거나 /preprocess, /ingest, /query, /lint ...  (Shift+Enter로 줄바꿈)",
       hint: "Enter 전송 · Shift+Enter 줄바꿈 · `/`로 슬래시 커맨드 자동완성",
       slashCommands: [
+        {
+          name: "/preprocess",
+          arg: "[path] [설명]",
+          desc: "raw에서 노이즈 제거 (dry-run, --apply로 적용)",
+        },
         { name: "/ingest", arg: "<path|url>", desc: "raw의 자료를 위키로 흡수 (1 sub-chunk)" },
         {
           name: "/ingest-loop",
@@ -360,9 +365,14 @@ export const TEXT = {
       commandMenu: "Command menu",
       send: "Send",
       placeholder:
-        "Ask a question or use /ingest, /query, /lint ...  (Shift+Enter for newline)",
+        "Ask a question or use /preprocess, /ingest, /query, /lint ...  (Shift+Enter for newline)",
       hint: "Enter to send · Shift+Enter for newline · `/` for slash command autocomplete",
       slashCommands: [
+        {
+          name: "/preprocess",
+          arg: "[path] [description]",
+          desc: "Strip noise from raw/ (dry-run; --apply to commit)",
+        },
         {
           name: "/ingest",
           arg: "<path|url>",

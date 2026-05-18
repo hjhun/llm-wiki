@@ -39,6 +39,7 @@ function detectKind(message: string): ChatKind {
   // a plain "/ingest" call.
   if (head.startsWith("/ingest-loop")) return "ingest-loop";
   if (head.startsWith("/ingest")) return "ingest";
+  if (head.startsWith("/preprocess")) return "preprocess";
   if (head.startsWith("/query")) return "query";
   if (head.startsWith("/lint")) return "lint";
   if (head.startsWith("wiki-graphify ")) return "graph";

@@ -47,6 +47,7 @@ export default function MessageList({
           <ul className="ml-4 list-disc text-[12.5px] leading-relaxed">
             <li>
               {t.chat.guideFreeQuestion}{" "}
+              <span className="font-mono">/preprocess &lt;path&gt;</span>,{" "}
               <span className="font-mono">/ingest &lt;path&gt;</span>,{" "}
               <span className="font-mono">/query &lt;question&gt;</span>,{" "}
               <span className="font-mono">/lint</span>

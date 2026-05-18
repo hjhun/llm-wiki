@@ -43,12 +43,20 @@ const Body = z.object({
    * progress state reports no remaining work.
    */
   kind: z
-    .enum(["chat", "ingest", "ingest-loop", "query", "lint", "graph"])
+    .enum([
+      "chat",
+      "ingest",
+      "ingest-loop",
+      "preprocess",
+      "query",
+      "lint",
+      "graph",
+    ])
     .optional(),
 });
 
 const LOG_HEADING_RE =
-  /^##\s+\[([^\]]+)\]\s+(ingest|query|lint|graph)\s*\|\s*(.+?)\s*$/;
+  /^##\s+\[([^\]]+)\]\s+(ingest|preprocess|query|lint|graph)\s*\|\s*(.+?)\s*$/;
 
 type ProgressEvent = Extract<ChatSendEvent, { type: "progress" }>;
 

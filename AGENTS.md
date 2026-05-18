@@ -23,7 +23,8 @@
 
 | Path | Owner | Mutability | Purpose |
 |---|---|---|---|
-| `raw/` | User | **Immutable (read only)** | Original material: articles, papers, notes, images. Never modify or delete it. |
+| `raw/` | User | **Immutable** except via `/preprocess` (Section 3.4) | Original material: articles, papers, notes, images. Outside the `/preprocess` workflow, never modify, delete, or move. |
+| `raw/.trash/` | LLM via `/preprocess`, UI soft-delete | Append-only quarantine | Files moved out of `raw/` by `/preprocess` or by the Explorer's delete button. Filename is `<ISO8601>_<basename>`; recoverable. |
 | `wiki/` | LLM | LLM may freely write/update | Main wiki body. All generated artifacts go here. |
 | `wiki/sources/` | LLM | LLM | One summary page per original source. |
 | `wiki/answers/` | LLM | LLM | Pages fed back from query answers. |
@@ -37,14 +38,14 @@
 | `.agents/skills/` | Project | Change via PR | Project-local skills. **They take priority over global skills.** |
 | `webapp/`, `config/` | System | User/admin | Next.js full-stack web UI and settings. Do not touch during wiki operations (`/ingest`, `/query`, `/lint`). |
 
-## 3. Operations - Ingest / Query / Lint
+## 3. Operations - Preprocess / Ingest / Query / Lint
 
-Each of the three operations maps to one skill. If these rules conflict with a skill body, **the skill body takes precedence** within its scope.
+Each of the four operations maps to one skill. If these rules conflict with a skill body, **the skill body takes precedence** within its scope.
 
 ### 3.1 Ingest (`/ingest`, [`.agents/skills/wiki-ingest/SKILL.md`](.agents/skills/wiki-ingest/SKILL.md))
 - Input: new material under `raw/`, either a single file, URL, or folder.
 - Always follow the **leaf-directory chunks + merge pass** principle (Section 7).
-- Trigger: manual (`/ingest`, `/ingest-loop`) or **automatic** via Settings → 자동 인제스트 패널 (`raw/` 파일 이벤트 또는 주기 실행). 자동 트리거는 `webapp/lib/auto-ingest/`의 매니저가 동일한 `runIngestLoop()` 헬퍼를 호출하며, 기본 설정(`skipIfBusy: true`)에서는 `.lock` 존재 시 스킵된다.
+- Trigger: manual (`/ingest`, `/ingest-loop`) or **automatic** via the Settings → Auto Ingest panel (`raw/` file events or interval schedule). The auto trigger is driven by the manager in `webapp/lib/auto-ingest/`, which calls the same `runIngestLoop()` helper; by default (`skipIfBusy: true`) it is skipped while `.lock` exists.
 - Outputs:
   - `wiki/sources/<YYYY>/<YYYY-MM>/<slug>.md` summary page with YAML frontmatter
   - New or updated related entity/concept pages
@@ -61,6 +62,17 @@ Each of the three operations maps to one skill. If these rules conflict with a s
 ### 3.3 Lint (`/lint`, [`.agents/skills/wiki-lint/SKILL.md`](.agents/skills/wiki-lint/SKILL.md))
 - Wiki health check: contradictions, stale claims, orphan pages, broken wikilinks, missing metadata, and frequently mentioned concepts without their own page.
 - Write results to `wiki/lint/<YYYY-MM-DD>.md` and separate automatically fixable items from items needing manual review.
+
+### 3.4 Preprocess (`/preprocess`, [`.agents/skills/wiki-preprocess/SKILL.md`](.agents/skills/wiki-preprocess/SKILL.md))
+- Input: a path under `raw/` plus a free-form natural-language description of which noise patterns to remove (ads, navigation, footers, empty files, duplicate snapshots, etc.).
+- Trigger: manual only — `/preprocess [path] [description]` (dry-run) and `/preprocess --apply` (commit). No automatic trigger.
+- Outputs:
+  - `raw/.trash/<ISO-ts>_<basename>` — files (or content backups) moved out of `raw/`
+  - For content-level rules, the cleaned bytes are written back to the original `raw/` path after the original is backed up to `raw/.trash/`
+  - `wiki/.progress/preprocess/<ts>-{rules,plan}.{json,md}` and `<ts>-applied.json`
+  - One line appended to `wiki/log.md`
+- Always runs in two phases: the dry-run must produce a `<ts>-plan.json` and a chat summary first; only `/preprocess --apply` mutates `raw/`.
+- Leaf-first chunking still applies for large `raw/` trees (Section 7) — the skill enumerates leaves under `target` and merges per-leaf plans into a single `<ts>-plan.json` before showing the user.
 
 ## 4. Page Conventions
 
@@ -120,6 +132,7 @@ use that year with the fallback month from the next available source.
 
 | User input pattern | Skill to call |
 |---|---|
+| `/preprocess [path] [description]`, `/preprocess --apply`, "clean up ads / empty files in raw" | [`wiki-preprocess`](.agents/skills/wiki-preprocess/SKILL.md) |
 | `/ingest <path|url>`, "summarize this material", `+ -> ingest` | [`wiki-ingest`](.agents/skills/wiki-ingest/SKILL.md) |
 | `/query <question>`, general questions | [`wiki-query`](.agents/skills/wiki-query/SKILL.md) |
 | `/lint`, "check the wiki" | [`wiki-lint`](.agents/skills/wiki-lint/SKILL.md) |
@@ -160,7 +173,10 @@ This applies to both ingest and graphify. Never start by throwing the whole root
 
 ## 9. Hard Rules
 
-- Do **not** modify, delete, or move files under `raw/`. Only the user adds to it.
+- Do **not** modify, delete, or move files under `raw/`, **except** through `/preprocess` (`wiki-preprocess` skill), which may:
+  - move whole files into `raw/.trash/<ISO-ts>_<basename>`, and
+  - rewrite a file in place after backing the original up to `raw/.trash/`.
+  All other paths and operations on `raw/` remain forbidden — `/preprocess --apply` is the only sanctioned mutation path.
 - Do **not** arbitrarily delete files under `wiki/`. Retire pages by moving them to `wiki/archive/` and recording the reason.
 - Do **not** invent external URLs. If there is no source, mark it as "source unknown" and record it in the operation log.
 - Do **not** manually edit `sessions/`, `config/local.json`, or `.env*`.

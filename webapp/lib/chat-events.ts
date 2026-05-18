@@ -4,6 +4,7 @@ export type ChatKind =
   | "chat"
   | "ingest"
   | "ingest-loop"
+  | "preprocess"
   | "query"
   | "lint"
   | "graph";
