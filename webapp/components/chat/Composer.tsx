@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Command, Plus, Send, StopCircle } from "lucide-react";
+import { Command, Plus, Send, StopCircle, XCircle } from "lucide-react";
 import { useLanguage } from "../i18n";
 import { Button, IconButton } from "../ui";
 
@@ -9,6 +9,7 @@ export default function Composer({
   disabled,
   onSend,
   loopStop,
+  cancel,
 }: {
   disabled: boolean;
   onSend: (message: string) => void;
@@ -18,6 +19,13 @@ export default function Composer({
    * sub-chunk" control. The button is hidden for every other kind of call.
    */
   loopStop?: { onStop: () => void; stopping: boolean } | null;
+  /**
+   * Generic "Cancel CLI" handler. Surfaces whenever a chat-page CLI call is
+   * in-flight (chat/ingest/query/lint/...) so the user can abort a long-running
+   * invocation. For ingest-loop, the parent passes `loopStop` instead so the
+   * user gets the graceful between-sub-chunk variant.
+   */
+  cancel?: { onCancel: () => void; cancelling: boolean } | null;
 }) {
   const { t } = useLanguage();
   const [value, setValue] = useState("");
@@ -130,6 +138,18 @@ export default function Composer({
             icon={StopCircle}
           >
             {loopStop.stopping ? t.chat.stopping : t.chat.stopLoop}
+          </Button>
+        ) : null}
+        {cancel ? (
+          <Button
+            onClick={cancel.onCancel}
+            disabled={cancel.cancelling}
+            title={t.chat.cancelHint}
+            variant="danger"
+            size="md"
+            icon={XCircle}
+          >
+            {cancel.cancelling ? t.chat.cancelling : t.chat.cancel}
           </Button>
         ) : null}
         <Button

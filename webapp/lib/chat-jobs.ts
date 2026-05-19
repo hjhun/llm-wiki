@@ -30,6 +30,20 @@ export class ChatJob {
   updated: string;
   status: ChatJobStatus = "running";
 
+  /**
+   * Server-side AbortController paired with this job. Passed into runCli /
+   * runIngestLoop so an HTTP cancel request can SIGTERM the live child
+   * process. We keep this independent of `req.signal` because closing the
+   * streaming response (navigating away, reattaching) must not kill the CLI.
+   */
+  readonly abort = new AbortController();
+  /**
+   * Set to true once an explicit cancel has been requested. Used by the
+   * driver to format the final assistant message and avoid treating the
+   * SIGTERM as an unexpected failure.
+   */
+  cancelled = false;
+
   private nextSeq = 0;
   private events: StoredEvent[] = [];
   private listeners = new Set<Listener>();
@@ -43,6 +57,21 @@ export class ChatJob {
     this.agent = input.agent;
     this.started = now;
     this.updated = now;
+  }
+
+  /**
+   * Request immediate cancellation. SIGTERMs the running child via the
+   * paired AbortController. Idempotent. The job's `done`/`error` event is
+   * still emitted by the driver once the child exits.
+   */
+  cancel(): void {
+    if (this.status !== "running") return;
+    this.cancelled = true;
+    try {
+      this.abort.abort();
+    } catch {
+      // ignore — controller is single-shot.
+    }
   }
 
   append(event: ChatSendEvent): void {

@@ -296,6 +296,12 @@ export async function POST(req: Request) {
         // powers both manual /ingest-loop calls and the AutoIngestManager
         // background trigger. The HTTP route only adapts streaming and
         // appends the final assistant message.
+        //
+        // The ingest-loop cancel path remains graceful: the file-based stop
+        // flag halts the loop between sub-chunks. We do not pass the job's
+        // AbortSignal here because aborting mid sub-chunk would lose partial
+        // progress, which is exactly what the file flag was designed to
+        // avoid. The UI Cancel button calls /ingest-loop/stop for this kind.
         const result = await runIngestLoop({
           cfg,
           agent,
@@ -328,12 +334,23 @@ export async function POST(req: Request) {
           safeMode: cfg.agent.safeMode,
           // null in config means "no timeout for this operation kind".
           timeoutMs: kindTimeout ?? undefined,
+          // Pair the child process to the job's AbortController so an HTTP
+          // cancel request can SIGTERM it. killOnAbort=true (default) wires
+          // the SIGTERM through. Independent of req.signal — closing the
+          // streaming response must not kill the CLI.
+          signal: job.abort.signal,
           onStdout: (chunk) => emitChunk(chunk),
         });
         let reply =
           result.stdout.trim() ||
           result.stderr.trim() ||
           `(에이전트가 빈 응답을 반환했습니다. exitCode=${result.exitCode})`;
+        // When the user cancelled, the child was SIGTERM-ed mid-run. Prefix
+        // the captured tail with a marker so the saved assistant message
+        // makes the cause obvious instead of looking like a silent crash.
+        if (job.cancelled) {
+          reply = `⛔ 사용자 취소로 중단됨 (exitCode=${result.exitCode}).\n\n${reply}`;
+        }
 
         if (kind === "ingest" && ingestBefore) {
           const ingestAfter = await readProgressSnapshot();

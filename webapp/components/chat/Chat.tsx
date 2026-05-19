@@ -61,6 +61,7 @@ export default function Chat() {
   const [activeKind, setActiveKind] = useState<ChatKind | null>(null);
   const [attachedJobId, setAttachedJobId] = useState<string | null>(null);
   const [stopping, setStopping] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
   const [capturingIndex, setCapturingIndex] = useState<number | null>(null);
   const streamAbortRef = useRef<AbortController | null>(null);
   const streamTokenRef = useRef(0);
@@ -115,6 +116,7 @@ export default function Chat() {
     setAttachedJobId(null);
     setProgress(null);
     setStopping(false);
+    setCancelling(false);
   }
 
   // 초기에는 가장 최근 세션만 연다. 실행 중인 다른 세션의 job에 자동으로
@@ -208,6 +210,28 @@ export default function Chat() {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setStopping(false);
+    }
+  }
+
+  // Immediate-cancel for any non-loop CLI call. Sends a server-side SIGTERM
+  // via /api/chat/jobs/cancel; the running job's `done` event still arrives
+  // through the existing stream (now reflecting the cancelled exit code).
+  async function cancelCli() {
+    if (!pending || !attachedJobId || cancelling || activeKind === "ingest-loop") {
+      return;
+    }
+    setCancelling(true);
+    try {
+      const res = await fetch("/api/chat/jobs/cancel", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ jobId: attachedJobId }),
+      });
+      if (!res.ok) throw await asError(res);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setCancelling(false);
     }
   }
 
@@ -584,6 +608,11 @@ export default function Chat() {
           loopStop={
             pending && activeKind === "ingest-loop"
               ? { onStop: stopIngestLoop, stopping }
+              : null
+          }
+          cancel={
+            pending && activeKind !== "ingest-loop" && attachedJobId
+              ? { onCancel: cancelCli, cancelling }
               : null
           }
         />

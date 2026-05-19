@@ -103,11 +103,13 @@ export const ConfigSchema = z.object({
      * `null` disables the timeout entirely for that kind. `ingest` defaults to
      * null because a single ingest pass can legitimately run for tens of
      * minutes per leaf chunk and SIGTERM-ing the child mid-summary corrupts
-     * partial progress. `chat` keeps the historical 5-minute cap.
+     * partial progress. `chat` defaults to 30 minutes — the chat UI surfaces a
+     * Cancel button for user-driven aborts, but the timeout still protects
+     * against a CLI that wedges silently.
      */
     timeouts: z
       .object({
-        chat: z.number().int().min(1000).nullable().default(5 * 60 * 1000),
+        chat: z.number().int().min(1000).nullable().default(30 * 60 * 1000),
         ingest: z.number().int().min(1000).nullable().default(null),
         /**
          * Per-sub-chunk timeout inside an /ingest-loop iteration. Defaults to
@@ -139,7 +141,7 @@ export const ConfigSchema = z.object({
         graph: z.number().int().min(1000).nullable().default(30 * 60 * 1000),
       })
       .default({
-        chat: 5 * 60 * 1000,
+        chat: 30 * 60 * 1000,
         ingest: null,
         "ingest-loop": null,
         preprocess: 60 * 60 * 1000,

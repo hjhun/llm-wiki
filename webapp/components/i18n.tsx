@@ -87,6 +87,10 @@ export const TEXT = {
       stopLoop: "Stop loop",
       stopping: "Stopping...",
       stopLoopHint: "현재 sub-chunk가 끝나면 ingest-loop를 멈춥니다.",
+      cancel: "Cancel",
+      cancelling: "Cancelling...",
+      cancelHint:
+        "실행 중인 CLI 프로세스에 SIGTERM을 보내 즉시 중단합니다. (최대 30분 타임아웃까지 기다리지 않음)",
       saveCapture: "외부 캡처를 raw/chat에 저장",
       captureSaved: (path: string) => `외부 캡처 저장됨: ${path}`,
       newChat: "+ New Chat",
@@ -394,6 +398,10 @@ export const TEXT = {
       stopLoop: "Stop loop",
       stopping: "Stopping...",
       stopLoopHint: "Halt the ingest-loop once the current sub-chunk finishes.",
+      cancel: "Cancel",
+      cancelling: "Cancelling...",
+      cancelHint:
+        "SIGTERM the running CLI process immediately (do not wait for the 30-minute timeout).",
       saveCapture: "Save external capture to raw/chat",
       captureSaved: (path: string) => `Saved external capture to ${path}`,
       newChat: "+ New Chat",
