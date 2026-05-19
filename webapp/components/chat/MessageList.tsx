@@ -1,7 +1,13 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { Bot, CircleDotDashed, Terminal, UserRound } from "lucide-react";
+import {
+  Archive,
+  Bot,
+  CircleDotDashed,
+  Terminal,
+  UserRound,
+} from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { useLanguage } from "../i18n";
@@ -24,10 +30,16 @@ export default function MessageList({
   messages,
   pending,
   progress,
+  sessionPath,
+  capturingIndex,
+  onCaptureMessage,
 }: {
   messages: ChatMessage[];
   pending: boolean;
   progress: ChatProgress | null;
+  sessionPath: string | null;
+  capturingIndex: number | null;
+  onCaptureMessage: (messageIndex: number) => void;
 }) {
   const { t } = useLanguage();
   const endRef = useRef<HTMLDivElement | null>(null);
@@ -71,12 +83,26 @@ export default function MessageList({
             ].join(" ")}
           >
             <header className="mb-2 flex items-center gap-2 text-[11px] text-ink-faint">
-              <RoleIcon aria-hidden className="h-3.5 w-3.5" />
-              <span className="font-mono uppercase tracking-widest">
-                {ROLE_LABEL[m.role] ?? m.role}
-                {m.agent ? ` · ${m.agent}` : ""}
-              </span>
-              <span className="font-mono">{m.ts}</span>
+              <div className="flex min-w-0 flex-1 items-center gap-2">
+                <RoleIcon aria-hidden className="h-3.5 w-3.5 shrink-0" />
+                <span className="truncate font-mono uppercase tracking-widest">
+                  {ROLE_LABEL[m.role] ?? m.role}
+                  {m.agent ? ` · ${m.agent}` : ""}
+                </span>
+                <span className="shrink-0 font-mono">{m.ts}</span>
+              </div>
+              {m.role === "assistant" && sessionPath && !pending ? (
+                <button
+                  type="button"
+                  className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded border border-line bg-bg-subtle text-ink-muted transition hover:border-accent/60 hover:text-ink disabled:cursor-not-allowed disabled:opacity-50"
+                  title={t.chat.saveCapture}
+                  aria-label={t.chat.saveCapture}
+                  disabled={capturingIndex === i}
+                  onClick={() => onCaptureMessage(i)}
+                >
+                  <Archive aria-hidden className="h-3.5 w-3.5" />
+                </button>
+              ) : null}
             </header>
             <div className="prose prose-theme max-w-none text-[13.5px]">
               <ReactMarkdown remarkPlugins={[remarkGfm]}>

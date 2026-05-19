@@ -24,6 +24,7 @@
 | Path | Owner | Mutability | Purpose |
 |---|---|---|---|
 | `raw/` | User | **Immutable** except via `/preprocess` (Section 3.4) | Original material: articles, papers, notes, images. Outside the `/preprocess` workflow, never modify, delete, or move. |
+| `raw/chat/` | User via Chat UI | Append-only capture | User-approved external captures from Chat, such as browser/search/tool findings. These are source candidates for later `/ingest`, not full conversation logs. |
 | `raw/.trash/` | LLM via `/preprocess`, UI soft-delete | Append-only quarantine | Files moved out of `raw/` by `/preprocess` or by the Explorer's delete button. Filename is `<ISO8601>_<basename>`; recoverable. |
 | `wiki/` | LLM | LLM may freely write/update | Main wiki body. All generated artifacts go here. |
 | `wiki/sources/` | LLM | LLM | One summary page per original source. |
@@ -176,7 +177,7 @@ This applies to both ingest and graphify. Never start by throwing the whole root
 - Do **not** modify, delete, or move files under `raw/`, **except** through `/preprocess` (`wiki-preprocess` skill), which may:
   - move whole files into `raw/.trash/<ISO-ts>_<basename>`, and
   - rewrite a file in place after backing the original up to `raw/.trash/`.
-  All other paths and operations on `raw/` remain forbidden — `/preprocess --apply` is the only sanctioned mutation path.
+  The only other allowed `raw/` mutation is creating a new, user-approved Chat external-capture file under `raw/chat/<YYYY-MM-DD>/...`; never rewrite or delete existing `raw/chat/` captures. All other paths and operations on `raw/` remain forbidden.
 - Do **not** arbitrarily delete files under `wiki/`. Retire pages by moving them to `wiki/archive/` and recording the reason.
 - Do **not** invent external URLs. If there is no source, mark it as "source unknown" and record it in the operation log.
 - Do **not** manually edit `sessions/`, `config/local.json`, or `.env*`.

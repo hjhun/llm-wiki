@@ -54,12 +54,14 @@ export default function Chat() {
   const [pending, setPending] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [progress, setProgress] = useState<ChatProgress | null>(null);
   // Tracks whether the in-flight request is an /ingest-loop run so the
   // Composer can render the "Stop loop" button only while it would help.
   const [activeKind, setActiveKind] = useState<ChatKind | null>(null);
   const [attachedJobId, setAttachedJobId] = useState<string | null>(null);
   const [stopping, setStopping] = useState(false);
+  const [capturingIndex, setCapturingIndex] = useState<number | null>(null);
   const streamAbortRef = useRef<AbortController | null>(null);
   const streamTokenRef = useRef(0);
 
@@ -138,6 +140,7 @@ export default function Chat() {
   async function openSession(ref: SessionRef) {
     cancelActiveStream();
     setError(null);
+    setNotice(null);
     try {
       await loadSession(ref.path);
       const jobs = await refreshRunningJobs();
@@ -153,6 +156,7 @@ export default function Chat() {
     cancelActiveStream();
     setActive(null);
     setError(null);
+    setNotice(null);
   }
 
   async function deleteSessions(paths: string[]) {
@@ -204,6 +208,32 @@ export default function Chat() {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setStopping(false);
+    }
+  }
+
+  async function captureMessage(messageIndex: number) {
+    if (!active || active.path === "(pending)" || capturingIndex !== null) {
+      return;
+    }
+    setCapturingIndex(messageIndex);
+    setError(null);
+    setNotice(null);
+    try {
+      const res = await fetch("/api/chat/capture", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          sessionPath: active.path,
+          messageIndex,
+        }),
+      });
+      if (!res.ok) throw await asError(res);
+      const j = (await res.json()) as { path: string };
+      setNotice(t.chat.captureSaved(j.path));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setCapturingIndex(null);
     }
   }
 
@@ -435,6 +465,7 @@ export default function Chat() {
     setActiveKind(kind);
     setAttachedJobId(null);
     setError(null);
+    setNotice(null);
     setProgress(null);
 
     const now = new Date();
@@ -528,12 +559,22 @@ export default function Chat() {
             {error}
           </div>
         ) : null}
+        {notice ? (
+          <div className="border-b border-emerald-900/50 bg-emerald-950/30 px-4 py-1 text-[11px] text-emerald-300">
+            {notice}
+          </div>
+        ) : null}
 
         <div className="min-h-0 flex-1 overflow-auto">
           <MessageList
             messages={active?.messages ?? []}
             pending={pending}
             progress={progress}
+            sessionPath={
+              active?.path && active.path !== "(pending)" ? active.path : null
+            }
+            capturingIndex={capturingIndex}
+            onCaptureMessage={captureMessage}
           />
         </div>
 

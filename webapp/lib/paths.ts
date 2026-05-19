@@ -28,6 +28,7 @@ function detectProjectRoot(): string {
 export const PROJECT_ROOT = detectProjectRoot();
 
 export const RAW_ROOT = path.join(PROJECT_ROOT, "raw");
+export const RAW_CHAT_ROOT = path.join(RAW_ROOT, "chat");
 export const WIKI_ROOT = path.join(PROJECT_ROOT, "wiki");
 export const SESSIONS_ROOT = path.join(PROJECT_ROOT, "sessions");
 export const TOOLS_ROOT = path.join(PROJECT_ROOT, "tools");

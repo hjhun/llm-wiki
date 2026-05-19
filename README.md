@@ -41,6 +41,7 @@ The important split is ownership:
 | Path | Owner | Purpose |
 |---|---|---|
 | `raw/` | You | Original source files. CLIO and agents must not edit, move, or delete them. |
+| `raw/chat/` | You via Chat | User-approved external captures from Chat, such as browser/search/tool findings, ready for later ingest. |
 | `wiki/` | Agent | Generated and maintained Markdown wiki. |
 | `wiki/sources/YYYY/YYYY-MM/` | Agent | One source summary page per original source. |
 | `wiki/answers/` | Agent | Saved answers from query workflows. |

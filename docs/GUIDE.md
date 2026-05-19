@@ -48,6 +48,11 @@ CLIO is not just a chat interface over documents. The important result is the ge
 
 Agents must treat `raw/` as read-only. They should not edit, delete, or move your original files.
 
+Chat can also create append-only external captures under `raw/chat/` when you
+explicitly save an assistant message. Use this for browser/search/tool findings
+that should become source candidates. The full conversation still lives under
+`sessions/`; `raw/chat/` is for curated captures, not transcript storage.
+
 ### Agent-Maintained Wiki: `wiki/`
 
 `wiki/` is where the agent writes generated knowledge:
@@ -539,6 +544,9 @@ Each job stores its run record under:
 ```text
 raw/automation/<job>/<run>/
 ```
+
+This path is only for scheduled automation artifacts. External findings saved
+from an interactive Chat session are stored separately under `raw/chat/`.
 
 Use templates for YouTube summaries, GitHub/Gerrit patch review, email sync, or a custom prompt. External writes are draft-only by default: jobs may create review or email drafts, but they should not post comments, send mail, or mutate remote systems automatically.
 
