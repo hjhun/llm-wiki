@@ -131,6 +131,30 @@ function renderFrontmatter(meta: SessionMeta): string {
   return lines.join("\n");
 }
 
+function normalizeTitle(input: string): string {
+  return input.trim().replace(/\s+/g, " ").slice(0, 120) || "untitled";
+}
+
+async function allocateSessionPath(date: string, time: string, slug: string): Promise<{
+  rel: string;
+  abs: string;
+}> {
+  const base = slug || "untitled";
+  for (let index = 0; index < 1000; index += 1) {
+    const suffix = index === 0 ? "" : `-${index + 1}`;
+    const rel = `${date}/${time}_${base}${suffix}.md`;
+    const abs = path.join(SESSIONS_ROOT, rel);
+    try {
+      const handle = await fs.open(abs, "wx");
+      await handle.close();
+      return { rel, abs };
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code !== "EEXIST") throw err;
+    }
+  }
+  throw new Error("could not allocate a unique session path");
+}
+
 export async function newSession(opts: {
   subject: string;
   agent: string | null;
@@ -138,12 +162,12 @@ export async function newSession(opts: {
   const now = new Date();
   const date = formatDate(now);
   const time = formatTime(now);
-  const slug = slugify(opts.subject) || "untitled";
-  const rel = `${date}/${time}_${slug}.md`;
-  const abs = path.join(SESSIONS_ROOT, rel);
-  await fs.mkdir(path.dirname(abs), { recursive: true });
+  const title = normalizeTitle(opts.subject);
+  const slug = slugify(title) || "untitled";
+  await fs.mkdir(path.join(SESSIONS_ROOT, date), { recursive: true });
+  const { rel, abs } = await allocateSessionPath(date, time, slug);
   const meta: SessionMeta = {
-    title: opts.subject || "untitled",
+    title,
     agent: opts.agent,
     created: now.toISOString(),
     updated: now.toISOString(),
@@ -260,6 +284,26 @@ export async function readSession(rel: string): Promise<{
     messages.push(current);
   }
   return { meta, messages };
+}
+
+export async function renameSession(
+  rel: string,
+  title: string,
+): Promise<SessionRef> {
+  if (!rel.endsWith(".md")) {
+    throw new Error(`not a markdown session: ${rel}`);
+  }
+  const abs = resolveSessionAbs(rel);
+  const text = await fs.readFile(abs, "utf8");
+  const { meta, body } = parseFrontmatter(text);
+  const now = new Date();
+  const newMeta: SessionMeta = {
+    ...meta,
+    title: normalizeTitle(title),
+    updated: now.toISOString(),
+  };
+  await fs.writeFile(abs, renderFrontmatter(newMeta) + body, "utf8");
+  return { path: rel, meta: newMeta };
 }
 
 /**

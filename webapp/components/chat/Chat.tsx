@@ -1,13 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Check, Pencil, X } from "lucide-react";
 import AutoIngestBanner from "./AutoIngestBanner";
 import AutoLintHint from "./AutoLintHint";
 import Composer from "./Composer";
 import MessageList from "./MessageList";
 import SessionList from "./SessionList";
 import { useLanguage } from "../i18n";
-import { PageHeader, StatusBadge } from "../ui";
+import { IconButton, PageHeader, StatusBadge } from "../ui";
 import type {
   ChatJobSnapshot,
   ChatKind,
@@ -63,6 +64,9 @@ export default function Chat() {
   const [stopping, setStopping] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [capturingIndex, setCapturingIndex] = useState<number | null>(null);
+  const [renaming, setRenaming] = useState(false);
+  const [renameDraft, setRenameDraft] = useState("");
+  const [savingRename, setSavingRename] = useState(false);
   const streamAbortRef = useRef<AbortController | null>(null);
   const streamTokenRef = useRef(0);
 
@@ -143,6 +147,8 @@ export default function Chat() {
     cancelActiveStream();
     setError(null);
     setNotice(null);
+    setRenaming(false);
+    setRenameDraft("");
     try {
       await loadSession(ref.path);
       const jobs = await refreshRunningJobs();
@@ -157,8 +163,61 @@ export default function Chat() {
     // 실제 세션 파일 생성은 첫 메시지 전송 시 send 라우트가 만든다.
     cancelActiveStream();
     setActive(null);
+    setRenaming(false);
+    setRenameDraft("");
     setError(null);
     setNotice(null);
+  }
+
+  function startRename() {
+    if (!active || active.path === "(pending)") return;
+    setRenameDraft(active.meta.title);
+    setRenaming(true);
+    setError(null);
+  }
+
+  function cancelRename() {
+    setRenaming(false);
+    setRenameDraft("");
+  }
+
+  async function saveRename() {
+    if (!active || active.path === "(pending)" || savingRename) return;
+    const title = renameDraft.trim();
+    if (!title) {
+      setError(t.chat.renameEmpty);
+      return;
+    }
+    if (title === active.meta.title) {
+      cancelRename();
+      return;
+    }
+    setSavingRename(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/chat/session", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ path: active.path, title }),
+      });
+      if (!res.ok) throw await asError(res);
+      const ref = (await res.json()) as SessionRef;
+      setActive((current) =>
+        current && current.path === ref.path
+          ? { ...current, meta: ref.meta }
+          : current,
+      );
+      setSessions((current) =>
+        current.map((session) => (session.path === ref.path ? ref : session)),
+      );
+      setRenaming(false);
+      setRenameDraft("");
+      await refreshSessions();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setSavingRename(false);
+    }
   }
 
   async function deleteSessions(paths: string[]) {
@@ -546,6 +605,67 @@ export default function Chat() {
     }
   }
 
+  const canRename = Boolean(active?.path && active.path !== "(pending)");
+  const headerTitle =
+    renaming && canRename ? (
+      <input
+        autoFocus
+        value={renameDraft}
+        onChange={(event) => setRenameDraft(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") {
+            event.preventDefault();
+            void saveRename();
+          } else if (event.key === "Escape") {
+            event.preventDefault();
+            cancelRename();
+          }
+        }}
+        disabled={savingRename}
+        aria-label={t.chat.renameInput}
+        className="h-8 w-full max-w-xl rounded-md border border-line bg-bg px-2 text-sm font-semibold text-ink outline-none focus:border-accent"
+      />
+    ) : (
+      active?.meta.title ?? t.chat.newTitle
+    );
+  const headerActions = (
+    <>
+      {renaming && canRename ? (
+        <>
+          <IconButton
+            icon={Check}
+            label={savingRename ? t.chat.renaming : t.chat.saveRename}
+            onClick={() => void saveRename()}
+            disabled={savingRename}
+            variant="primary"
+          />
+          <IconButton
+            icon={X}
+            label={t.common.cancel}
+            onClick={cancelRename}
+            disabled={savingRename}
+            variant="ghost"
+          />
+        </>
+      ) : canRename ? (
+        <IconButton
+          icon={Pencil}
+          label={t.chat.renameChat}
+          onClick={startRename}
+          disabled={pending}
+          variant="ghost"
+        />
+      ) : null}
+      {active?.meta.agent ? (
+        <StatusBadge tone="info">
+          agent <span className="ml-1 normal-case">{active.meta.agent}</span>
+        </StatusBadge>
+      ) : pending ? (
+        <StatusBadge tone="running">{t.chat.processing}</StatusBadge>
+      ) : null}
+    </>
+  );
+
   return (
     <div className="flex h-full w-full overflow-hidden">
       <aside className="w-64 shrink-0 border-r border-line bg-bg-subtle">
@@ -562,17 +682,9 @@ export default function Chat() {
       <section className="flex min-w-0 flex-1 flex-col">
         <PageHeader
           eyebrow="conversation"
-          title={active?.meta.title ?? t.chat.newTitle}
+          title={headerTitle}
           meta={active?.path ?? t.chat.pendingPath}
-          actions={
-            active?.meta.agent ? (
-              <StatusBadge tone="info">
-                agent <span className="ml-1 normal-case">{active.meta.agent}</span>
-              </StatusBadge>
-            ) : pending ? (
-              <StatusBadge tone="running">{t.chat.processing}</StatusBadge>
-            ) : null
-          }
+          actions={headerActions}
         />
 
         <AutoIngestBanner />
