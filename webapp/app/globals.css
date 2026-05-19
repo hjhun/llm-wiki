@@ -3,19 +3,19 @@
 @tailwind utilities;
 
 :root {
-  --color-bg: 243 246 251;
-  --color-bg-subtle: 232 238 247;
+  --color-bg: 239 244 252;
+  --color-bg-subtle: 225 234 247;
   --color-bg-panel: 255 255 255;
-  --color-line: 202 212 226;
+  --color-line: 190 204 224;
   --color-ink: 18 25 38;
   --color-ink-dim: 75 88 108;
   --color-ink-faint: 117 132 154;
-  --color-accent: 52 89 235;
-  --color-accent-soft: 214 224 255;
+  --color-accent: 79 70 229;
+  --color-accent-soft: 221 214 254;
   --color-success: 16 142 105;
   --color-warning: 190 111 10;
   --color-danger: 210 47 86;
-  --color-info: 2 132 199;
+  --color-info: 8 145 178;
 
   color-scheme: light;
 }
@@ -66,10 +66,21 @@ body {
   font-feature-settings: "ss01", "cv11";
 }
 
-:root:not([data-theme="dark"]) body {
+:root body,
+:root[data-theme="default"] body {
   background:
-    radial-gradient(circle at 16% 0%, rgb(var(--color-accent-soft) / 0.72), transparent 34rem),
-    linear-gradient(180deg, rgb(248 250 255), rgb(var(--color-bg)) 18rem);
+    radial-gradient(circle at 12% -8%, rgb(45 212 191 / 0.34), transparent 28rem),
+    radial-gradient(circle at 82% 0%, rgb(129 140 248 / 0.34), transparent 30rem),
+    radial-gradient(circle at 18% 104%, rgb(244 114 182 / 0.16), transparent 26rem),
+    linear-gradient(180deg, rgb(250 252 255), rgb(var(--color-bg)) 22rem);
+}
+
+:root[data-theme="light"] body {
+  background: rgb(var(--color-bg));
+}
+
+:root[data-theme="dark"] body {
+  background: rgb(var(--color-bg));
 }
 
 button,

@@ -12,9 +12,9 @@ type ButtonSize = "sm" | "md";
 
 const BUTTON_VARIANTS: Record<ButtonVariant, string> = {
   primary:
-    "border-transparent bg-accent text-bg shadow-[0_0_0_1px_rgb(var(--color-accent)_/_0.2)] hover:bg-accent/90",
+    "border-transparent bg-[linear-gradient(135deg,rgb(var(--color-accent)),rgb(var(--color-info)))] text-white shadow-[0_10px_24px_rgb(var(--color-accent)_/_0.22)] hover:brightness-105",
   secondary:
-    "border-line bg-bg text-ink-dim hover:border-ink-faint/60 hover:bg-bg-panel hover:text-ink",
+    "border-line bg-bg-panel/78 text-ink-dim shadow-sm hover:border-ink-faint/60 hover:bg-bg-panel hover:text-ink",
   ghost:
     "border-transparent bg-transparent text-ink-dim hover:bg-bg-panel/70 hover:text-ink",
   danger:
@@ -95,7 +95,7 @@ export function PageHeader({
   actions?: ReactNode;
 }) {
   return (
-    <header className="flex min-h-14 shrink-0 items-center justify-between gap-4 border-b border-line bg-bg/95 px-4 py-2">
+    <header className="flex min-h-14 shrink-0 items-center justify-between gap-4 border-b border-line bg-bg-panel/70 px-4 py-2 shadow-sm backdrop-blur-xl">
       <div className="min-w-0">
         {eyebrow ? (
           <div className="font-mono text-[10px] uppercase tracking-widest text-ink-faint">
@@ -128,7 +128,12 @@ export function Panel({
   className?: string;
 }) {
   return (
-    <section className={cx("rounded-md border border-line bg-bg-subtle", className)}>
+    <section
+      className={cx(
+        "rounded-md border border-line bg-bg-panel/82 shadow-[0_14px_38px_rgb(15_23_42_/_0.08)] backdrop-blur-xl",
+        className,
+      )}
+    >
       <header className="flex items-start justify-between gap-3 border-b border-line px-4 py-3">
         <div className="min-w-0">
           {eyebrow ? (
@@ -191,7 +196,12 @@ export function SegmentControl<T extends string>({
   className?: string;
 }) {
   return (
-    <div className={cx("inline-grid rounded-md border border-line bg-bg p-1", className)}>
+    <div
+      className={cx(
+        "inline-grid rounded-md border border-line bg-bg-panel/76 p-1 shadow-sm",
+        className,
+      )}
+    >
       {options.map((option) => (
         <button
           key={option.value}
@@ -226,7 +236,7 @@ export function EmptyState({
   return (
     <div
       className={cx(
-        "flex min-h-40 flex-col items-center justify-center rounded-md border border-dashed border-line bg-bg-subtle px-6 py-8 text-center",
+        "flex min-h-40 flex-col items-center justify-center rounded-md border border-dashed border-line bg-bg-panel/68 px-6 py-8 text-center shadow-sm backdrop-blur-xl",
         className,
       )}
     >
@@ -245,7 +255,7 @@ export function Toolbar({ children, className }: { children: ReactNode; classNam
   return (
     <div
       className={cx(
-        "flex min-h-10 items-center justify-between gap-3 border-b border-line bg-bg-subtle px-4 py-2",
+        "flex min-h-10 items-center justify-between gap-3 border-b border-line bg-bg-panel/55 px-4 py-2 shadow-sm backdrop-blur-xl",
         className,
       )}
     >

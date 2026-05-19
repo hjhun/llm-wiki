@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
-  Bot,
   ChevronLeft,
   ChevronRight,
   Clock3,
@@ -74,20 +73,15 @@ export default function Sidebar() {
   return (
     <aside
       className={cx(
-        "flex h-screen shrink-0 flex-col border-r border-line bg-bg-subtle transition-[width]",
+        "flex h-screen shrink-0 flex-col border-r border-line bg-bg-panel/60 shadow-[12px_0_36px_rgb(15_23_42_/_0.08)] backdrop-blur-xl transition-[width]",
         collapsed ? "w-16" : "w-56",
       )}
     >
       <div className={collapsed ? "px-2 pb-3 pt-6" : "px-5 pb-3 pt-6"}>
         <div className="flex items-start justify-between gap-2">
           <div className={cx("min-w-0", collapsed ? "sr-only" : "")}>
-            <div className="flex items-center gap-2">
-              <span className="flex h-7 w-7 items-center justify-center rounded-md border border-line bg-bg text-accent">
-                <Bot aria-hidden className="h-4 w-4" />
-              </span>
-              <div className="font-mono text-xs uppercase tracking-widest text-ink">
-                {BRAND_NAME}
-              </div>
+            <div className="font-mono text-xs uppercase tracking-widest text-ink">
+              {BRAND_NAME}
             </div>
             <div className="mt-2 text-xs text-ink-faint">{t.sidebar.local}</div>
           </div>
@@ -117,7 +111,7 @@ export default function Sidebar() {
                   ? "h-10 items-center justify-center px-0 py-0"
                   : "flex-col px-3 py-2.5",
                 active
-                  ? "border-line bg-bg-panel text-ink"
+                  ? "border-accent/25 bg-[linear-gradient(135deg,rgb(var(--color-accent-soft)_/_0.78),rgb(var(--color-bg-panel)_/_0.92))] text-ink shadow-sm"
                   : "border-transparent text-ink-dim hover:border-line/70 hover:bg-bg-panel/60 hover:text-ink",
               )}
             >
