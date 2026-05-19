@@ -156,7 +156,7 @@ function startProgressWatcher(
 
 const ANSI_RE =
   // eslint-disable-next-line no-control-regex
-  /[\u001B\u009B][[\]()#;?]*(?:[a-zA-Z\d]*(?:;[a-zA-Z\d]*)*)?\u0007|(?:\d{1,4}(?:;\d{0,4})*)?[\dA-PR-TZcf-nq-uy=><~]/g;
+  /(?:\u001B\][^\u0007\u001B]*(?:\u0007|\u001B\\)|[\u001B\u009B][[\]()#;?]*(?:[0-?]*[ -/]*[@-~]))/g;
 
 function shorten(s: string, n: number): string {
   const t = s.trim().replace(/\s+/g, " ");
