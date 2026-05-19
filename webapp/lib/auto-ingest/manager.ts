@@ -312,7 +312,7 @@ function buildAutoTriggerPrompt(input: {
 }): string {
   return [
     "You are operating an LLM Wiki repository.",
-    "Read CLAUDE.md/AGENTS.md and follow .agents/skills/wiki-ingest/SKILL.md.",
+    "Read CLAUDE.md/AGENTS.md and follow .agents/skills/wiki-ingest/SKILL.md. If additional skills are needed, project .agents/skills takes priority, then ~/.agents/skills, then host-specific global skill directories such as ~/.codex/skills or ~/.claude/skills.",
     `Active session log: sessions/${input.sessionPath}`,
     `This run was triggered automatically (source=${input.source}, reason=${input.reason}).`,
     "Start exactly like a normal `/ingest` with no path: enumerate `raw/`, update wiki/.progress/ingest/.state.json for new, changed, or stale leaves, then process exactly one pending sub-chunk or one merge-pass unit per the wiki-ingest skill. Exit after that single unit; the backend driver will spawn the next iteration.",

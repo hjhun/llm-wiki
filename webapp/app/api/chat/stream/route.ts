@@ -14,6 +14,11 @@ export async function GET(req: Request) {
   const job = getChatJob(jobId);
   if (!job) return jsonError("job not found", 404);
 
+  const sessionPath = searchParams.get("sessionPath");
+  if (sessionPath && sessionPath !== job.sessionPath) {
+    return jsonError("job does not belong to requested session", 409);
+  }
+
   const afterRaw = searchParams.get("after");
   const after = afterRaw == null ? -1 : Number.parseInt(afterRaw, 10);
   const afterSeq = Number.isFinite(after) ? after : -1;

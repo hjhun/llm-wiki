@@ -1,14 +1,18 @@
-import fs from "node:fs/promises";
-import path from "node:path";
 import { NextResponse } from "next/server";
+import { z } from "zod";
 import { requireSession, errorMessage, jsonError } from "@/lib/api";
-import { PROJECT_ROOT } from "@/lib/paths";
+import {
+  clearStopFlag,
+  requestStopFlag,
+  stopFlagExists,
+} from "@/lib/ingest-loop";
 
 /**
- * Stop flag for the /ingest-loop driver in /api/chat/send/route.ts.
+ * Per-session stop flag for the /ingest-loop driver in /api/chat/send/route.ts.
  *
- * The loop polls for this file between sub-chunk invocations and halts when
- * it is present. We use a file (not an in-memory abort controller) because:
+ * Each loop polls its own session-scoped file between sub-chunk invocations
+ * and halts when it is present. We use files (not in-memory abort controllers)
+ * because:
  *   - it survives Next.js dev-server hot reloads,
  *   - it works across multiple worker processes (none today, but trivial to
  *     scale later),
@@ -21,45 +25,48 @@ import { PROJECT_ROOT } from "@/lib/paths";
  * matches the user-visible "Stop after current sub-chunk" semantics in the
  * chat UI.
  */
-const STOP_FLAG_REL = "wiki/.progress/ingest/.stop";
+const StopQuery = z.object({
+  sessionPath: z.string().min(1).optional(),
+});
 
-function stopFlagAbs(): string {
-  return path.join(PROJECT_ROOT, STOP_FLAG_REL);
-}
+const StopBody = z.object({
+  sessionPath: z.string().min(1),
+});
 
-async function flagExists(): Promise<boolean> {
-  try {
-    await fs.access(stopFlagAbs());
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-export async function GET() {
+export async function GET(req: Request) {
   const unauth = await requireSession();
   if (unauth) return unauth;
-  return NextResponse.json({ stopRequested: await flagExists() });
+  const parsed = StopQuery.safeParse(
+    Object.fromEntries(new URL(req.url).searchParams),
+  );
+  if (!parsed.success) return jsonError("invalid query", 400);
+  return NextResponse.json({
+    stopRequested: await stopFlagExists(parsed.data.sessionPath),
+  });
 }
 
-export async function POST() {
+export async function POST(req: Request) {
   const unauth = await requireSession();
   if (unauth) return unauth;
+  const parsed = StopBody.safeParse(await req.json().catch(() => null));
+  if (!parsed.success) return jsonError("sessionPath required", 400);
   try {
-    const abs = stopFlagAbs();
-    await fs.mkdir(path.dirname(abs), { recursive: true });
-    await fs.writeFile(abs, `${new Date().toISOString()}\n`, "utf8");
+    await requestStopFlag(parsed.data.sessionPath);
     return NextResponse.json({ ok: true, stopRequested: true });
   } catch (err) {
     return jsonError(errorMessage(err), 500);
   }
 }
 
-export async function DELETE() {
+export async function DELETE(req: Request) {
   const unauth = await requireSession();
   if (unauth) return unauth;
+  const parsed = StopQuery.safeParse(
+    Object.fromEntries(new URL(req.url).searchParams),
+  );
+  if (!parsed.success) return jsonError("invalid query", 400);
   try {
-    await fs.rm(stopFlagAbs(), { force: true });
+    await clearStopFlag(parsed.data.sessionPath);
     return NextResponse.json({ ok: true, stopRequested: false });
   } catch (err) {
     return jsonError(errorMessage(err), 500);

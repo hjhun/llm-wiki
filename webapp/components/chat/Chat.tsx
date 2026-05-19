@@ -115,14 +115,12 @@ export default function Chat() {
     setStopping(false);
   }
 
-  // 초기: 진행 중인 job이 있으면 그 세션을 우선 열고 스트림에 다시 붙는다.
+  // 초기에는 가장 최근 세션만 연다. 실행 중인 다른 세션의 job에 자동으로
+  // 붙으면 채널 간 진행 내용이 섞여 보일 수 있다.
   useEffect(() => {
     (async () => {
       const list = await refreshSessions();
-      const jobs = await refreshRunningJobs();
-      if (jobs.length > 0) {
-        await attachJob(jobs[0], true);
-      } else if (list.length > 0) {
+      if (list.length > 0) {
         await openSession(list[0]);
       }
     })();
@@ -185,10 +183,22 @@ export default function Chat() {
   }
 
   async function stopIngestLoop() {
-    if (!pending || activeKind !== "ingest-loop" || stopping) return;
+    if (
+      !pending ||
+      activeKind !== "ingest-loop" ||
+      stopping ||
+      !active ||
+      active.path === "(pending)"
+    ) {
+      return;
+    }
     setStopping(true);
     try {
-      const res = await fetch("/api/chat/ingest-loop/stop", { method: "POST" });
+      const res = await fetch("/api/chat/ingest-loop/stop", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ sessionPath: active.path }),
+      });
       if (!res.ok) throw await asError(res);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -395,6 +405,7 @@ export default function Chat() {
       if (reopenFirst) await loadSession(job.sessionPath);
       const u = new URL("/api/chat/stream", window.location.origin);
       u.searchParams.set("jobId", job.id);
+      u.searchParams.set("sessionPath", job.sessionPath);
       const res = await fetch(u, { signal: controller.signal });
       if (!res.ok) throw await asError(res);
       await consumeChatStream(res, job.sessionPath, token);

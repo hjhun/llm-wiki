@@ -115,7 +115,7 @@ export function buildGraphifyPrompt(
 
   return [
     "You are operating an LLM Wiki repository.",
-    "Read CLAUDE.md/AGENTS.md and use .agents/skills/wiki-graphify/SKILL.md.",
+    "Read CLAUDE.md/AGENTS.md and use .agents/skills/wiki-graphify/SKILL.md. If additional skills are needed, project .agents/skills takes priority, then ~/.agents/skills, then host-specific global skill directories such as ~/.codex/skills or ~/.claude/skills.",
     `Active session log: sessions/${sessionPath}`,
     `Run exactly this graph operation: ${commandLabel}`,
     "",

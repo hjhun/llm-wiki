@@ -72,6 +72,7 @@ type ProgressEvent = Extract<ChatSendEvent, { type: "progress" }>;
  */
 function startProgressWatcher(
   emit: (event: ProgressEvent) => void,
+  options: { sessionPath?: string } = {},
 ): () => void {
   const stateAbs = path.join(PROJECT_ROOT, PROGRESS_STATE_PATH);
   const logAbs = path.join(PROJECT_ROOT, WIKI_LOG_REL);
@@ -87,7 +88,9 @@ function startProgressWatcher(
       if (st.mtimeMs !== lastStateMtime) {
         lastStateMtime = st.mtimeMs;
         const raw = await fs.readFile(stateAbs, "utf8");
-        const summary = summarizeIngestState(raw);
+        const summary = summarizeIngestState(raw, {
+          sessionPath: options.sessionPath,
+        });
         if (summary) {
           const line = formatStateSummary(summary);
           if (line !== lastSummary) {
@@ -104,42 +107,44 @@ function startProgressWatcher(
     } catch {
       // ENOENT or partial JSON — try again on the next tick.
     }
-    try {
-      const st = await fs.stat(logAbs);
-      if (baselineLogSize == null) {
-        baselineLogSize = st.size;
-      } else if (st.size > baselineLogSize) {
-        const length = st.size - baselineLogSize;
-        const fh = await fs.open(logAbs, "r");
-        try {
-          const buf = Buffer.alloc(length);
-          await fh.read(buf, 0, length, baselineLogSize);
-          const text = buf.toString("utf8");
-          const lines = text.split("\n");
-          const completed = lines.slice(0, -1);
-          let consumedBytes = 0;
-          for (const line of completed) {
-            consumedBytes += Buffer.byteLength(line, "utf8") + 1;
-            const m = LOG_HEADING_RE.exec(line);
-            if (m) {
-              emit({
-                type: "progress",
-                phase: "log",
-                ts: m[1],
-                op: m[2],
-                detail: m[3],
-              });
+    if (!options.sessionPath) {
+      try {
+        const st = await fs.stat(logAbs);
+        if (baselineLogSize == null) {
+          baselineLogSize = st.size;
+        } else if (st.size > baselineLogSize) {
+          const length = st.size - baselineLogSize;
+          const fh = await fs.open(logAbs, "r");
+          try {
+            const buf = Buffer.alloc(length);
+            await fh.read(buf, 0, length, baselineLogSize);
+            const text = buf.toString("utf8");
+            const lines = text.split("\n");
+            const completed = lines.slice(0, -1);
+            let consumedBytes = 0;
+            for (const line of completed) {
+              consumedBytes += Buffer.byteLength(line, "utf8") + 1;
+              const m = LOG_HEADING_RE.exec(line);
+              if (m) {
+                emit({
+                  type: "progress",
+                  phase: "log",
+                  ts: m[1],
+                  op: m[2],
+                  detail: m[3],
+                });
+              }
             }
+            baselineLogSize += consumedBytes;
+          } finally {
+            await fh.close();
           }
-          baselineLogSize += consumedBytes;
-        } finally {
-          await fh.close();
+        } else if (st.size < baselineLogSize) {
+          baselineLogSize = st.size;
         }
-      } else if (st.size < baselineLogSize) {
-        baselineLogSize = st.size;
+      } catch {
+        // log.md may not exist yet — that is fine.
       }
-    } catch {
-      // log.md may not exist yet — that is fine.
     }
   };
 
@@ -249,7 +254,7 @@ export async function POST(req: Request) {
 
   const promptLines: string[] = [
     "You are operating an LLM Wiki repository.",
-    "Read CLAUDE.md/AGENTS.md in this repository and follow the .agents/skills/ that match the user's intent.",
+    "Read CLAUDE.md/AGENTS.md in this repository and follow matching skills. Skill lookup priority: project .agents/skills first, then ~/.agents/skills, then host-specific global skill directories such as ~/.codex/skills or ~/.claude/skills.",
     `Active session log: sessions/${sessionPath}`,
   ];
   if (progressRef) promptLines.push(progressRef);
@@ -272,7 +277,10 @@ export async function POST(req: Request) {
     send({ type: "start", sessionPath });
 
     const kindTimeout = cfg.cli.timeouts[kind];
-    const stopWatcher = startProgressWatcher((event) => send(event));
+    const stopWatcher =
+      kind === "ingest" || kind === "ingest-loop"
+        ? startProgressWatcher((event) => send(event), { sessionPath })
+        : () => undefined;
 
     const emitChunk = (text: string) => {
       const rendered = displayChunk(text);

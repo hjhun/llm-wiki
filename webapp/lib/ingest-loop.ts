@@ -1,4 +1,5 @@
 import fs from "node:fs/promises";
+import { createHash } from "node:crypto";
 import path from "node:path";
 import { runCli, type CliName, type RunResult } from "./cli";
 import type { Config } from "./config";
@@ -10,6 +11,7 @@ import { errorMessage } from "./api";
 export const PROGRESS_DASHBOARD_PATH = "wiki/.progress/ingest/DASHBOARD.md";
 export const PROGRESS_STATE_PATH = "wiki/.progress/ingest/.state.json";
 export const PROGRESS_STOP_PATH = "wiki/.progress/ingest/.stop";
+export const PROGRESS_STOP_DIR = "wiki/.progress/ingest/stops";
 export const PROGRESS_LOCK_PATH = "wiki/.progress/ingest/.lock";
 export const WIKI_LOG_REL = "wiki/log.md";
 
@@ -130,18 +132,43 @@ export async function readIngestStateSummary(): Promise<StateSummary | null> {
   }
 }
 
-export async function stopFlagExists(): Promise<boolean> {
+function sessionStopFlagAbs(sessionPath: string): string {
+  const key = createHash("sha1").update(sessionPath).digest("hex");
+  return path.join(PROJECT_ROOT, PROGRESS_STOP_DIR, `${key}.stop`);
+}
+
+function legacyStopFlagAbs(): string {
+  return path.join(PROJECT_ROOT, PROGRESS_STOP_PATH);
+}
+
+export async function requestStopFlag(sessionPath: string): Promise<void> {
+  const abs = sessionStopFlagAbs(sessionPath);
+  await fs.mkdir(path.dirname(abs), { recursive: true });
+  await fs.writeFile(
+    abs,
+    JSON.stringify({ sessionPath, requested_at: new Date().toISOString() }) +
+      "\n",
+    "utf8",
+  );
+}
+
+export async function stopFlagExists(sessionPath?: string): Promise<boolean> {
   try {
-    await fs.access(path.join(PROJECT_ROOT, PROGRESS_STOP_PATH));
+    await fs.access(
+      sessionPath ? sessionStopFlagAbs(sessionPath) : legacyStopFlagAbs(),
+    );
     return true;
   } catch {
     return false;
   }
 }
 
-export async function clearStopFlag(): Promise<void> {
+export async function clearStopFlag(sessionPath?: string): Promise<void> {
   try {
-    await fs.rm(path.join(PROJECT_ROOT, PROGRESS_STOP_PATH), { force: true });
+    await fs.rm(
+      sessionPath ? sessionStopFlagAbs(sessionPath) : legacyStopFlagAbs(),
+      { force: true },
+    );
   } catch {
     // Best-effort cleanup; the next loop run will overwrite or re-check it.
   }
@@ -219,7 +246,7 @@ export function buildLoopContinuationPrompt(input: {
 }): string {
   const lines: string[] = [
     "You are operating an LLM Wiki repository.",
-    "Read CLAUDE.md/AGENTS.md in this repository and follow .agents/skills/wiki-ingest/SKILL.md.",
+    "Read CLAUDE.md/AGENTS.md in this repository and follow .agents/skills/wiki-ingest/SKILL.md. If additional skills are needed, project .agents/skills takes priority, then ~/.agents/skills, then host-specific global skill directories such as ~/.codex/skills or ~/.claude/skills.",
     `Active session log: sessions/${input.sessionPath}`,
   ];
   if (input.progressRef) lines.push(input.progressRef);
@@ -234,7 +261,18 @@ export function buildLoopContinuationPrompt(input: {
   return lines.join("\n");
 }
 
-export function summarizeIngestState(raw: string): StateSummary | null {
+function stateLeafBelongsToSession(
+  leaf: Record<string, unknown>,
+  sessionPath: string,
+): boolean {
+  const lastSession = typeof leaf.last_session === "string" ? leaf.last_session : "";
+  return lastSession === sessionPath || lastSession === `sessions/${sessionPath}`;
+}
+
+export function summarizeIngestState(
+  raw: string,
+  options: { sessionPath?: string } = {},
+): StateSummary | null {
   let parsed: unknown;
   try {
     parsed = JSON.parse(raw);
@@ -262,8 +300,14 @@ export function summarizeIngestState(raw: string): StateSummary | null {
     active_subchunk: null,
   };
   for (const [leafPath, leafValue] of Object.entries(leaves)) {
-    summary.total += 1;
     const leaf = (leafValue ?? {}) as Record<string, unknown>;
+    if (
+      options.sessionPath &&
+      !stateLeafBelongsToSession(leaf, options.sessionPath)
+    ) {
+      continue;
+    }
+    summary.total += 1;
     const status = typeof leaf.status === "string" ? leaf.status : "pending";
     if (status === "done") summary.done += 1;
     else if (status === "in_progress") summary.in_progress += 1;
@@ -283,6 +327,7 @@ export function summarizeIngestState(raw: string): StateSummary | null {
       }
     }
   }
+  if (options.sessionPath && summary.total === 0) return null;
   return summary;
 }
 
@@ -366,7 +411,7 @@ async function runCliWithIngestLoopRetries(input: {
   let lastFailure = "CLI 호출 실패";
 
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-    if (await stopFlagExists()) {
+    if (await stopFlagExists(input.sessionPath)) {
       return {
         ok: false,
         kind: "stopped",
@@ -452,7 +497,7 @@ async function runCliWithIngestLoopRetries(input: {
     );
     input.onChunk?.(`\n\n---\n${retryNote}\n`);
 
-    if (await stopFlagExists()) {
+    if (await stopFlagExists(input.sessionPath)) {
       return {
         ok: false,
         kind: "stopped",
@@ -627,7 +672,7 @@ export async function runIngestLoop(
 ): Promise<RunIngestLoopResult> {
   const { cfg, agent, sessionPath, initialPrompt, signal, onChunk } = input;
   if (!input.preserveStopFlag) {
-    await clearStopFlag();
+    await clearStopFlag(sessionPath);
   }
   const maxIter = cfg.cli.ingestLoop.maxIterations;
   await appendMessage(
@@ -652,7 +697,7 @@ export async function runIngestLoop(
       : await buildProgressReference();
 
   while (true) {
-    if (await stopFlagExists()) {
+    if (await stopFlagExists(sessionPath)) {
       haltKind = "stopped";
       haltReason = "사용자 Stop 요청";
       break;
@@ -731,7 +776,7 @@ export async function runIngestLoop(
       exitCode: result.exitCode,
       summary,
       mergeDone: snap.mergeDone,
-      stopRequested: await stopFlagExists(),
+      stopRequested: await stopFlagExists(sessionPath),
       iteration,
       maxIter,
     });
@@ -743,7 +788,7 @@ export async function runIngestLoop(
   }
 
   if (!input.preserveStopFlag) {
-    await clearStopFlag();
+    await clearStopFlag(sessionPath);
   }
 
   let finalReply =
