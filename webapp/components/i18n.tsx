@@ -331,6 +331,17 @@ export const TEXT = {
       storage:
         "비밀번호와 세션 시크릿은 config/local.json에 저장되며 git 추적에서 제외됩니다.",
     },
+    agentPanel: {
+      title: "에이전트",
+      tabLabel: "에이전트",
+      openLabel: "에이전트 상태 패널 열기",
+      closeLabel: "에이전트 상태 패널 닫기",
+      idle: "대기 중",
+      idleHint: "메시지를 보내면 여기서 같이 일해요.",
+      running: "실행 중",
+      jobLabel: (kind: string) => `${kind} 작업을 처리하는 중…`,
+      jobsRunning: (count: number) => `작업 ${count}개를 동시에 처리하는 중…`,
+    },
   },
   en: {
     common: {
@@ -652,6 +663,17 @@ export const TEXT = {
       pending: "Working...",
       storage:
         "The password and session secret are stored in config/local.json, which is excluded from git.",
+    },
+    agentPanel: {
+      title: "Agent",
+      tabLabel: "AGENT",
+      openLabel: "Open agent status panel",
+      closeLabel: "Close agent status panel",
+      idle: "Idle",
+      idleHint: "Send a message and it will work alongside you.",
+      running: "Running",
+      jobLabel: (kind: string) => `Working on a ${kind} job…`,
+      jobsRunning: (count: number) => `Working on ${count} jobs at once…`,
     },
   },
 } as const;

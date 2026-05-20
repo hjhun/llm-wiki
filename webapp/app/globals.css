@@ -261,3 +261,296 @@ select {
   background-color: rgb(113 63 18 / 0.28);
   color: rgb(254 240 138);
 }
+
+/* ── Agent edge panel ─────────────────────────────────────────────────── */
+
+/* The whole panel slides horizontally; only the tab stays on-screen when
+   collapsed. `--agent-edge-x` is the hidden-state offset (panel body width). */
+.agent-edge-panel {
+  --agent-edge-x: 248px;
+  transform: translate(var(--agent-edge-x), -50%);
+  transition: transform 0.34s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.agent-edge-panel[data-open="true"] {
+  --agent-edge-x: 0px;
+}
+
+.agent-edge-tab {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  width: 36px;
+  border: 1px solid rgb(var(--color-line));
+  border-right: none;
+  border-radius: 14px 0 0 14px;
+  background-color: rgb(var(--color-bg-panel) / 0.9);
+  backdrop-filter: blur(12px);
+  color: rgb(var(--color-ink-faint));
+  cursor: pointer;
+  box-shadow: -8px 0 22px rgb(0 0 0 / 0.1);
+  transition:
+    color 0.2s ease,
+    background-color 0.2s ease,
+    border-color 0.2s ease;
+}
+.agent-edge-tab:hover {
+  color: rgb(var(--color-ink));
+}
+.agent-edge-tab-label {
+  writing-mode: vertical-rl;
+  text-orientation: upright;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+}
+.agent-edge-tab-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 9999px;
+  background-color: currentColor;
+}
+.agent-edge-tab[data-running="true"] {
+  color: rgb(var(--color-accent));
+  border-color: rgb(var(--color-accent) / 0.5);
+  background-color: rgb(var(--color-accent) / 0.12);
+  animation: agent-tab-peek 1.7s ease-in-out infinite;
+}
+.agent-edge-tab[data-running="true"] .agent-edge-tab-dot {
+  animation: agent-tab-dot 1s ease-in-out infinite;
+}
+/* Once the panel is open the tab no longer needs to call for attention. */
+.agent-edge-panel[data-open="true"] .agent-edge-tab {
+  animation: none;
+}
+
+.agent-edge-body {
+  display: flex;
+  flex-direction: column;
+  width: 248px;
+  padding: 15px 16px 17px;
+  border: 1px solid rgb(var(--color-line));
+  border-left: none;
+  background-color: rgb(var(--color-bg-panel) / 0.9);
+  backdrop-filter: blur(18px);
+  box-shadow: -18px 0 46px rgb(0 0 0 / 0.18);
+}
+
+.agent-mascot-stage {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 168px;
+  border-radius: 14px;
+  background: radial-gradient(
+    circle at 50% 40%,
+    rgb(var(--color-accent) / 0.16),
+    transparent 70%
+  );
+}
+
+/* ── Fallback chibi mascot ────────────────────────────────────────────── */
+
+.agent-chibi {
+  display: block;
+  overflow: visible;
+}
+.agent-chibi-face,
+.agent-chibi-arm,
+.agent-chibi-leg {
+  fill: #fde4d3;
+}
+.agent-chibi-hair {
+  fill: rgb(var(--color-accent));
+}
+.agent-chibi-ahoge {
+  fill: none;
+  stroke: rgb(var(--color-accent));
+  stroke-width: 5;
+  stroke-linecap: round;
+}
+.agent-chibi-body {
+  fill: rgb(var(--color-accent) / 0.92);
+}
+.agent-chibi-eye {
+  fill: #3b2f3a;
+}
+.agent-chibi-blush {
+  fill: #f4a3ac;
+  opacity: 0.78;
+}
+.agent-chibi-mouth {
+  fill: none;
+  stroke: #3b2f3a;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+}
+.agent-chibi-spark {
+  fill: rgb(var(--color-accent));
+  opacity: 0;
+}
+
+/* fill-box transform origins so rotate/scale pivot on each part itself */
+.agent-chibi-bob,
+.agent-chibi-eyes,
+.agent-chibi-arm,
+.agent-chibi-ahoge,
+.agent-chibi-spark {
+  transform-box: fill-box;
+}
+.agent-chibi-bob {
+  transform-origin: 50% 100%;
+}
+.agent-chibi-eyes {
+  transform-origin: 50% 50%;
+}
+.agent-chibi-arm {
+  transform-origin: 50% 8%;
+}
+.agent-chibi-ahoge {
+  transform-origin: 35% 90%;
+}
+.agent-chibi-spark {
+  transform-origin: 50% 50%;
+}
+
+/* eyes blink in both states */
+.agent-chibi-eyes {
+  animation: agent-blink 5s infinite;
+}
+
+/* idle: gentle breathing + a slow ahoge sway */
+.agent-chibi[data-running="false"] .agent-chibi-bob {
+  animation: agent-breathe 3.6s ease-in-out infinite;
+}
+.agent-chibi[data-running="false"] .agent-chibi-ahoge {
+  animation: agent-ahoge 4.4s ease-in-out infinite;
+}
+
+/* running: bouncing body, swinging limbs, bobbing ahoge, sparkles */
+.agent-chibi[data-running="true"] .agent-chibi-bob {
+  animation: agent-bob 0.52s ease-in-out infinite;
+}
+.agent-chibi[data-running="true"] .agent-chibi-ahoge {
+  animation: agent-ahoge 0.9s ease-in-out infinite;
+}
+.agent-chibi[data-running="true"] .agent-chibi-arm-l {
+  animation: agent-arm 0.52s ease-in-out infinite;
+}
+.agent-chibi[data-running="true"] .agent-chibi-arm-r {
+  animation: agent-arm 0.52s ease-in-out infinite reverse;
+}
+.agent-chibi[data-running="true"] .agent-chibi-leg-l {
+  animation: agent-leg 0.52s ease-in-out infinite;
+}
+.agent-chibi[data-running="true"] .agent-chibi-leg-r {
+  animation: agent-leg 0.52s ease-in-out infinite;
+  animation-delay: 0.26s;
+}
+.agent-chibi[data-running="true"] .agent-chibi-spark {
+  animation: agent-spark 1.2s ease-in-out infinite;
+}
+.agent-chibi[data-running="true"] .agent-chibi-spark-late {
+  animation-delay: 0.6s;
+}
+
+@keyframes agent-tab-peek {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  50% {
+    transform: translateX(-7px);
+  }
+}
+@keyframes agent-tab-dot {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+@keyframes agent-breathe {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.04);
+  }
+}
+@keyframes agent-bob {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-7px);
+  }
+}
+@keyframes agent-blink {
+  0%,
+  90%,
+  100% {
+    transform: scaleY(1);
+  }
+  95% {
+    transform: scaleY(0.12);
+  }
+}
+@keyframes agent-ahoge {
+  0%,
+  100% {
+    transform: rotate(-10deg);
+  }
+  50% {
+    transform: rotate(14deg);
+  }
+}
+@keyframes agent-arm {
+  0%,
+  100% {
+    transform: rotate(-26deg);
+  }
+  50% {
+    transform: rotate(22deg);
+  }
+}
+@keyframes agent-leg {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+@keyframes agent-spark {
+  0%,
+  100% {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agent-edge-panel,
+  .agent-edge-tab,
+  .agent-edge-tab-dot,
+  .agent-chibi-bob,
+  .agent-chibi-eyes,
+  .agent-chibi-ahoge,
+  .agent-chibi-arm,
+  .agent-chibi-leg,
+  .agent-chibi-spark {
+    animation: none !important;
+    transition: none !important;
+  }
+}

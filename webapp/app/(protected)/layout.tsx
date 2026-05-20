@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import AgentEdgePanel from "@/components/agent-panel/AgentEdgePanel";
 import { LanguageProvider } from "@/components/i18n";
 import Sidebar from "@/components/Sidebar";
 import { ThemeProvider } from "@/components/theme";
@@ -33,6 +34,7 @@ export default async function ProtectedLayout({
             {children}
           </main>
         </div>
+        <AgentEdgePanel />
       </LanguageProvider>
     </ThemeProvider>
   );
