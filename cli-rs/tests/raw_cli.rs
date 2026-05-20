@@ -48,6 +48,65 @@ fn raw_add_copies_file() {
     assert_eq!(fs::read(&copied).unwrap(), b"hello world");
 }
 
+#[cfg(unix)]
+#[test]
+fn raw_add_can_symlink_file() {
+    let project = make_project();
+    let src = project.path().join("linked.md");
+    fs::write(&src, b"linked content").unwrap();
+
+    clio()
+        .env("CLIO_HOME", project.path())
+        .args(["raw", "add", "--symlink", src.to_str().unwrap()])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("added 1 new"));
+
+    let linked = project.path().join("raw").join("linked.md");
+    let meta = fs::symlink_metadata(&linked).unwrap();
+    assert!(meta.file_type().is_symlink(), "expected raw link");
+    assert_eq!(
+        fs::read_link(&linked).unwrap(),
+        fs::canonicalize(&src).unwrap()
+    );
+    assert_eq!(fs::read(&linked).unwrap(), b"linked content");
+
+    clio()
+        .env("CLIO_HOME", project.path())
+        .args(["raw", "list"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("raw/linked.md"));
+}
+
+#[cfg(unix)]
+#[test]
+fn raw_add_can_symlink_directory_without_expanding_it() {
+    let project = make_project();
+    let src_dir = project.path().join("notes");
+    fs::create_dir_all(&src_dir).unwrap();
+    fs::write(src_dir.join("a.md"), b"a").unwrap();
+
+    clio()
+        .env("CLIO_HOME", project.path())
+        .args(["raw", "add", "--symlink", src_dir.to_str().unwrap()])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("added 1 new"));
+
+    let linked = project.path().join("raw").join("notes");
+    let meta = fs::symlink_metadata(&linked).unwrap();
+    assert!(
+        meta.file_type().is_symlink(),
+        "directory source should be linked, not copied"
+    );
+    assert_eq!(
+        fs::read_link(&linked).unwrap(),
+        fs::canonicalize(&src_dir).unwrap()
+    );
+    assert_eq!(fs::read(linked.join("a.md")).unwrap(), b"a");
+}
+
 #[test]
 fn raw_add_updates_and_backs_up_existing() {
     let project = make_project();

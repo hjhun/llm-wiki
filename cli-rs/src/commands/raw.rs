@@ -10,7 +10,7 @@
 //! We still respect the AGENTS.md / CLAUDE.md hard rules:
 //!
 //!   * `add` writes inside `raw/` only (resolved via `paths::resolve_workspace`).
-//!     If the destination already exists, the previous file is moved to
+//!     If the destination already exists, the previous entry is moved to
 //!     `raw/.trash/<ISO-ts>_<basename>` before the new bytes land. That
 //!     matches the "update via /preprocess" backup contract.
 //!   * `remove` never deletes; it always moves to `raw/.trash/`.
@@ -31,8 +31,8 @@ use crate::paths::{raw_destination, resolve_workspace, Workspace};
 
 #[derive(Debug, Subcommand)]
 pub enum RawCmd {
-    /// Copy a file or directory into raw/. Existing files are replaced and
-    /// the previous bytes are moved to raw/.trash/.
+    /// Copy or symlink a file or directory into raw/. Existing entries are
+    /// replaced and moved to raw/.trash/.
     Add(AddArgs),
     /// Soft-delete a file inside raw/ by moving it to raw/.trash/.
     Remove(RemoveArgs),
@@ -54,6 +54,11 @@ pub struct AddArgs {
     /// Print actions without touching the filesystem.
     #[arg(long)]
     pub dry_run: bool,
+
+    /// Create a symbolic link in raw/ instead of copying bytes. Directory
+    /// sources are linked as directories instead of being expanded.
+    #[arg(long)]
+    pub symlink: bool,
 }
 
 #[derive(Debug, Args)]
@@ -97,7 +102,21 @@ async fn run_add(ctx: &Ctx, args: AddArgs) -> Result<u8> {
         let metadata = fs::metadata(src)
             .await
             .with_context(|| format!("failed to stat {}", src.display()))?;
-        if metadata.is_dir() {
+        if args.symlink {
+            let dest = args.dest.clone().unwrap_or_else(|| raw_destination(src));
+            add_one(
+                ctx,
+                src,
+                &dest,
+                AddMode::Symlink {
+                    source_is_dir: metadata.is_dir(),
+                },
+                args.dry_run,
+                &mut added,
+                &mut updated,
+            )
+            .await?;
+        } else if metadata.is_dir() {
             walk_and_add(
                 ctx,
                 src,
@@ -109,7 +128,16 @@ async fn run_add(ctx: &Ctx, args: AddArgs) -> Result<u8> {
             .await?;
         } else {
             let dest = args.dest.clone().unwrap_or_else(|| raw_destination(src));
-            add_one(ctx, src, &dest, args.dry_run, &mut added, &mut updated).await?;
+            add_one(
+                ctx,
+                src,
+                &dest,
+                AddMode::Copy,
+                args.dry_run,
+                &mut added,
+                &mut updated,
+            )
+            .await?;
         }
     }
 
@@ -129,6 +157,12 @@ async fn run_add(ctx: &Ctx, args: AddArgs) -> Result<u8> {
         );
     }
     Ok(0)
+}
+
+#[derive(Clone, Copy, Debug)]
+enum AddMode {
+    Copy,
+    Symlink { source_is_dir: bool },
 }
 
 async fn walk_and_add(
@@ -167,7 +201,16 @@ async fn walk_and_add(
         } else {
             format!("{}/{}", prefix.trim_end_matches('/'), rel.to_string_lossy())
         };
-        add_one(ctx, entry.path(), &dest, dry_run, added, updated).await?;
+        add_one(
+            ctx,
+            entry.path(),
+            &dest,
+            AddMode::Copy,
+            dry_run,
+            added,
+            updated,
+        )
+        .await?;
     }
     Ok(())
 }
@@ -176,12 +219,18 @@ async fn add_one(
     ctx: &Ctx,
     src: &Path,
     dest_rel: &str,
+    mode: AddMode,
     dry_run: bool,
     added: &mut u32,
     updated: &mut u32,
 ) -> Result<()> {
     let dest_abs = resolve_workspace(&ctx.project_root, Workspace::Raw, dest_rel)?;
-    let exists = fs::metadata(&dest_abs).await.is_ok();
+    let existing = fs::symlink_metadata(&dest_abs).await.ok();
+    let exists = existing.is_some();
+    let verb = match mode {
+        AddMode::Copy => "add",
+        AddMode::Symlink { .. } => "link",
+    };
 
     if dry_run {
         if exists {
@@ -196,7 +245,7 @@ async fn add_one(
             *added += 1;
             println!(
                 "  {}  {} → raw/{}",
-                style("add").green(),
+                style(verb).green(),
                 src.display(),
                 dest_rel
             );
@@ -211,18 +260,31 @@ async fn add_one(
     }
 
     if exists {
-        backup_to_trash(ctx, &dest_abs).await?;
-        fs::remove_file(&dest_abs)
-            .await
-            .with_context(|| format!("failed to remove existing {}", dest_abs.display()))?;
+        move_to_trash(ctx, &dest_abs).await?;
         *updated += 1;
     } else {
         *added += 1;
     }
 
-    fs::copy(src, &dest_abs)
-        .await
-        .with_context(|| format!("failed to copy {} → {}", src.display(), dest_abs.display()))?;
+    match mode {
+        AddMode::Copy => {
+            fs::copy(src, &dest_abs).await.with_context(|| {
+                format!("failed to copy {} → {}", src.display(), dest_abs.display())
+            })?;
+        }
+        AddMode::Symlink { source_is_dir } => {
+            let target = fs::canonicalize(src)
+                .await
+                .with_context(|| format!("failed to resolve {}", src.display()))?;
+            create_symlink(&target, &dest_abs, source_is_dir).with_context(|| {
+                format!(
+                    "failed to symlink {} → {}",
+                    target.display(),
+                    dest_abs.display()
+                )
+            })?;
+        }
+    }
     println!(
         "  {} {} → raw/{}",
         style("ok").green(),
@@ -236,7 +298,7 @@ async fn run_remove(ctx: &Ctx, args: RemoveArgs) -> Result<u8> {
     let mut removed = 0u32;
     for rel in &args.paths {
         let abs = resolve_workspace(&ctx.project_root, Workspace::Raw, rel)?;
-        if fs::metadata(&abs).await.is_err() {
+        if fs::symlink_metadata(&abs).await.is_err() {
             eprintln!("{} not found: raw/{rel}", style("warn:").yellow());
             continue;
         }
@@ -247,10 +309,7 @@ async fn run_remove(ctx: &Ctx, args: RemoveArgs) -> Result<u8> {
                 rel
             );
         } else {
-            backup_to_trash(ctx, &abs).await?;
-            fs::remove_file(&abs)
-                .await
-                .with_context(|| format!("failed to remove {}", abs.display()))?;
+            move_to_trash(ctx, &abs).await?;
             println!("{} raw/{} → raw/.trash/", style("removed:").green(), rel);
         }
         removed += 1;
@@ -283,7 +342,7 @@ async fn run_list(ctx: &Ctx, args: ListArgs) -> Result<u8> {
         })
     {
         let entry = entry.with_context(|| format!("walking {}", base.display()))?;
-        if !entry.file_type().is_file() {
+        if !(entry.file_type().is_file() || entry.path_is_symlink()) {
             continue;
         }
         let rel = entry
@@ -298,7 +357,7 @@ async fn run_list(ctx: &Ctx, args: ListArgs) -> Result<u8> {
     Ok(0)
 }
 
-async fn backup_to_trash(ctx: &Ctx, source: &Path) -> Result<()> {
+async fn move_to_trash(ctx: &Ctx, source: &Path) -> Result<()> {
     let trash_dir = ctx.project_root.join("raw").join(".trash");
     fs::create_dir_all(&trash_dir)
         .await
@@ -309,18 +368,28 @@ async fn backup_to_trash(ctx: &Ctx, source: &Path) -> Result<()> {
         .unwrap_or_else(|| "untitled".to_string());
     let stamp = Utc::now().format("%Y%m%dT%H%M%SZ").to_string();
     let target = trash_dir.join(format!("{stamp}_{basename}"));
-    if fs::metadata(&target).await.is_ok() {
+    if fs::symlink_metadata(&target).await.is_ok() {
         return Err(anyhow!(
             "trash backup collision: {} already exists",
             target.display()
         ));
     }
-    fs::copy(source, &target).await.with_context(|| {
-        format!(
-            "failed to back up {} → {}",
-            source.display(),
-            target.display()
-        )
-    })?;
+    fs::rename(source, &target)
+        .await
+        .with_context(|| format!("failed to move {} → {}", source.display(), target.display()))?;
     Ok(())
+}
+
+#[cfg(unix)]
+fn create_symlink(target: &Path, link: &Path, _target_is_dir: bool) -> std::io::Result<()> {
+    std::os::unix::fs::symlink(target, link)
+}
+
+#[cfg(windows)]
+fn create_symlink(target: &Path, link: &Path, target_is_dir: bool) -> std::io::Result<()> {
+    if target_is_dir {
+        std::os::windows::fs::symlink_dir(target, link)
+    } else {
+        std::os::windows::fs::symlink_file(target, link)
+    }
 }

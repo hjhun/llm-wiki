@@ -15,7 +15,7 @@ cargo build --release
 
 | Command | Transport | Description |
 |---|---|---|
-| `clio raw add <path>...` | local FS | Copy files/folders into `raw/`. Re-adding an existing path replaces it and backs the old bytes up to `raw/.trash/`. |
+| `clio raw add <path>...` | local FS | Copy files/folders into `raw/`; pass `--symlink` to add links instead. Re-adding an existing path replaces it and moves the old entry to `raw/.trash/`. |
 | `clio raw remove <raw-path>...` | local FS | Soft-delete a file from `raw/` (moves it to `raw/.trash/`). |
 | `clio raw list [raw-path]` | local FS | List files under `raw/`. |
 | `clio ingest [path]` | webapp HTTP | Run one `/ingest` pass. |

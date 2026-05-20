@@ -163,7 +163,7 @@ export PATH="$HOME/.clio/bin:$PATH"
 
 | Command | What it does |
 |---|---|
-| `clio raw add <path>...` | Copy files or folders into `raw/`. Re-adding an existing path replaces it and backs the previous bytes up to `raw/.trash/`. |
+| `clio raw add <path>...` | Copy files or folders into `raw/`. Use `--symlink` to add links instead of copying bytes. Re-adding an existing path replaces it and moves the previous entry to `raw/.trash/`. |
 | `clio raw remove <raw-path>...` | Soft-delete a file from `raw/` (moves it to `raw/.trash/`). |
 | `clio raw list [raw-path]` | List files currently under `raw/`. |
 | `clio ingest [path]` | Run one `/ingest` pass through the configured coding agent. |
@@ -211,7 +211,7 @@ Tips:
 - Do not put secrets, API keys, private tokens, or unnecessary personal data into `raw/`.
 - If a PDF or image is scanned and has no selectable text, OCR it first or add a companion `.md` note.
 - After adding files, run `/ingest-loop raw/<folder>` or enable Auto Ingest in Settings.
-- From a terminal, `clio raw add <file>` copies material in and `clio ingest-loop` processes it.
+- From a terminal, `clio raw add <file>` copies material in; `clio raw add --symlink <folder>` links an external folder; `clio ingest-loop` processes it.
 
 ## Web UI
 
