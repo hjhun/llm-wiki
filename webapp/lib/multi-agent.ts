@@ -127,6 +127,7 @@ function wrapWorkerPrompt(input: {
     `Worker slot: ${input.worker.index + 1}/${input.totalWorkers}`,
     `Round: ${input.round}`,
     "A central manager agent will review all worker outputs, decide whether the operation is complete, and report to the user.",
+    "The host webapp already created the active chat session. Do not create, rename, delete, or allocate any sessions/*.md file; use the Active session log supplied in the manager task.",
     operationPolicy(input.kind),
     "",
     "===== MANAGER-PROVIDED TASK =====",

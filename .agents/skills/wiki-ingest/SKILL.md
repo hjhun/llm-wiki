@@ -83,9 +83,15 @@ conversation. The host webapp also slims the prompt to the last N turns
 
 ## Workflow
 
-### Step 0 — Start Session and Acquire Lock
+### Step 0 — Use Session and Acquire Lock
 
-1. Create the chat log session file `sessions/<YYYY-MM-DD>/<HHMMSS>_ingest_<subject>.md` (frontmatter only). This file holds the conversation, not progress.
+1. Use the active chat session supplied by the host.
+   - If the prompt includes `Active session log: sessions/<path>.md`, treat that
+     session as already created. **Do not create another `sessions/*.md` file.**
+   - If no active session is supplied because the skill is being run directly
+     outside the webapp/CLI adapter, create one chat log session file
+     `sessions/<YYYY-MM-DD>/<HHMMSS>_ingest_<subject>.md` (frontmatter only).
+   - This file holds the conversation, not progress.
 2. Ensure `wiki/.progress/ingest/` exists. Create `leaves/`, `tmp/` subfolders if missing.
 3. Attempt to acquire `wiki/.progress/ingest/.lock`:
    - File contents: `{"pid": <int>, "started_at": <ISO8601>, "session": "<rel path>"}`.

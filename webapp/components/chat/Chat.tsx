@@ -75,8 +75,11 @@ export default function Chat() {
       const res = await fetch("/api/chat/sessions");
       if (!res.ok) throw await asError(res);
       const j = (await res.json()) as { sessions: SessionRef[] };
-      setSessions(j.sessions);
-      return j.sessions;
+      const visibleSessions = j.sessions.filter(
+        (session) => session.meta.origin !== "background",
+      );
+      setSessions(visibleSessions);
+      return visibleSessions;
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
       return [];
