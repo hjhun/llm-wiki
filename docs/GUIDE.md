@@ -103,8 +103,9 @@ The repository includes local instructions in `.agents/skills/`. These tell the 
 ### Optional Helpers
 
 - A Rust toolchain (`cargo`) to build the `clio` CLI. `setup.sh` builds it
-  automatically when `cargo` is on `PATH`, and skips the build with a
-  warning otherwise. The web app works without it.
+  from source when needed. Release installs first try the prebuilt `clio` asset
+  for Ubuntu, Windows, or macOS, then fall back to `cargo` when no matching
+  asset exists. The web app works without it.
 - `graphify` from the official `graphifyy` Python package
 - `qmd` for search/reranking
 - Marp CLI for slide-style answers
@@ -126,7 +127,8 @@ What this does:
 
 1. Resolves the latest GitHub release and downloads its source archive.
 2. Installs it into `~/.clio` (the default install directory).
-3. Runs `setup.sh`, which builds the web app and the `clio` CLI.
+3. Runs `setup.sh`, which builds the web app and installs the `clio` CLI
+   from a release asset when available.
 4. Starts the web app in the background.
 
 If `~/.clio` already contains CLIO, running the installer again refreshes project files while preserving `raw/`, `wiki/`, `sessions/`, local config, runtime files, and webapp build/dependency outputs. To create a separate install instead, choose another path:

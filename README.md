@@ -94,8 +94,9 @@ The project setup and full workflows need:
 - npm
 - Python 3
 - At least one supported coding agent CLI: `codex`, `claude`, `gemini`, or `cline`
-- Optional: a Rust toolchain (`cargo`) to build the `clio` CLI — `setup.sh`
-  skips the CLI build with a warning when `cargo` is missing
+- Optional: a Rust toolchain (`cargo`) to build the `clio` CLI from source.
+  Release installs try the prebuilt `clio` asset for Ubuntu, Windows, or macOS
+  first, then fall back to a local cargo build when no matching asset exists.
 - Optional: `graphify`, `qmd`, and Marp CLI
 
 `setup.sh` detects installed agent CLIs and writes the result to `config/cli-detected.json`. Missing CLIs can be installed manually or configured by path in Settings.
@@ -154,9 +155,10 @@ The web app does not execute `graphify` directly. The selected coding agent read
 
 ## Command-Line Interface (`clio`)
 
-`setup.sh` builds a native Rust CLI and installs it to `<install-dir>/bin/clio`.
-It runs the same operations as the Chat tab, so you can drive a wiki from a
-terminal or a script.
+`setup.sh` installs a native Rust CLI to `<install-dir>/bin/clio`. Release
+installs use a prebuilt binary when one is available for the current OS and CPU;
+source checkouts fall back to `cargo build --release`. The CLI runs the same
+operations as the Chat tab, so you can drive a wiki from a terminal or a script.
 
 Add it to your `PATH` (the installer prints this line when needed):
 

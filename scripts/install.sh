@@ -335,6 +335,8 @@ sync_path_without_rsync() {
 
 run_project_setup() {
   local target_dir="$1"
+  local repo_slug="$2"
+  local ref="$3"
 
   if [[ "${RUN_SETUP}" -eq 0 ]]; then
     log "setup skipped"
@@ -342,7 +344,10 @@ run_project_setup() {
   fi
 
   log "running setup.sh ${SETUP_ARGS[*]:-}"
-  (cd "${target_dir}" && bash ./setup.sh "${SETUP_ARGS[@]}")
+  (
+    cd "${target_dir}"
+    CLIO_RELEASE_REPO="${repo_slug}" CLIO_RELEASE_REF="${ref}" bash ./setup.sh "${SETUP_ARGS[@]}"
+  )
 }
 
 run_install() {
@@ -371,7 +376,7 @@ run_install() {
   log "installing to ${target_dir}"
   mv "${extracted_root}" "${target_dir}"
 
-  run_project_setup "${target_dir}"
+  run_project_setup "${target_dir}" "${repo_slug}" "${ref}"
 
   log "installation complete"
   log "project directory: ${target_dir}"
@@ -410,7 +415,7 @@ run_update() {
     sync_path "${extracted_root}" "${target_dir}" "${rel_path}"
   done
 
-  run_project_setup "${target_dir}"
+  run_project_setup "${target_dir}" "${repo_slug}" "${ref}"
 
   log "update complete"
   log "preserved data directories: raw/, wiki/, sessions/"

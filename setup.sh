@@ -147,6 +147,23 @@ require_command() {
   command -v "${name}" >/dev/null 2>&1 || fail "${name} is required but was not found on PATH"
 }
 
+download_file() {
+  local url="$1"
+  local output="$2"
+
+  if command -v curl >/dev/null 2>&1; then
+    curl -fL --retry 3 --connect-timeout 15 -o "${output}" "${url}"
+    return
+  fi
+
+  if command -v wget >/dev/null 2>&1; then
+    wget -O "${output}" "${url}"
+    return
+  fi
+
+  return 1
+}
+
 node_major() {
   node -p 'Number(process.versions.node.split(".")[0])'
 }
@@ -618,6 +635,9 @@ build_clio_cli() {
     log "skipping Rust clio CLI build (--skip-cli)"
     return
   fi
+  if install_prebuilt_clio_cli; then
+    return
+  fi
   if [[ ! -d "${CLI_RS_DIR}" ]]; then
     warn "cli-rs/ not found; skipping clio CLI build"
     return
@@ -643,6 +663,117 @@ build_clio_cli() {
   mkdir -p "${BIN_DIR}"
   install -m 0755 "${built}" "${BIN_DIR}/clio"
   log "installed clio CLI to ${BIN_DIR}/clio"
+  if ! command -v clio >/dev/null 2>&1; then
+    log "add it to PATH:  export PATH=\"${BIN_DIR}:\$PATH\""
+  fi
+}
+
+clio_binary_name() {
+  case "$(uname -s 2>/dev/null || printf unknown)" in
+    CYGWIN*|MINGW*|MSYS*|Windows_NT)
+      printf 'clio.exe\n'
+      ;;
+    *)
+      printf 'clio\n'
+      ;;
+  esac
+}
+
+detect_prebuilt_clio_asset() {
+  local version="$1"
+  local kernel=""
+  local machine=""
+  local platform=""
+  local arch=""
+
+  kernel="$(uname -s 2>/dev/null || printf unknown)"
+  machine="$(uname -m 2>/dev/null || printf unknown)"
+
+  case "${kernel}" in
+    Linux*)
+      platform="ubuntu"
+      ;;
+    Darwin*)
+      platform="macos"
+      ;;
+    CYGWIN*|MINGW*|MSYS*|Windows_NT)
+      platform="windows"
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+
+  case "${machine}" in
+    x86_64|amd64|AMD64)
+      arch="x86_64"
+      ;;
+    arm64|aarch64)
+      arch="aarch64"
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+
+  case "${platform}-${arch}" in
+    ubuntu-x86_64|windows-x86_64|macos-x86_64|macos-aarch64)
+      printf 'clio-%s-%s-%s.tar.gz\n' "${version}" "${platform}" "${arch}"
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+install_prebuilt_clio_cli() {
+  local version="${CLIO_RELEASE_REF:-${CLIO_RELEASE_VERSION:-}}"
+  local repo="${CLIO_RELEASE_REPO:-hjhun/llm-wiki}"
+  local asset=""
+  local url=""
+  local tmp_dir=""
+  local archive_file=""
+  local extract_dir=""
+  local bin_name=""
+  local built=""
+
+  [[ "${version}" =~ ^v[0-9] ]] || return 1
+  asset="$(detect_prebuilt_clio_asset "${version}")" || return 1
+  command -v tar >/dev/null 2>&1 || return 1
+
+  tmp_dir="$(mktemp -d 2>/dev/null || true)"
+  [[ -n "${tmp_dir}" ]] || return 1
+  archive_file="${tmp_dir}/${asset}"
+  extract_dir="${tmp_dir}/extract"
+  mkdir -p "${extract_dir}"
+
+  url="https://github.com/${repo}/releases/download/${version}/${asset}"
+  log "trying prebuilt clio CLI asset: ${asset}"
+  if ! download_file "${url}" "${archive_file}"; then
+    rm -rf "${tmp_dir}"
+    warn "prebuilt clio CLI asset unavailable; falling back to local cargo build"
+    return 1
+  fi
+
+  if ! tar -xzf "${archive_file}" -C "${extract_dir}"; then
+    rm -rf "${tmp_dir}"
+    warn "could not unpack prebuilt clio CLI asset; falling back to local cargo build"
+    return 1
+  fi
+
+  bin_name="$(clio_binary_name)"
+  built="${extract_dir}/${bin_name}"
+  if [[ ! -f "${built}" ]]; then
+    rm -rf "${tmp_dir}"
+    warn "prebuilt clio CLI asset did not contain ${bin_name}; falling back to local cargo build"
+    return 1
+  fi
+
+  mkdir -p "${BIN_DIR}"
+  install -m 0755 "${built}" "${BIN_DIR}/${bin_name}"
+  rm -rf "${tmp_dir}"
+
+  log "installed prebuilt clio CLI to ${BIN_DIR}/${bin_name}"
   if ! command -v clio >/dev/null 2>&1; then
     log "add it to PATH:  export PATH=\"${BIN_DIR}:\$PATH\""
   fi

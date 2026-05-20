@@ -3,8 +3,9 @@
 Native Rust command-line interface for the CLIO LLM wiki. It runs the same
 operations as the web app's Chat tab from a terminal or a script.
 
-`setup.sh` builds this crate in release mode and installs the binary to
-`<install-dir>/bin/clio`. To build it directly:
+Release installs use a prebuilt binary when one is available for the current OS
+and CPU. Otherwise, `setup.sh` builds this crate in release mode and installs
+the binary to `<install-dir>/bin/clio`. To build it directly:
 
 ```bash
 cargo build --release
