@@ -342,7 +342,7 @@ select {
   align-items: center;
   justify-content: center;
   height: 168px;
-  border-radius: 14px;
+  border-radius: 8px;
   background: radial-gradient(
     circle at 50% 40%,
     rgb(var(--color-accent) / 0.16),
@@ -350,108 +350,159 @@ select {
   );
 }
 
-/* ── Fallback chibi mascot ────────────────────────────────────────────── */
+/* ── Fallback voxel mascot ────────────────────────────────────────────── */
 
-.agent-chibi {
+.agent-voxel {
   display: block;
   overflow: visible;
+  shape-rendering: geometricPrecision;
 }
-.agent-chibi-face,
-.agent-chibi-arm,
-.agent-chibi-leg {
-  fill: #fde4d3;
+.agent-voxel-shadow {
+  fill: rgb(15 23 42 / 0.2);
 }
-.agent-chibi-hair {
-  fill: rgb(var(--color-accent));
+.agent-voxel-head-top {
+  fill: #d8a15f;
 }
-.agent-chibi-ahoge {
-  fill: none;
-  stroke: rgb(var(--color-accent));
-  stroke-width: 5;
-  stroke-linecap: round;
+.agent-voxel-head-side {
+  fill: #9a643d;
 }
-.agent-chibi-body {
-  fill: rgb(var(--color-accent) / 0.92);
+.agent-voxel-face {
+  fill: #c98145;
 }
-.agent-chibi-eye {
-  fill: #3b2f3a;
+.agent-voxel-ear {
+  fill: #c98145;
 }
-.agent-chibi-blush {
+.agent-voxel-inner-ear,
+.agent-voxel-nose {
   fill: #f4a3ac;
-  opacity: 0.78;
 }
-.agent-chibi-mouth {
+.agent-voxel-face-patch,
+.agent-voxel-muzzle,
+.agent-voxel-belly {
+  fill: #f2d0a4;
+}
+.agent-voxel-eye {
+  fill: #111827;
+}
+.agent-voxel-mouth {
+  fill: #5a3323;
+}
+.agent-voxel-whisker {
   fill: none;
-  stroke: #3b2f3a;
-  stroke-width: 2.4;
-  stroke-linecap: round;
+  stroke: #5a3323;
+  stroke-width: 2;
+  stroke-linecap: square;
 }
-.agent-chibi-spark {
+.agent-voxel-body,
+.agent-voxel-tail,
+.agent-voxel-paw {
+  fill: #b8703c;
+}
+.agent-voxel-tail rect:nth-child(2) {
+  fill: #9a643d;
+}
+.agent-voxel-tail rect:nth-child(3) {
+  fill: #d8a15f;
+}
+.agent-voxel-body-shade {
+  fill: #9a643d;
+}
+.agent-voxel-collar {
+  fill: #256d5a;
+}
+.agent-voxel-tag {
+  fill: #67e8f9;
+}
+.agent-voxel-paw {
+  fill: #f2d0a4;
+}
+.agent-voxel-spark {
   fill: rgb(var(--color-accent));
   opacity: 0;
 }
 
 /* fill-box transform origins so rotate/scale pivot on each part itself */
-.agent-chibi-bob,
-.agent-chibi-eyes,
-.agent-chibi-arm,
-.agent-chibi-ahoge,
-.agent-chibi-spark {
+.agent-voxel-bob,
+.agent-voxel-head,
+.agent-voxel-eyes,
+.agent-voxel-ear,
+.agent-voxel-tail,
+.agent-voxel-paw,
+.agent-voxel-spark,
+.agent-voxel-tag {
   transform-box: fill-box;
 }
-.agent-chibi-bob {
+.agent-voxel-bob {
   transform-origin: 50% 100%;
 }
-.agent-chibi-eyes {
+.agent-voxel-head {
+  transform-origin: 50% 100%;
+}
+.agent-voxel-eyes {
   transform-origin: 50% 50%;
 }
-.agent-chibi-arm {
-  transform-origin: 50% 8%;
+.agent-voxel-ear {
+  transform-origin: 50% 100%;
 }
-.agent-chibi-ahoge {
-  transform-origin: 35% 90%;
+.agent-voxel-tail {
+  transform-origin: 8% 65%;
 }
-.agent-chibi-spark {
+.agent-voxel-paw {
+  transform-origin: 50% 50%;
+}
+.agent-voxel-spark,
+.agent-voxel-tag {
   transform-origin: 50% 50%;
 }
 
 /* eyes blink in both states */
-.agent-chibi-eyes {
-  animation: agent-blink 5s infinite;
+.agent-voxel-eyes {
+  animation: agent-voxel-blink 5.8s infinite;
 }
 
-/* idle: gentle breathing + a slow ahoge sway */
-.agent-chibi[data-running="false"] .agent-chibi-bob {
-  animation: agent-breathe 3.6s ease-in-out infinite;
+/* idle: slight mechanical hover and a soft status light */
+.agent-voxel[data-running="false"] .agent-voxel-bob {
+  animation: agent-voxel-idle 3.8s ease-in-out infinite;
 }
-.agent-chibi[data-running="false"] .agent-chibi-ahoge {
-  animation: agent-ahoge 4.4s ease-in-out infinite;
+.agent-voxel[data-running="false"] .agent-voxel-head {
+  animation: agent-voxel-head-idle 4.2s ease-in-out infinite;
+}
+.agent-voxel[data-running="false"] .agent-voxel-tail {
+  animation: agent-voxel-tail-idle 3.2s steps(2, end) infinite;
+}
+.agent-voxel[data-running="false"] .agent-voxel-tag {
+  animation: agent-voxel-light 2.8s ease-in-out infinite;
 }
 
-/* running: bouncing body, swinging limbs, bobbing ahoge, sparkles */
-.agent-chibi[data-running="true"] .agent-chibi-bob {
-  animation: agent-bob 0.52s ease-in-out infinite;
+/* running: blocky work-cycle motion with square spark pixels */
+.agent-voxel[data-running="true"] .agent-voxel-bob {
+  animation: agent-voxel-run 0.58s steps(2, end) infinite;
 }
-.agent-chibi[data-running="true"] .agent-chibi-ahoge {
-  animation: agent-ahoge 0.9s ease-in-out infinite;
+.agent-voxel[data-running="true"] .agent-voxel-head {
+  animation: agent-voxel-head-run 0.58s steps(2, end) infinite;
 }
-.agent-chibi[data-running="true"] .agent-chibi-arm-l {
-  animation: agent-arm 0.52s ease-in-out infinite;
+.agent-voxel[data-running="true"] .agent-voxel-ear-l {
+  animation: agent-voxel-ear 0.9s steps(2, end) infinite;
 }
-.agent-chibi[data-running="true"] .agent-chibi-arm-r {
-  animation: agent-arm 0.52s ease-in-out infinite reverse;
+.agent-voxel[data-running="true"] .agent-voxel-ear-r {
+  animation: agent-voxel-ear 0.9s steps(2, end) infinite reverse;
 }
-.agent-chibi[data-running="true"] .agent-chibi-leg-l {
-  animation: agent-leg 0.52s ease-in-out infinite;
+.agent-voxel[data-running="true"] .agent-voxel-tail {
+  animation: agent-voxel-tail-run 0.58s steps(2, end) infinite;
 }
-.agent-chibi[data-running="true"] .agent-chibi-leg-r {
-  animation: agent-leg 0.52s ease-in-out infinite;
-  animation-delay: 0.26s;
+.agent-voxel[data-running="true"] .agent-voxel-paw-l {
+  animation: agent-voxel-paw 0.58s steps(2, end) infinite;
 }
-.agent-chibi[data-running="true"] .agent-chibi-spark {
-  animation: agent-spark 1.2s ease-in-out infinite;
+.agent-voxel[data-running="true"] .agent-voxel-paw-r {
+  animation: agent-voxel-paw 0.58s steps(2, end) infinite reverse;
 }
-.agent-chibi[data-running="true"] .agent-chibi-spark-late {
+.agent-voxel[data-running="true"] .agent-voxel-tag {
+  animation: agent-voxel-light 0.75s steps(2, end) infinite;
+}
+.agent-voxel[data-running="true"] .agent-voxel-spark {
+  animation: agent-voxel-spark 1.1s steps(3, end) infinite;
+}
+.agent-voxel[data-running="true"] .agent-voxel-spark-late {
   animation-delay: 0.6s;
 }
 
@@ -473,25 +524,25 @@ select {
     opacity: 0.35;
   }
 }
-@keyframes agent-breathe {
-  0%,
-  100% {
-    transform: scale(1);
-  }
-  50% {
-    transform: scale(1.04);
-  }
-}
-@keyframes agent-bob {
+@keyframes agent-voxel-idle {
   0%,
   100% {
     transform: translateY(0);
   }
   50% {
-    transform: translateY(-7px);
+    transform: translateY(-3px);
   }
 }
-@keyframes agent-blink {
+@keyframes agent-voxel-run {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+@keyframes agent-voxel-blink {
   0%,
   90%,
   100% {
@@ -501,38 +552,75 @@ select {
     transform: scaleY(0.12);
   }
 }
-@keyframes agent-ahoge {
+@keyframes agent-voxel-head-idle {
   0%,
   100% {
-    transform: rotate(-10deg);
+    transform: rotate(-1.5deg);
+  }
+  50% {
+    transform: rotate(1.5deg);
+  }
+}
+@keyframes agent-voxel-head-run {
+  0%,
+  100% {
+    transform: rotate(-2deg);
+  }
+  50% {
+    transform: rotate(2deg);
+  }
+}
+@keyframes agent-voxel-ear {
+  0%,
+  100% {
+    transform: rotate(-3deg);
+  }
+  50% {
+    transform: rotate(3deg);
+  }
+}
+@keyframes agent-voxel-tail-idle {
+  0%,
+  100% {
+    transform: rotate(-5deg);
+  }
+  50% {
+    transform: rotate(7deg);
+  }
+}
+@keyframes agent-voxel-tail-run {
+  0%,
+  100% {
+    transform: rotate(-12deg);
   }
   50% {
     transform: rotate(14deg);
   }
 }
-@keyframes agent-arm {
-  0%,
-  100% {
-    transform: rotate(-26deg);
-  }
-  50% {
-    transform: rotate(22deg);
-  }
-}
-@keyframes agent-leg {
+@keyframes agent-voxel-paw {
   0%,
   100% {
     transform: translateY(0);
   }
   50% {
-    transform: translateY(-8px);
+    transform: translateY(-5px);
   }
 }
-@keyframes agent-spark {
+@keyframes agent-voxel-light {
+  0%,
+  100% {
+    opacity: 0.52;
+  }
+  50% {
+    opacity: 1;
+    filter: drop-shadow(0 0 6px rgb(103 232 249 / 0.75));
+  }
+}
+@keyframes agent-voxel-spark {
   0%,
   100% {
     opacity: 0;
-    transform: scale(0.4);
+    transform: scale(0.5);
   }
   50% {
     opacity: 1;
@@ -544,12 +632,14 @@ select {
   .agent-edge-panel,
   .agent-edge-tab,
   .agent-edge-tab-dot,
-  .agent-chibi-bob,
-  .agent-chibi-eyes,
-  .agent-chibi-ahoge,
-  .agent-chibi-arm,
-  .agent-chibi-leg,
-  .agent-chibi-spark {
+  .agent-voxel-bob,
+  .agent-voxel-head,
+  .agent-voxel-eyes,
+  .agent-voxel-ear,
+  .agent-voxel-tail,
+  .agent-voxel-paw,
+  .agent-voxel-spark,
+  .agent-voxel-tag {
     animation: none !important;
     transition: none !important;
   }
