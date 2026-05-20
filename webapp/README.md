@@ -2,14 +2,14 @@
 
 Local web UI for CLIO - LLM WIKI (Next.js 15 + React 19 + Tailwind 3.4).
 
-The wiki is operated through four vertical tabs on the left: **Chat / Explorer / Graph / Settings**.
+The wiki is operated through five vertical tabs on the left: **Chat / Explorer / Graph / Automations / Settings**.
 
 ## Directory Roles
 
 | Path | Description |
 |---|---|
 | `app/` | Next.js App Router. The `(protected)` route group is session-guarded. |
-| `app/api/` | Server routes: auth, files, chat, graph, and settings. |
+| `app/api/` | Server routes: auth, files, chat, graph, automation, auto triggers, and settings. |
 | `components/` | UI components such as Sidebar and AuthCard. |
 | `lib/` | Server libraries such as `paths.ts`, `config.ts`, and `auth.ts`. |
 
@@ -55,6 +55,7 @@ On first run, set the administrator password at `/setup`. The password hash and 
 - `bcryptjs` — password hashing
 - `jose` — session JWT (HS256)
 - `mermaid` — Explorer Markdown diagram rendering
+- `cytoscape` — Graph tab network rendering
 - `zod` — input/config validation
 - `tailwindcss` 3.4
 

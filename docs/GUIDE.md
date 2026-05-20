@@ -8,7 +8,7 @@ This guide explains how to install CLIO, start the web UI, add raw data, ingest 
 
 CLIO is a local-first LLM Wiki workbench.
 
-You collect source material in `raw/`. A coding agent reads that material and maintains a Markdown wiki in `wiki/`. The browser UI gives you four main tabs:
+You collect source material in `raw/`. A coding agent reads that material and maintains a Markdown wiki in `wiki/`. The browser UI gives you five main tabs:
 
 | Tab | What you do there |
 |---|---|
@@ -16,7 +16,7 @@ You collect source material in `raw/`. A coding agent reads that material and ma
 | Explorer | Browse and inspect source files, wiki pages, logs, and reports. |
 | Graph | Build or update the knowledge graph. |
 | Automations | Create scheduled multi-CLI jobs that write draft-only records under `raw/automation/`. |
-| Settings | Choose the default agent CLI, configure host/port, Auto Ingest, language, graph options, and password. |
+| Settings | Choose the default agent CLI, configure host/port, Auto Ingest, Auto Lint, language/theme, graph options, and password. |
 
 The core idea is simple:
 
@@ -30,6 +30,12 @@ flowchart TD
 ```
 
 CLIO is not just a chat interface over documents. The important result is the generated wiki: ordinary Markdown files that can be read, searched, reviewed, backed up, and improved.
+
+### Current Implementation Snapshot
+
+The current CLIO app includes authenticated first-run setup and login, Korean/English language switching, a native `clio` CLI, Chat sessions with optional external captures under `raw/chat/`, Explorer browsing plus upload/rename/delete actions where allowed, a Cytoscape-based graph view, Auto Ingest, Auto Lint, draft-only scheduled Automations, release/update scripts, and optional systemd service installation.
+
+Some interfaces are still intentionally active areas of development: project skills, graph output shape, automation templates, and setup ergonomics may change between releases.
 
 ## 2. Mental Model
 
@@ -111,6 +117,8 @@ The repository includes local instructions in `.agents/skills/`. These tell the 
 - Marp CLI for slide-style answers
 
 `setup.sh` attempts to install or upgrade graphify unless you pass `--skip-graphify`. Agent CLIs are detected, but not installed by default. You can request a best-effort install with `--install-cli=codex,claude,gemini`.
+
+For browser-based automation jobs, `./setup.sh --with-agent-browser` performs a best-effort install of the optional `agent-browser` helper.
 
 ## 4. Install CLIO
 
@@ -351,7 +359,7 @@ In **Settings**:
 
 1. Check the detected CLI list.
 2. Click **Use** for the CLI you want.
-3. Tune the maximum concurrent agents and worker name prefix used by `/ingest`, `/ingest-loop`, `/query`, and `/lint`. The default is 5 workers named like `agent-1`, `agent-2`.
+3. Tune the maximum concurrent agents and worker name prefix used by `/ingest`, `/ingest-loop`, `/query`, and `/lint`. The default is 2 workers named like `agent-1`, `agent-2`.
 4. If the CLI is missing, enter its manual path or install it on the host.
 5. Save settings.
 
@@ -396,6 +404,22 @@ CLIO processes leaf directories first. A leaf directory is a directory with no c
 mkdir -p raw/demo
 cp examples/raw/llm-wiki-demo.md raw/demo/
 ```
+
+### Optional: Preprocess Noisy Raw Data
+
+Use preprocess when a `raw/` folder contains obvious noise such as ads, navigation, footers, empty files, or duplicate snapshots. Preprocess is deliberately two-phase:
+
+```text
+/preprocess raw/<path> remove navigation/footer boilerplate and empty snapshots
+```
+
+The dry-run writes a plan under `wiki/.progress/preprocess/` and summarizes what would change. Only after reviewing that plan should you apply it:
+
+```text
+/preprocess --apply
+```
+
+Apply mode may move whole files to `raw/.trash/` or rewrite a file in place after backing the original up to `raw/.trash/`. Outside this workflow, agents should treat `raw/` as immutable.
 
 ## 9. Ingest Data
 
@@ -568,6 +592,25 @@ wiki/lint/YYYY-MM-DD.md
 
 If the same day has multiple reports, CLIO should create `_2`, `_3`, and so on rather than overwrite old reports.
 
+### Auto Lint
+
+Auto Lint is configured in **Settings**. It has two signals:
+
+| Signal | Behavior |
+|---|---|
+| Counter | Counts ingest entries since the last lint entry and shows a recommendation when the threshold is reached. This does not auto-run lint. |
+| Cron | Runs `/lint` on a daily, weekly, or monthly schedule when enabled. |
+
+Useful settings:
+
+| Setting | Meaning |
+|---|---|
+| Enabled | Turns Auto Lint on or off. |
+| Ingest count threshold | Number of ingest log entries before the UI recommends a lint run. |
+| Run on a schedule | Enables scheduled cron-style lint runs. |
+| Apply `--fix` | Passes `--fix` to scheduled or manual Auto Lint runs. |
+| Skip if busy | Skips when ingest or lint locks are present. |
+
 ## 13. Auto Ingest
 
 Auto Ingest is configured in **Settings**.
@@ -635,13 +678,16 @@ Useful defaults:
 |---|---:|---|
 | `server.port` | `9091` | Web UI port. |
 | `server.host` | `0.0.0.0` | LAN-reachable host binding. |
-| `agent.orchestration.maxConcurrentAgents` | `5` | Maximum worker agents for ingest/query/lint operations. |
+| `agent.orchestration.maxConcurrentAgents` | `2` | Maximum worker agents for ingest/query/lint operations. |
 | `chunking.maxFilesPerInvocation` | `4` | Maximum raw files per ingest agent call. |
 | `chunking.maxBytesPerFile` | `131072` | Large files are read head + tail. |
 | `graph.autoUpdateOnIngest` | `true` | Run graph synchronization after ingest progress. |
 | `graph.autoUpdateStrategy` | `auto` | `auto` skips partial graph updates for small ingests and runs them for large workloads; `finalOnly` never runs partials; `partialAndFinal` always does. |
 | `graph.partialThresholds` | `{ minLeaves: 4, minFiles: 16, minBytes: 1048576, minSubChunks: 4 }` | Workload thresholds used by `auto` to decide whether `update-partial` is worth running before the final graph update. |
 | `autoIngest.enabled` | `false` | Auto Ingest starts disabled. |
+| `autoLint.enabled` | `false` | Auto Lint starts disabled. |
+| `autoLint.counter.threshold` | `10` | Ingest count that triggers a lint recommendation. |
+| `autoLint.cron.enabled` | `false` | Scheduled lint runs start disabled. |
 | `automation.enabled` | `false` | Automation scheduler starts disabled. |
 
 Prefer changing settings through the UI unless you know exactly what you are editing.
@@ -690,6 +736,8 @@ Check:
 - a message can be sent from Chat
 - Graph tab shows empty state or current graph state
 - Build button is visible
+- Automations tab opens and shows scheduler status
+- Settings exposes Auto Ingest and Auto Lint panels
 
 Stop:
 

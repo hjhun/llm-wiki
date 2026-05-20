@@ -16,9 +16,10 @@ Most "chat with your documents" tools hide knowledge in a transcript or an opaqu
 |---|---|
 | Local-first source library | Your original material lives in `raw/`; agents treat it as read-only. |
 | Maintained Markdown wiki | Summaries, concepts, entities, answers, lint reports, and graph reports live in `wiki/`. |
-| Agent-operated workflows | `codex`, `claude`, `gemini`, or `cline` can run `/ingest`, `/query`, `/lint`, and graph workflows. |
-| Browser workbench | A Next.js UI provides Chat, Explorer, Graph, and Settings tabs. |
+| Agent-operated workflows | `codex`, `claude`, `gemini`, or `cline` can run `/ingest`, `/query`, `/lint`, preprocess, and graph workflows. |
+| Browser workbench | A Next.js UI provides Chat, Explorer, Graph, Automations, and Settings tabs. |
 | Incremental processing | Large folders are processed leaf-first in small chunks, then merged into a coherent wiki. |
+| Automation support | Auto Ingest, Auto Lint, and draft-only scheduled jobs help keep the wiki moving without hiding the artifacts. |
 | Reviewable outputs | Wiki pages, logs, sessions, and graph JSON are files you can inspect and version. |
 
 ## How It Works
@@ -34,14 +35,17 @@ flowchart LR
     Wiki --> Query["/query<br/>cited answers"]
     Wiki --> Graph["Graph tab<br/>knowledge graph"]
     Wiki --> Lint["/lint<br/>health checks"]
+    Skills --> Automation["Automations<br/>draft-only scheduled jobs"]
+    Automation --> RawAutomation["raw/automation/<br/>run records"]
 ```
 
 The important split is ownership:
 
 | Path | Owner | Purpose |
 |---|---|---|
-| `raw/` | You | Original source files. CLIO and agents must not edit, move, or delete them. |
+| `raw/` | You | Original source files. Agents treat them as immutable except through explicit preprocess or user-driven file operations. |
 | `raw/chat/` | You via Chat | User-approved external captures from Chat, such as browser/search/tool findings, ready for later ingest. |
+| `raw/automation/` | Automations | Draft-only scheduled job records. Treat them as source candidates for later ingest. |
 | `wiki/` | Agent | Generated and maintained Markdown wiki. |
 | `wiki/sources/YYYY/YYYY-MM/` | Agent | One source summary page per original source. |
 | `wiki/answers/` | Agent | Saved answers from query workflows. |
@@ -98,8 +102,15 @@ The project setup and full workflows need:
   Release installs try the prebuilt `clio` asset for Ubuntu, Windows, or macOS
   first, then fall back to a local cargo build when no matching asset exists.
 - Optional: `graphify`, `qmd`, and Marp CLI
+- Optional: `agent-browser` for browser-based automation jobs
 
 `setup.sh` detects installed agent CLIs and writes the result to `config/cli-detected.json`. Missing CLIs can be installed manually or configured by path in Settings.
+
+## Current State
+
+The current app is a working local-first workbench rather than a thin prototype. The implemented surfaces include authenticated setup/login, a bilingual Korean/English UI, Chat sessions with append-only external captures under `raw/chat/`, Explorer browsing for `raw/`, `wiki/`, and `sessions/` with file operations where allowed, Cytoscape graph inspection, Auto Ingest, Auto Lint, draft-only Automations, the native `clio` CLI, release/update scripts, and optional systemd service installation.
+
+The project is still evolving. The agent skills, graph schema, automation templates, and setup ergonomics should be treated as active interfaces that may change between releases.
 
 ## First Wiki in Five Minutes
 
@@ -143,6 +154,7 @@ Run these from the **Chat** tab:
 | `/query <question>` | Answer from the wiki first, with citations. |
 | `/lint` | Check metadata, links, contradictions, index consistency, and sensitive information. |
 | `/lint --fix` | Apply safe automatic fixes and write a lint report. |
+| `/preprocess raw/<path> <rules>` | Dry-run cleanup planning for noise under `raw/`; only `/preprocess --apply` mutates files after backups. |
 
 Run graph workflows from the **Graph** tab:
 
@@ -222,10 +234,11 @@ Tips:
 
 | Tab | Purpose |
 |---|---|
-| Chat | Run `/ingest`, `/ingest-loop`, `/query`, `/lint`, or natural-language requests. |
+| Chat | Run `/ingest`, `/ingest-loop`, `/query`, `/lint`, `/preprocess`, or natural-language requests. |
 | Explorer | Browse `raw/`, `wiki/`, and generated reports. |
 | Graph | Build, update, and inspect the knowledge graph. |
-| Settings | Configure agent CLI, server host/port, graph behavior, Auto Ingest, language, and password. |
+| Automations | Schedule draft-only multi-CLI jobs and inspect their run records under `raw/automation/`. |
+| Settings | Configure agent CLI, server host/port, graph behavior, Auto Ingest, Auto Lint, language, theme, default tab, and password. |
 
 ## Setup Options
 
@@ -289,6 +302,7 @@ Common `setup.sh` options:
 | `--skip-cli` | Skip building the Rust `clio` CLI. |
 | `--with-qmd` | Best-effort optional qmd setup. |
 | `--with-marp` | Best-effort optional Marp CLI setup. |
+| `--with-agent-browser` | Best-effort optional agent-browser setup for browser automation tasks. |
 | `--install-cli=<names>` | Best-effort CLI install for `codex`, `claude`, `gemini`, or `cline`. |
 
 Runtime files are written under `.run/`:
@@ -425,4 +439,4 @@ This project is licensed under the Apache License 2.0. See [LICENSE](./LICENSE).
 
 ## Status
 
-CLIO is an early local-first workbench. The main surfaces are implemented, but the skills, graph schema, and setup ergonomics are expected to evolve.
+CLIO is a usable local-first workbench with the main browser, CLI, ingest/query/lint, graph, automation, and setup surfaces implemented. The skills, graph schema, automation templates, and setup ergonomics are still expected to evolve.

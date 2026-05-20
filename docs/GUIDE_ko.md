@@ -8,7 +8,7 @@ English guide: [GUIDE.md](./GUIDE.md)
 
 CLIO는 로컬 우선(local-first) LLM Wiki 워크벤치입니다.
 
-사용자는 원본 자료를 `raw/`에 모읍니다. 선택한 코딩 에이전트는 그 자료를 읽고 `wiki/` 아래에 사람이 읽을 수 있는 Markdown 위키를 유지합니다. 브라우저 UI에는 네 가지 주요 탭이 있습니다.
+사용자는 원본 자료를 `raw/`에 모읍니다. 선택한 코딩 에이전트는 그 자료를 읽고 `wiki/` 아래에 사람이 읽을 수 있는 Markdown 위키를 유지합니다. 브라우저 UI에는 다섯 가지 주요 탭이 있습니다.
 
 | 탭 | 할 수 있는 일 |
 |---|---|
@@ -16,7 +16,7 @@ CLIO는 로컬 우선(local-first) LLM Wiki 워크벤치입니다.
 | Explorer | 원본 파일, 위키 페이지, 로그, 리포트 탐색 |
 | Graph | 지식 그래프 빌드 및 업데이트 |
 | Automations | 여러 CLI로 주기 작업을 실행하고 `raw/automation/`에 draft-only 기록 저장 |
-| Settings | 기본 에이전트 CLI, 서버, 자동 인제스트, 언어, 그래프, 비밀번호 설정 |
+| Settings | 기본 에이전트 CLI, 서버, 자동 인제스트, 자동 Lint, 언어/테마, 그래프, 비밀번호 설정 |
 
 핵심 흐름은 다음과 같습니다.
 
@@ -30,6 +30,12 @@ flowchart TD
 ```
 
 CLIO는 단순히 문서에 채팅하는 도구가 아닙니다. 중요한 결과물은 `wiki/`에 남는 Markdown 파일입니다. 이 파일들은 사람이 읽고, 검색하고, 검토하고, 백업하고, 버전 관리할 수 있습니다.
+
+### 현재 구현 상태 요약
+
+현재 CLIO 앱에는 첫 실행 설정과 로그인, 한국어/영어 전환, 네이티브 `clio` CLI, `raw/chat/` 외부 캡처를 지원하는 Chat 세션, Explorer 파일 탐색과 허용된 위치의 업로드/이름 변경/삭제 동작, Cytoscape 기반 Graph 보기, 자동 인제스트, 자동 Lint, draft-only 예약 Automations, 릴리스/업데이트 스크립트, 선택적 systemd 서비스 설치가 구현되어 있습니다.
+
+프로젝트 스킬, 그래프 출력 형식, 자동화 템플릿, 설치 편의성은 계속 발전 중인 인터페이스입니다. 릴리스 사이에서 세부 동작이 바뀔 수 있습니다.
 
 ## 2. 기본 개념
 
@@ -108,6 +114,8 @@ CLIO는 단순히 문서에 채팅하는 도구가 아닙니다. 중요한 결�
 - 슬라이드 답변 생성을 위한 Marp CLI
 
 `setup.sh`는 기본적으로 graphify 설치 또는 업그레이드를 시도합니다. 원하지 않으면 `--skip-graphify`를 사용하세요. 코딩 에이전트 CLI는 자동 감지하지만 기본적으로 자동 설치하지 않습니다. 필요하면 `--install-cli=codex,claude,gemini`처럼 명시적으로 요청할 수 있습니다.
+
+브라우저 기반 자동화 작업이 필요하다면 `./setup.sh --with-agent-browser`로 선택 도구인 `agent-browser` 설치를 best-effort로 시도할 수 있습니다.
 
 ## 4. 설치하기
 
@@ -345,7 +353,7 @@ CLIO의 ingest/query/lint/graph 작업은 웹앱 자체가 직접 수행하지 �
 
 1. 감지된 CLI 목록을 확인합니다.
 2. 사용할 CLI의 **Use** 버튼을 누릅니다.
-3. `/ingest`, `/ingest-loop`, `/query`, `/lint`에 사용할 최대 동시 에이전트 수와 이름 prefix를 조정합니다. 기본값은 5개이며 워커 이름은 `agent-1`, `agent-2`처럼 붙습니다.
+3. `/ingest`, `/ingest-loop`, `/query`, `/lint`에 사용할 최대 동시 에이전트 수와 이름 prefix를 조정합니다. 기본값은 2개이며 워커 이름은 `agent-1`, `agent-2`처럼 붙습니다.
 4. CLI가 보이지 않으면 호스트에 설치하거나 수동 경로를 입력합니다.
 5. 저장합니다.
 
@@ -390,6 +398,22 @@ CLIO는 leaf directory를 먼저 처리합니다. leaf directory는 자식 디�
 mkdir -p raw/demo
 cp examples/raw/llm-wiki-demo.md raw/demo/
 ```
+
+### 선택 사항: 노이즈가 많은 raw 데이터 전처리
+
+광고, 내비게이션, footer, 빈 파일, 중복 snapshot처럼 명확한 노이즈가 `raw/` 폴더에 섞여 있을 때 preprocess를 사용합니다. preprocess는 반드시 두 단계로 동작합니다.
+
+```text
+/preprocess raw/<path> navigation/footer boilerplate와 빈 snapshot 제거
+```
+
+dry-run은 `wiki/.progress/preprocess/` 아래에 계획을 쓰고, 변경될 내용을 요약합니다. 이 계획을 검토한 뒤에만 적용합니다.
+
+```text
+/preprocess --apply
+```
+
+apply 단계에서는 파일 전체를 `raw/.trash/`로 옮기거나, 원본을 `raw/.trash/`에 백업한 뒤 파일 내용을 제자리에서 정리할 수 있습니다. 이 workflow 밖에서 에이전트는 `raw/`를 immutable로 취급해야 합니다.
 
 ## 9. 데이터 인제스트하기
 
@@ -562,6 +586,25 @@ wiki/lint/YYYY-MM-DD.md
 
 같은 날 여러 번 실행하면 기존 리포트를 덮어쓰지 않고 `_2`, `_3` 같은 suffix를 붙여 새 파일을 만들어야 합니다.
 
+### 자동 Lint
+
+자동 Lint는 **Settings**에서 설정합니다. 두 가지 신호를 사용합니다.
+
+| 신호 | 동작 |
+|---|---|
+| Counter | 마지막 lint 이후 ingest 로그 entry 수를 세고, 임계값에 도달하면 UI에 lint 권장을 표시합니다. 이 신호만으로 lint를 자동 실행하지는 않습니다. |
+| Cron | 활성화하면 매일/매주/매월 일정에 따라 `/lint`를 실행합니다. |
+
+중요 설정:
+
+| 설정 | 의미 |
+|---|---|
+| Enabled | 자동 Lint 켜기/끄기 |
+| Ingest count threshold | UI가 lint 실행을 권장하기 전까지 허용할 ingest 로그 entry 수 |
+| Run on a schedule | cron 방식 예약 lint 실행 활성화 |
+| Apply `--fix` | 예약 또는 수동 Auto Lint 실행 시 `--fix` 전달 |
+| Skip if busy | ingest 또는 lint lock이 있으면 실행 건너뜀 |
+
 ## 13. 자동 인제스트
 
 자동 인제스트는 **Settings**에서 설정합니다.
@@ -628,13 +671,16 @@ config/local.json
 |---|---:|---|
 | `server.port` | `9091` | 웹 UI 포트 |
 | `server.host` | `0.0.0.0` | LAN에서 접근 가능한 host binding |
-| `agent.orchestration.maxConcurrentAgents` | `5` | ingest/query/lint 작업에 동시에 띄울 수 있는 워커 에이전트 수 |
+| `agent.orchestration.maxConcurrentAgents` | `2` | ingest/query/lint 작업에 동시에 띄울 수 있는 워커 에이전트 수 |
 | `chunking.maxFilesPerInvocation` | `4` | 에이전트 호출 1회당 최대 raw 파일 수 |
 | `chunking.maxBytesPerFile` | `131072` | 큰 파일은 head + tail만 읽음 |
 | `graph.autoUpdateOnIngest` | `true` | ingest 진행 후 graph 동기화 실행 |
 | `graph.autoUpdateStrategy` | `auto` | `auto`는 작은 ingest에서는 partial graph update를 생략하고 큰 작업에서만 실행합니다. `finalOnly`는 partial을 항상 생략하고, `partialAndFinal`은 항상 실행합니다. |
 | `graph.partialThresholds` | `{ minLeaves: 4, minFiles: 16, minBytes: 1048576, minSubChunks: 4 }` | `auto`가 최종 graph update 전 `update-partial` 실행 여부를 판단할 때 쓰는 작업 규모 임계값 |
 | `autoIngest.enabled` | `false` | 자동 인제스트 기본 비활성화 |
+| `autoLint.enabled` | `false` | 자동 Lint 기본 비활성화 |
+| `autoLint.counter.threshold` | `10` | lint 권장을 표시하는 ingest 로그 entry 수 |
+| `autoLint.cron.enabled` | `false` | 예약 lint 실행 기본 비활성화 |
 | `automation.enabled` | `false` | 자동화 스케줄러 기본 비활성화 |
 
 가능하면 UI에서 설정을 바꾸고, 수동 편집은 필요한 경우에만 하세요.
@@ -683,6 +729,8 @@ http://127.0.0.1:9091
 - Chat에서 메시지 전송 가능
 - Graph 탭이 empty state 또는 현재 graph state 표시
 - Build 버튼이 보임
+- Automations 탭이 열리고 scheduler 상태가 보임
+- Settings에서 자동 인제스트와 자동 Lint 패널이 보임
 
 종료:
 
