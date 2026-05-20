@@ -45,7 +45,8 @@ Usage: install.sh [install|update|upgrade] [installer options] [setup.sh options
 
 Commands:
   install           Download CLIO, create a new project directory, and run setup.sh.
-                    This is the default command.
+                    If the directory already contains CLIO, refresh project files
+                    while preserving user data. This is the default command.
   update, upgrade   Update an existing CLIO directory from the selected release/ref.
                     Preserves raw/, wiki/, sessions/, config/local.json, .run/,
                     webapp/node_modules/, webapp/.next/, and webapp/.env*.
@@ -296,7 +297,7 @@ sync_path() {
   fi
 
   if [[ -d "${source_path}" && ! -L "${source_path}" ]]; then
-    rsync -a --delete \
+    rsync -a --checksum --delete \
       --exclude 'node_modules/' \
       --exclude '.next/' \
       --exclude '.env' \
@@ -305,7 +306,7 @@ sync_path() {
     return
   fi
 
-  rsync -a "${source_path}" "${target_path}"
+  rsync -a --checksum "${source_path}" "${target_path}"
 }
 
 sync_path_without_rsync() {
@@ -350,9 +351,19 @@ run_install() {
   local target_dir="$3"
   local tmp_dir="$4"
   local extracted_root=""
+  local not_clio_message=""
 
   if [[ -e "${target_dir}" || -L "${target_dir}" ]]; then
-    fail "install directory already exists: ${target_dir}. Choose another path with --dir; this installer never overwrites existing data."
+    if ! is_clio_project_dir "${target_dir}"; then
+      not_clio_message="install directory already exists and does not look"
+      not_clio_message+=" like a CLIO project: ${target_dir}."
+      not_clio_message+=" Choose another path with --dir."
+      fail "${not_clio_message}"
+    fi
+    log "install directory already exists; refreshing project files"
+    log "preserving raw/, wiki/, sessions/, local config, and runtime data"
+    run_update "${repo_slug}" "${ref}" "${target_dir}" "${tmp_dir}"
+    return
   fi
 
   extracted_root="$(download_source_archive "${repo_slug}" "${ref}" "${tmp_dir}")"

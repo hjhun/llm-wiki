@@ -126,7 +126,7 @@ cd ~/.clio
 3. `setup.sh`를 실행해 웹앱과 `clio` CLI를 빌드합니다.
 4. 웹앱을 백그라운드로 시작합니다.
 
-설치 스크립트는 기존 디렉터리를 덮어쓰지 않습니다. `~/.clio`가 이미 있으면 다른 경로를 지정하세요.
+`~/.clio`가 이미 CLIO 설치본이면 설치 스크립트를 다시 실행해도 `raw/`, `wiki/`, `sessions/`, 로컬 설정, 런타임 파일, 웹앱 빌드/의존성 산출물은 보존하고 프로젝트 파일만 새 릴리스/ref로 갱신합니다. 별도 설치본을 만들고 싶으면 다른 경로를 지정하세요.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/hjhun/llm-wiki/main/scripts/install.sh | bash -s -- --dir ./my-clio --start
@@ -164,7 +164,7 @@ curl -fsSL https://raw.githubusercontent.com/hjhun/llm-wiki/main/scripts/install
 
 | 옵션 | 설명 |
 |---|---|
-| `install` | 기본 command. 새 설치 디렉터리를 만듭니다 |
+| `install` | 기본 command. 새 설치 디렉터리를 만들거나, 대상이 기존 CLIO 설치본이면 사용자 데이터를 보존한 채 프로젝트 파일을 갱신합니다 |
 | `update`, `upgrade` | 선택한 릴리스/ref에서 기존 설치본을 업데이트합니다. `raw/`, `wiki/`, `sessions/`, 로컬 설정, 런타임 파일, 웹앱 빌드/의존성 산출물은 보존합니다 |
 | `--dir <path>` | 설치 디렉터리. 기본값은 `~/.clio` |
 | `--version <ver>` | 설치할 GitHub 릴리스 태그 또는 `latest`. 기본값은 `latest` |

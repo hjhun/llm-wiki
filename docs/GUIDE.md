@@ -129,7 +129,7 @@ What this does:
 3. Runs `setup.sh`, which builds the web app and the `clio` CLI.
 4. Starts the web app in the background.
 
-The installer never overwrites an existing directory. If `~/.clio` already exists, choose another path:
+If `~/.clio` already contains CLIO, running the installer again refreshes project files while preserving `raw/`, `wiki/`, `sessions/`, local config, runtime files, and webapp build/dependency outputs. To create a separate install instead, choose another path:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/hjhun/llm-wiki/main/scripts/install.sh | bash -s -- --dir ./my-clio --start
@@ -167,7 +167,7 @@ curl -fsSL https://raw.githubusercontent.com/hjhun/llm-wiki/main/scripts/install
 
 | Option | Description |
 |---|---|
-| `install` | Default command. Create a new install directory. |
+| `install` | Default command. Create a new install directory, or refresh project files when the target already contains CLIO. |
 | `update`, `upgrade` | Update an existing install from the selected release/ref while preserving `raw/`, `wiki/`, `sessions/`, local config, runtime files, and webapp build/dependency outputs. |
 | `--dir <path>` | Install directory. Default: `~/.clio`. |
 | `--version <ver>` | GitHub release tag to install, or `latest`. Default: `latest`. |

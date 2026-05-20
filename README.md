@@ -61,7 +61,10 @@ cd ~/.clio
 ```
 
 The installer defaults to `~/.clio`. Pass `--dir <path>` (or set `CLIO_INSTALL_DIR`)
-to install somewhere else; the installer never overwrites an existing directory.
+to install somewhere else. If the target already contains CLIO, `install`
+refreshes project files while preserving `raw/`, `wiki/`, `sessions/`,
+`config/local.json`, `.run/`, `webapp/node_modules/`, `webapp/.next/`, and
+`webapp/.env*`.
 
 Open:
 
@@ -246,9 +249,9 @@ Installer options:
 
 | Option | Description |
 |---|---|
-| `install` | Default command. Create a new install directory. |
+| `install` | Default command. Create a new install directory, or refresh project files when the target already contains CLIO. |
 | `update`, `upgrade` | Update an existing install from the selected release/ref. Preserves `raw/`, `wiki/`, `sessions/`, `config/local.json`, `.run/`, `webapp/node_modules/`, `webapp/.next/`, and `webapp/.env*`. |
-| `--dir <path>` | Install directory. Default: `~/.clio`. The installer never overwrites an existing path. |
+| `--dir <path>` | Install directory. Default: `~/.clio`. Existing CLIO directories are refreshed with user data preserved. |
 | `--version <ver>` | GitHub release tag to install, or `latest`. Default: `latest`. |
 | `--ref <ref>` | GitHub tag, branch, or commit to install exactly. Overrides `--version`. |
 | `--repo <repo>` | GitHub repo as `owner/name` or a `github.com` URL. Default: `hjhun/llm-wiki`. |

@@ -100,6 +100,62 @@ grep -qx 'install' "${tmp_root}/npm.log" || fail "setup.sh did not install missi
 log "checking scripts/install.sh help"
 "${ROOT_DIR}/scripts/install.sh" --help >/dev/null
 
+log "checking install refreshes an existing CLIO directory"
+install_tmp="$(mktemp -d)"
+mkdir -p "${install_tmp}/archive/llm-wiki-fake/"{.agents/skills,cli-rs,config,docs,scripts,systemd,webapp}
+printf '%s\n' "#!/usr/bin/env bash" "exit 0" > "${install_tmp}/archive/llm-wiki-fake/setup.sh"
+printf '%s\n' '{"name":"fake-webapp"}' > "${install_tmp}/archive/llm-wiki-fake/webapp/package.json"
+printf '%s\n' "# fake llm wiki" > "${install_tmp}/archive/llm-wiki-fake/llm-wiki.md"
+printf '%s\n' "new readme" > "${install_tmp}/archive/llm-wiki-fake/README.md"
+touch \
+  "${install_tmp}/archive/llm-wiki-fake/.agents/skills/placeholder" \
+  "${install_tmp}/archive/llm-wiki-fake/cli-rs/placeholder" \
+  "${install_tmp}/archive/llm-wiki-fake/config/default.json" \
+  "${install_tmp}/archive/llm-wiki-fake/docs/placeholder" \
+  "${install_tmp}/archive/llm-wiki-fake/scripts/install.sh" \
+  "${install_tmp}/archive/llm-wiki-fake/systemd/clio-web.service" \
+  "${install_tmp}/archive/llm-wiki-fake/AGENTS.md" \
+  "${install_tmp}/archive/llm-wiki-fake/CLAUDE.md" \
+  "${install_tmp}/archive/llm-wiki-fake/LICENSE"
+(cd "${install_tmp}/archive" && tar -czf "${install_tmp}/source.tar.gz" llm-wiki-fake)
+
+mkdir -p "${install_tmp}/target/"{raw,wiki,sessions,config,webapp}
+printf '%s\n' "#!/usr/bin/env bash" "exit 0" > "${install_tmp}/target/setup.sh"
+printf '%s\n' '{"name":"old-webapp"}' > "${install_tmp}/target/webapp/package.json"
+printf '%s\n' "# old llm wiki" > "${install_tmp}/target/llm-wiki.md"
+printf '%s\n' "old readme" > "${install_tmp}/target/README.md"
+printf '%s\n' "raw data" > "${install_tmp}/target/raw/source.md"
+printf '%s\n' "wiki data" > "${install_tmp}/target/wiki/index.md"
+printf '%s\n' '{"auth":{"cliToken":"keep"}}' > "${install_tmp}/target/config/local.json"
+
+cat > "${install_tmp}/curl" <<'SH'
+#!/usr/bin/env bash
+output=""
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -o)
+      output="$2"
+      shift 2
+      ;;
+    *)
+      shift
+      ;;
+  esac
+done
+[[ -n "${output}" ]] || exit 2
+cp "${CLIO_FAKE_ARCHIVE}" "${output}"
+SH
+chmod +x "${install_tmp}/curl"
+
+CLIO_FAKE_ARCHIVE="${install_tmp}/source.tar.gz" \
+  PATH="${install_tmp}:${PATH}" \
+  "${ROOT_DIR}/scripts/install.sh" --repo owner/repo --ref fake --dir "${install_tmp}/target" --no-setup >/dev/null
+grep -qx 'new readme' "${install_tmp}/target/README.md" || fail "install did not refresh project files"
+grep -qx 'wiki data' "${install_tmp}/target/wiki/index.md" || fail "install did not preserve wiki data"
+grep -qx 'raw data' "${install_tmp}/target/raw/source.md" || fail "install did not preserve raw data"
+grep -qx '{"auth":{"cliToken":"keep"}}' "${install_tmp}/target/config/local.json" || fail "install did not preserve local config"
+rm -rf "${install_tmp}"
+
 log "checking setup.sh idempotent no-network path"
 "${ROOT_DIR}/setup.sh" --skip-graphify --skip-npm-install --skip-build >/dev/null
 
