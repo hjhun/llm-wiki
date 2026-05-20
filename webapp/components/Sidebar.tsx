@@ -14,6 +14,7 @@ import {
   Settings,
 } from "lucide-react";
 import { useEffect, useState } from "react";
+import packageJson from "../package.json";
 import AutoLintBadge from "./AutoLintBadge";
 import { BRAND_NAME, type Language, useLanguage } from "./i18n";
 import { IconButton, cx } from "./ui";
@@ -83,7 +84,12 @@ export default function Sidebar() {
             <div className="font-mono text-xs uppercase tracking-widest text-ink">
               {BRAND_NAME}
             </div>
-            <div className="mt-2 text-xs text-ink-faint">{t.sidebar.local}</div>
+            <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-ink-faint">
+              <span>{t.sidebar.local}</span>
+              <span className="font-mono text-[10px] uppercase tracking-widest text-ink-dim">
+                {t.sidebar.version} v{packageJson.version}
+              </span>
+            </div>
           </div>
           <IconButton
             onClick={toggleCollapsed}

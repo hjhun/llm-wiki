@@ -373,8 +373,10 @@ Create a GitHub release:
 3. Enter a version tag such as `v0.2.0`.
 
 The workflow validates release-critical scripts, creates the Git tag, and creates
-the GitHub Release. `scripts/install.sh` installs that release when it is the
-latest release, or when users pass `--version vX.Y.Z`.
+the GitHub Release. Before tagging, it also updates `webapp/package.json` and
+`webapp/package-lock.json` to the release version, so the installed web UI shows
+the same version as the GitHub release. `scripts/install.sh` installs that
+release when it is the latest release, or when users pass `--version vX.Y.Z`.
 
 ## Project Structure
 

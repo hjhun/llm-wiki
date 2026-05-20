@@ -48,6 +48,7 @@ export const TEXT = {
       localOnlyEmphasis: "LAN 공유",
       localOnlySuffix: "입니다.",
       defaultBind: "기본 bind",
+      version: "버전",
     },
     chat: {
       newTitle: "새 채팅",
@@ -365,6 +366,7 @@ export const TEXT = {
       localOnlyEmphasis: "LAN-reachable",
       localOnlySuffix: ".",
       defaultBind: "Default bind",
+      version: "Version",
     },
     chat: {
       newTitle: "New chat",
