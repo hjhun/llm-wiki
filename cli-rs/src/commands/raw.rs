@@ -199,7 +199,7 @@ async fn walk_and_add(
         let dest = if rel.as_os_str().is_empty() {
             prefix.clone()
         } else {
-            format!("{}/{}", prefix.trim_end_matches('/'), rel.to_string_lossy())
+            format!("{}/{}", prefix.trim_end_matches('/'), path_key(&rel))
         };
         add_one(
             ctx,
@@ -348,7 +348,7 @@ async fn run_list(ctx: &Ctx, args: ListArgs) -> Result<u8> {
         let rel = entry
             .path()
             .strip_prefix(&ctx.project_root)
-            .map(|p| p.to_string_lossy().into_owned())
+            .map(path_key)
             .unwrap_or_else(|_| entry.path().to_string_lossy().into_owned());
         println!("{rel}");
         count += 1;
@@ -392,4 +392,11 @@ fn create_symlink(target: &Path, link: &Path, target_is_dir: bool) -> std::io::R
     } else {
         std::os::windows::fs::symlink_file(target, link)
     }
+}
+
+fn path_key(path: &Path) -> String {
+    path.components()
+        .map(|component| component.as_os_str().to_string_lossy())
+        .collect::<Vec<_>>()
+        .join("/")
 }
