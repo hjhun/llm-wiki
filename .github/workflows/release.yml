@@ -59,7 +59,7 @@ jobs:
             target: x86_64-pc-windows-msvc
             asset_suffix: windows-x86_64
             bin_name: clio.exe
-          - os: macos-13
+          - os: macos-15-intel
             target: x86_64-apple-darwin
             asset_suffix: macos-x86_64
             bin_name: clio
