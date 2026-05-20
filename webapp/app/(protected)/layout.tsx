@@ -34,7 +34,7 @@ export default async function ProtectedLayout({
             {children}
           </main>
         </div>
-        <AgentEdgePanel />
+        {cfg.ui.agentEdgePanelEnabled ? <AgentEdgePanel /> : null}
       </LanguageProvider>
     </ThemeProvider>
   );

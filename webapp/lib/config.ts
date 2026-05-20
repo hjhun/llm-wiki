@@ -238,6 +238,7 @@ export const ConfigSchema = z.object({
     defaultTab: z
       .enum(["chat", "explorer", "graph", "automations", "settings"])
       .default("chat"),
+    agentEdgePanelEnabled: z.boolean().default(true),
   }),
   auth: z.object({
     /** bcrypt 해시. 첫 실행 시 비어 있음. */

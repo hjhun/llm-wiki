@@ -1,12 +1,23 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { KeyRound, RefreshCw, Save } from "lucide-react";
+import { useRouter } from "next/navigation";
+import {
+  Bot,
+  Gauge,
+  KeyRound,
+  RefreshCw,
+  Save,
+  ShieldCheck,
+  Wrench,
+  Zap,
+  type LucideIcon,
+} from "lucide-react";
 import { type Language, useLanguage } from "../i18n";
 import { useTheme } from "../theme";
 import AutoIngestPanel from "./AutoIngestPanel";
 import AutoLintPanel from "./AutoLintPanel";
-import { Button, PageHeader, StatusBadge } from "../ui";
+import { Button, PageHeader, StatusBadge, cx } from "../ui";
 import type {
   CliInfo,
   CliName,
@@ -18,6 +29,13 @@ import type {
 const CLI_NAMES: CliName[] = ["codex", "claude", "gemini", "cline"];
 const DEFAULT_TABS = ["chat", "explorer", "graph", "automations", "settings"] as const;
 const SESSION_TTL_24H_SEC = 60 * 60 * 24;
+
+type SettingsTabId =
+  | "agent"
+  | "runtime"
+  | "automation"
+  | "access"
+  | "diagnostics";
 
 async function asError(res: Response): Promise<Error> {
   const j = (await res.json().catch(() => null)) as { error?: string } | null;
@@ -58,6 +76,7 @@ function statusTone(status: "ready" | "missing") {
 }
 
 export default function Settings() {
+  const router = useRouter();
   const { language, setLanguage, t } = useLanguage();
   const { setTheme } = useTheme();
   const [state, setState] = useState<SettingsState | null>(null);
@@ -66,6 +85,7 @@ export default function Settings() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [password, setPassword] = useState({ current: "", next: "" });
+  const [activeTab, setActiveTab] = useState<SettingsTabId>("agent");
 
   const load = useCallback(async () => {
     setError(null);
@@ -91,6 +111,51 @@ export default function Settings() {
   const cliByName = useMemo(() => {
     return new Map(state?.cli.map((info) => [info.name, info]) ?? []);
   }, [state?.cli]);
+
+  const settingsTabs = useMemo(
+    () =>
+      [
+        {
+          id: "agent",
+          label: t.settings.settingsTabAgent,
+          description: t.settings.settingsTabAgentDesc,
+          icon: Bot,
+        },
+        {
+          id: "runtime",
+          label: t.settings.settingsTabRuntime,
+          description: t.settings.settingsTabRuntimeDesc,
+          icon: Gauge,
+        },
+        {
+          id: "automation",
+          label: t.settings.settingsTabAutomation,
+          description: t.settings.settingsTabAutomationDesc,
+          icon: Zap,
+        },
+        {
+          id: "access",
+          label: t.settings.settingsTabAccess,
+          description: t.settings.settingsTabAccessDesc,
+          icon: ShieldCheck,
+        },
+        {
+          id: "diagnostics",
+          label: t.settings.settingsTabDiagnostics,
+          description: t.settings.settingsTabDiagnosticsDesc,
+          icon: Wrench,
+        },
+      ] satisfies Array<{
+        id: SettingsTabId;
+        label: string;
+        description: string;
+        icon: LucideIcon;
+      }>,
+    [t],
+  );
+
+  const activeTabMeta =
+    settingsTabs.find((tab) => tab.id === activeTab) ?? settingsTabs[0];
 
   function updateDraft(mutator: (next: SettingsConfig) => void) {
     setDraft((current) => {
@@ -134,6 +199,7 @@ export default function Settings() {
         ui: { ...next.config.ui, language },
       });
       setNotice(t.settings.savedNotice);
+      router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -162,6 +228,8 @@ export default function Settings() {
       setBusy(null);
     }
   }
+
+  const ActiveTabIcon = activeTabMeta.icon;
 
   return (
     <div className="flex h-full w-full flex-col overflow-hidden">
@@ -208,389 +276,513 @@ export default function Settings() {
         </div>
       ) : (
         <main className="min-h-0 flex-1 overflow-auto">
-          <div className="grid gap-4 p-4 xl:grid-cols-[minmax(0,1fr)_360px]">
-            <section className="space-y-4">
-              <Panel
-                title={t.settings.codingAgent}
-                eyebrow={t.settings.defaultCli}
-              >
-                <div className="grid gap-3 lg:grid-cols-2">
-                  {CLI_NAMES.map((name) => (
-                    <CliCard
-                      key={name}
-                      info={cliByName.get(name)}
-                      selected={draft.agent.default === name}
-                      pathValue={draft.agent.paths[name] ?? ""}
-                      onSelect={() =>
-                        updateDraft((next) => {
-                          next.agent.default = name;
-                        })
-                      }
-                      onPathChange={(value) =>
-                        updateDraft((next) => {
-                          next.agent.paths[name] = value;
-                        })
-                      }
+          <div className="grid min-h-full gap-4 p-4 xl:grid-cols-[280px_minmax(0,1fr)]">
+            <aside className="min-w-0 xl:sticky xl:top-4 xl:self-start">
+              <nav className="rounded-md border border-line bg-bg-subtle/92 p-2 shadow-sm backdrop-blur-xl">
+                <div className="px-2 py-2">
+                  <div className="font-mono text-[10px] uppercase tracking-widest text-ink-faint">
+                    {t.settings.settingsNavTitle}
+                  </div>
+                  <p className="mt-1 text-xs leading-relaxed text-ink-faint">
+                    {t.settings.settingsNavDesc}
+                  </p>
+                </div>
+                <div className="mt-1 flex gap-2 overflow-x-auto pb-1 xl:flex-col xl:overflow-visible xl:pb-0">
+                  {settingsTabs.map((tab) => (
+                    <SettingsTabButton
+                      key={tab.id}
+                      tab={tab}
+                      active={activeTab === tab.id}
+                      onClick={() => setActiveTab(tab.id)}
                     />
                   ))}
                 </div>
-                <label className="mt-4 flex items-center justify-between gap-4 rounded border border-line bg-bg px-3 py-2">
-                  <span>
-                    <span className="block text-sm font-medium text-ink">
-                      {t.settings.safeMode}
-                    </span>
-                    <span className="block text-xs text-ink-faint">
-                      {t.settings.safeModeDesc}
-                    </span>
-                  </span>
-                  <input
-                    type="checkbox"
-                    checked={draft.agent.safeMode}
-                    onChange={(e) =>
-                      updateDraft((next) => {
-                        next.agent.safeMode = e.target.checked;
-                      })
-                    }
-                    className="h-4 w-4 accent-accent"
-                  />
-                </label>
-                <div className="mt-3 grid gap-3 md:grid-cols-4">
-                  <label className="rounded border border-line bg-bg px-3 py-2">
-                    <span className="text-xs text-ink-faint">
-                      {t.settings.multiAgentCli}
-                    </span>
-                    <select
-                      value={draft.agent.orchestration.cli ?? ""}
-                      onChange={(e) =>
-                        updateDraft((next) => {
-                          next.agent.orchestration.cli =
-                            e.target.value === ""
-                              ? null
-                              : (e.target.value as CliName);
-                        })
-                      }
-                      className="mt-1 block w-full rounded border border-line bg-bg-panel px-2 py-1.5 text-sm text-ink outline-none focus:border-accent"
-                    >
-                      <option value="">{t.settings.followDefaultCli}</option>
-                      {CLI_NAMES.map((name) => (
-                        <option key={name} value={name}>
-                          {name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <NumberField
-                    label={t.settings.maxConcurrentAgents}
-                    value={draft.agent.orchestration.maxConcurrentAgents}
-                    min={1}
-                    max={16}
-                    onChange={(value) =>
-                      updateDraft((next) => {
-                        next.agent.orchestration.maxConcurrentAgents = value;
-                      })
-                    }
-                  />
-                  <TextField
-                    label={t.settings.agentNamePrefix}
-                    value={draft.agent.orchestration.namePrefix}
-                    onChange={(value) =>
-                      updateDraft((next) => {
-                        next.agent.orchestration.namePrefix = value;
-                      })
-                    }
-                  />
-                  <TextField
-                    label={t.settings.managerName}
-                    value={draft.agent.orchestration.managerName}
-                    onChange={(value) =>
-                      updateDraft((next) => {
-                        next.agent.orchestration.managerName = value;
-                      })
-                    }
-                  />
-                </div>
-                <p className="mt-2 text-xs leading-relaxed text-ink-faint">
-                  {t.settings.agentOrchestrationDesc}
-                </p>
-              </Panel>
+              </nav>
+            </aside>
 
-              <Panel
-                title={t.settings.runtimeDefaults}
-                eyebrow={t.settings.wikiOperation}
-              >
-                <div className="grid gap-3 md:grid-cols-2">
-                  <NumberField
-                    label={t.settings.chunkMaxFiles}
-                    value={draft.chunking.maxFiles}
-                    min={1}
-                    onChange={(value) =>
-                      updateDraft((next) => {
-                        next.chunking.maxFiles = value;
-                      })
-                    }
-                  />
-                  <NumberField
-                    label={t.settings.chunkMaxBytes}
-                    value={draft.chunking.maxBytes}
-                    min={1024}
-                    onChange={(value) =>
-                      updateDraft((next) => {
-                        next.chunking.maxBytes = value;
-                      })
-                    }
-                  />
-                  <NumberField
-                    label={t.settings.minCommunitySize}
-                    value={draft.graph.minCommunitySize}
-                    min={1}
-                    onChange={(value) =>
-                      updateDraft((next) => {
-                        next.graph.minCommunitySize = value;
-                      })
-                    }
-                  />
-                  <label className="rounded border border-line bg-bg px-3 py-2">
-                    <span className="text-xs text-ink-faint">
-                      {t.settings.defaultTab}
-                    </span>
-                    <select
-                      value={draft.ui.defaultTab}
-                      onChange={(e) =>
-                        updateDraft((next) => {
-                          next.ui.defaultTab = e.target
-                            .value as SettingsConfig["ui"]["defaultTab"];
-                        })
-                      }
-                      className="mt-1 block w-full rounded border border-line bg-bg-panel px-2 py-1.5 text-sm text-ink outline-none focus:border-accent"
-                    >
-                      {DEFAULT_TABS.map((tab) => (
-                        <option key={tab} value={tab}>
-                          {tab}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="rounded border border-line bg-bg px-3 py-2">
-                    <span className="text-xs text-ink-faint">
-                      {t.settings.uiLanguage}
-                    </span>
-                    <select
-                      value={language}
-                      onChange={(e) => {
-                        const nextLanguage = e.target.value as Language;
-                        updateDraft((next) => {
-                          next.ui.language = nextLanguage;
-                        });
-                        void setLanguage(nextLanguage).catch(console.error);
-                      }}
-                      className="mt-1 block w-full rounded border border-line bg-bg-panel px-2 py-1.5 text-sm text-ink outline-none focus:border-accent"
-                    >
-                      <option value="ko">{t.common.korean}</option>
-                      <option value="en">{t.common.english}</option>
-                    </select>
-                  </label>
-                  <div className="rounded border border-line bg-bg px-3 py-2">
-                    <span className="text-xs text-ink-faint">
-                      {t.settings.uiTheme}
-                    </span>
-                    <div className="mt-1 grid grid-cols-3 gap-1 rounded border border-line bg-bg-subtle p-1">
-                      {(["default", "light", "dark"] as const).map((themeOption) => (
-                        <button
-                          key={themeOption}
-                          type="button"
-                          onClick={() => {
-                            updateDraft((next) => {
-                              next.ui.theme = themeOption;
-                            });
-                            setTheme(themeOption);
-                          }}
-                          className={[
-                            "h-8 rounded text-xs font-medium transition-colors",
-                            draft.ui.theme === themeOption
-                              ? "bg-accent text-bg"
-                              : "text-ink-dim hover:bg-bg-panel hover:text-ink",
-                          ].join(" ")}
-                        >
-                          {themeOption === "default"
-                            ? t.settings.defaultTheme
-                            : themeOption === "light"
-                              ? t.settings.lightTheme
-                              : t.settings.darkTheme}
-                        </button>
-                      ))}
+            <section className="min-w-0 space-y-4">
+              <div className="rounded-md border border-line bg-bg-panel/82 px-4 py-3 shadow-sm backdrop-blur-xl">
+                <div className="flex items-start gap-3">
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-line bg-bg-subtle text-accent">
+                    <ActiveTabIcon aria-hidden className="h-4 w-4" />
+                  </span>
+                  <div className="min-w-0">
+                    <div className="font-mono text-[10px] uppercase tracking-widest text-ink-faint">
+                      {t.settings.settingsActiveSection}
                     </div>
+                    <h2 className="mt-0.5 text-base font-semibold text-ink">
+                      {activeTabMeta.label}
+                    </h2>
+                    <p className="mt-1 max-w-3xl text-xs leading-relaxed text-ink-faint">
+                      {activeTabMeta.description}
+                    </p>
                   </div>
                 </div>
-                <label className="mt-3 flex items-center justify-between gap-4 rounded border border-line bg-bg px-3 py-2">
-                  <span>
-                    <span className="block text-sm font-medium text-ink">
-                      {t.settings.autoGraph}
+              </div>
+
+              {activeTab === "agent" ? (
+                <Panel
+                  title={t.settings.codingAgent}
+                  eyebrow={t.settings.defaultCli}
+                >
+                  <div className="grid gap-3 lg:grid-cols-2">
+                    {CLI_NAMES.map((name) => (
+                      <CliCard
+                        key={name}
+                        info={cliByName.get(name)}
+                        selected={draft.agent.default === name}
+                        pathValue={draft.agent.paths[name] ?? ""}
+                        onSelect={() =>
+                          updateDraft((next) => {
+                            next.agent.default = name;
+                          })
+                        }
+                        onPathChange={(value) =>
+                          updateDraft((next) => {
+                            next.agent.paths[name] = value;
+                          })
+                        }
+                      />
+                    ))}
+                  </div>
+                  <label className="mt-4 flex items-center justify-between gap-4 rounded border border-line bg-bg px-3 py-2">
+                    <span>
+                      <span className="block text-sm font-medium text-ink">
+                        {t.settings.safeMode}
+                      </span>
+                      <span className="block text-xs text-ink-faint">
+                        {t.settings.safeModeDesc}
+                      </span>
                     </span>
-                    <span className="block text-xs text-ink-faint">
-                      {t.settings.autoGraphDesc}
-                    </span>
-                  </span>
-                  <input
-                    type="checkbox"
-                    checked={draft.graph.autoUpdateOnIngest}
-                    onChange={(e) =>
-                      updateDraft((next) => {
-                        next.graph.autoUpdateOnIngest = e.target.checked;
-                      })
-                    }
-                    className="h-4 w-4 accent-accent"
-                  />
-                </label>
-              </Panel>
-
-              <AutoIngestPanel
-                draft={draft.autoIngest}
-                onChange={(nextAutoIngest) =>
-                  updateDraft((next) => {
-                    next.autoIngest = {
-                      ...nextAutoIngest,
-                      watch: { ...nextAutoIngest.watch },
-                      schedule: { ...nextAutoIngest.schedule },
-                    };
-                  })
-                }
-              />
-
-              <AutoLintPanel
-                draft={draft.autoLint}
-                onChange={(nextAutoLint) =>
-                  updateDraft((next) => {
-                    next.autoLint = {
-                      ...nextAutoLint,
-                      counter: { ...nextAutoLint.counter },
-                      cron: {
-                        ...nextAutoLint.cron,
-                        time: { ...nextAutoLint.cron.time },
-                      },
-                    };
-                  })
-                }
-              />
-            </section>
-
-            <aside className="space-y-4">
-              <Panel title={t.settings.server} eyebrow={t.settings.localWebUi}>
-                <div className="grid gap-3">
-                  <TextField
-                    label={t.settings.host}
-                    value={draft.server.host}
-                    onChange={(value) =>
-                      updateDraft((next) => {
-                        next.server.host = value;
-                      })
-                    }
-                  />
-                  <NumberField
-                    label={t.settings.port}
-                    value={draft.server.port}
-                    min={1}
-                    onChange={(value) =>
-                      updateDraft((next) => {
-                        next.server.port = value;
-                      })
-                    }
-                  />
-                  <p className="text-xs leading-relaxed text-ink-faint">
-                    {t.settings.serverDesc}
+                    <input
+                      type="checkbox"
+                      checked={draft.agent.safeMode}
+                      onChange={(e) =>
+                        updateDraft((next) => {
+                          next.agent.safeMode = e.target.checked;
+                        })
+                      }
+                      className="h-4 w-4 accent-accent"
+                    />
+                  </label>
+                  <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                    <label className="rounded border border-line bg-bg px-3 py-2">
+                      <span className="text-xs text-ink-faint">
+                        {t.settings.multiAgentCli}
+                      </span>
+                      <select
+                        value={draft.agent.orchestration.cli ?? ""}
+                        onChange={(e) =>
+                          updateDraft((next) => {
+                            next.agent.orchestration.cli =
+                              e.target.value === ""
+                                ? null
+                                : (e.target.value as CliName);
+                          })
+                        }
+                        className="mt-1 block w-full rounded border border-line bg-bg-panel px-2 py-1.5 text-sm text-ink outline-none focus:border-accent"
+                      >
+                        <option value="">{t.settings.followDefaultCli}</option>
+                        {CLI_NAMES.map((name) => (
+                          <option key={name} value={name}>
+                            {name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <NumberField
+                      label={t.settings.maxConcurrentAgents}
+                      value={draft.agent.orchestration.maxConcurrentAgents}
+                      min={1}
+                      max={16}
+                      onChange={(value) =>
+                        updateDraft((next) => {
+                          next.agent.orchestration.maxConcurrentAgents = value;
+                        })
+                      }
+                    />
+                    <TextField
+                      label={t.settings.agentNamePrefix}
+                      value={draft.agent.orchestration.namePrefix}
+                      onChange={(value) =>
+                        updateDraft((next) => {
+                          next.agent.orchestration.namePrefix = value;
+                        })
+                      }
+                    />
+                    <TextField
+                      label={t.settings.managerName}
+                      value={draft.agent.orchestration.managerName}
+                      onChange={(value) =>
+                        updateDraft((next) => {
+                          next.agent.orchestration.managerName = value;
+                        })
+                      }
+                    />
+                  </div>
+                  <p className="mt-2 text-xs leading-relaxed text-ink-faint">
+                    {t.settings.agentOrchestrationDesc}
                   </p>
-                </div>
-              </Panel>
+                </Panel>
+              ) : null}
 
-              <Panel title={t.settings.tools} eyebrow={t.settings.detected}>
-                <div className="space-y-2">
-                  {state?.tools.map((tool) => (
-                    <ToolRow key={tool.name} tool={tool} />
-                  ))}
-                </div>
-              </Panel>
+              {activeTab === "runtime" ? (
+                <Panel
+                  title={t.settings.runtimeDefaults}
+                  eyebrow={t.settings.wikiOperation}
+                >
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <NumberField
+                      label={t.settings.chunkMaxFiles}
+                      value={draft.chunking.maxFiles}
+                      min={1}
+                      onChange={(value) =>
+                        updateDraft((next) => {
+                          next.chunking.maxFiles = value;
+                        })
+                      }
+                    />
+                    <NumberField
+                      label={t.settings.chunkMaxBytes}
+                      value={draft.chunking.maxBytes}
+                      min={1024}
+                      onChange={(value) =>
+                        updateDraft((next) => {
+                          next.chunking.maxBytes = value;
+                        })
+                      }
+                    />
+                    <NumberField
+                      label={t.settings.minCommunitySize}
+                      value={draft.graph.minCommunitySize}
+                      min={1}
+                      onChange={(value) =>
+                        updateDraft((next) => {
+                          next.graph.minCommunitySize = value;
+                        })
+                      }
+                    />
+                    <label className="rounded border border-line bg-bg px-3 py-2">
+                      <span className="text-xs text-ink-faint">
+                        {t.settings.defaultTab}
+                      </span>
+                      <select
+                        value={draft.ui.defaultTab}
+                        onChange={(e) =>
+                          updateDraft((next) => {
+                            next.ui.defaultTab = e.target
+                              .value as SettingsConfig["ui"]["defaultTab"];
+                          })
+                        }
+                        className="mt-1 block w-full rounded border border-line bg-bg-panel px-2 py-1.5 text-sm text-ink outline-none focus:border-accent"
+                      >
+                        {DEFAULT_TABS.map((tab) => (
+                          <option key={tab} value={tab}>
+                            {tab}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="rounded border border-line bg-bg px-3 py-2">
+                      <span className="text-xs text-ink-faint">
+                        {t.settings.uiLanguage}
+                      </span>
+                      <select
+                        value={language}
+                        onChange={(e) => {
+                          const nextLanguage = e.target.value as Language;
+                          updateDraft((next) => {
+                            next.ui.language = nextLanguage;
+                          });
+                          void setLanguage(nextLanguage).catch(console.error);
+                        }}
+                        className="mt-1 block w-full rounded border border-line bg-bg-panel px-2 py-1.5 text-sm text-ink outline-none focus:border-accent"
+                      >
+                        <option value="ko">{t.common.korean}</option>
+                        <option value="en">{t.common.english}</option>
+                      </select>
+                    </label>
+                    <div className="rounded border border-line bg-bg px-3 py-2">
+                      <span className="text-xs text-ink-faint">
+                        {t.settings.uiTheme}
+                      </span>
+                      <div className="mt-1 grid grid-cols-3 gap-1 rounded border border-line bg-bg-subtle p-1">
+                        {(["default", "light", "dark"] as const).map((themeOption) => (
+                          <button
+                            key={themeOption}
+                            type="button"
+                            onClick={() => {
+                              updateDraft((next) => {
+                                next.ui.theme = themeOption;
+                              });
+                              setTheme(themeOption);
+                            }}
+                            className={[
+                              "h-8 rounded text-xs font-medium transition-colors",
+                              draft.ui.theme === themeOption
+                                ? "bg-accent text-bg"
+                                : "text-ink-dim hover:bg-bg-panel hover:text-ink",
+                            ].join(" ")}
+                          >
+                            {themeOption === "default"
+                              ? t.settings.defaultTheme
+                              : themeOption === "light"
+                                ? t.settings.lightTheme
+                                : t.settings.darkTheme}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                  <label className="mt-3 flex items-center justify-between gap-4 rounded border border-line bg-bg px-3 py-2">
+                    <span>
+                      <span className="block text-sm font-medium text-ink">
+                        {t.settings.autoGraph}
+                      </span>
+                      <span className="block text-xs text-ink-faint">
+                        {t.settings.autoGraphDesc}
+                      </span>
+                    </span>
+                    <input
+                      type="checkbox"
+                      checked={draft.graph.autoUpdateOnIngest}
+                      onChange={(e) =>
+                        updateDraft((next) => {
+                          next.graph.autoUpdateOnIngest = e.target.checked;
+                        })
+                      }
+                      className="h-4 w-4 accent-accent"
+                    />
+                  </label>
+                  <label className="mt-3 flex items-center justify-between gap-4 rounded border border-line bg-bg px-3 py-2">
+                    <span>
+                      <span className="block text-sm font-medium text-ink">
+                        {t.settings.agentEdgePanel}
+                      </span>
+                      <span className="block text-xs text-ink-faint">
+                        {t.settings.agentEdgePanelDesc}
+                      </span>
+                    </span>
+                    <input
+                      type="checkbox"
+                      checked={draft.ui.agentEdgePanelEnabled}
+                      onChange={(e) =>
+                        updateDraft((next) => {
+                          next.ui.agentEdgePanelEnabled = e.target.checked;
+                        })
+                      }
+                      className="h-4 w-4 accent-accent"
+                    />
+                  </label>
+                </Panel>
+              ) : null}
 
-              <Panel title={t.settings.loginSession} eyebrow="auth">
-                <div className="grid grid-cols-2 gap-2 rounded-md border border-line bg-bg p-1">
-                  <button
-                    type="button"
-                    onClick={() =>
+              {activeTab === "automation" ? (
+                <>
+                  <AutoIngestPanel
+                    draft={draft.autoIngest}
+                    onChange={(nextAutoIngest) =>
                       updateDraft((next) => {
-                        next.auth.sessionTtlSec = SESSION_TTL_24H_SEC;
+                        next.autoIngest = {
+                          ...nextAutoIngest,
+                          watch: { ...nextAutoIngest.watch },
+                          schedule: { ...nextAutoIngest.schedule },
+                        };
                       })
                     }
-                    className={[
-                      "h-8 rounded text-xs font-medium transition-colors",
-                      draft.auth.sessionTtlSec === SESSION_TTL_24H_SEC
-                        ? "bg-accent text-bg"
-                        : "text-ink-dim hover:bg-bg-panel hover:text-ink",
-                    ].join(" ")}
-                  >
-                    24h
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() =>
+                  />
+
+                  <AutoLintPanel
+                    draft={draft.autoLint}
+                    onChange={(nextAutoLint) =>
                       updateDraft((next) => {
-                        next.auth.sessionTtlSec = null;
+                        next.autoLint = {
+                          ...nextAutoLint,
+                          counter: { ...nextAutoLint.counter },
+                          cron: {
+                            ...nextAutoLint.cron,
+                            time: { ...nextAutoLint.cron.time },
+                          },
+                        };
                       })
                     }
-                    className={[
-                      "h-8 rounded text-xs font-medium transition-colors",
-                      draft.auth.sessionTtlSec == null
-                        ? "bg-accent text-bg"
-                        : "text-ink-dim hover:bg-bg-panel hover:text-ink",
-                    ].join(" ")}
-                  >
-                    {t.settings.keepSignedIn}
-                  </button>
-                </div>
-                <p className="mt-2 text-xs leading-relaxed text-ink-faint">
-                  {t.settings.sessionDesc}
-                </p>
-              </Panel>
-
-              <Panel title={t.settings.password} eyebrow={t.settings.admin}>
-                <div className="space-y-3">
-                  <TextField
-                    label={t.settings.currentPassword}
-                    type="password"
-                    value={password.current}
-                    onChange={(value) =>
-                      setPassword((next) => ({ ...next, current: value }))
-                    }
                   />
-                  <TextField
-                    label={t.settings.newPassword}
-                    type="password"
-                    value={password.next}
-                    onChange={(value) =>
-                      setPassword((next) => ({ ...next, next: value }))
-                    }
-                  />
-                  <Button
-                    onClick={() => void changePassword()}
-                    disabled={busy != null || !password.current || !password.next}
-                    icon={KeyRound}
-                    className="w-full"
-                  >
-                    {busy === "password"
-                      ? t.settings.changing
-                      : t.settings.changePassword}
-                  </Button>
-                </div>
-              </Panel>
+                </>
+              ) : null}
 
-              <Panel title={t.settings.configFiles} eyebrow={t.settings.paths}>
-                <div className="space-y-2 font-mono text-[11px] text-ink-faint">
-                  <PathLine label="default" path={state?.configPaths.default} />
-                  <PathLine label="local" path={state?.configPaths.local} />
+              {activeTab === "access" ? (
+                <div className="grid gap-4 lg:grid-cols-2">
+                  <Panel title={t.settings.server} eyebrow={t.settings.localWebUi}>
+                    <div className="grid gap-3">
+                      <TextField
+                        label={t.settings.host}
+                        value={draft.server.host}
+                        onChange={(value) =>
+                          updateDraft((next) => {
+                            next.server.host = value;
+                          })
+                        }
+                      />
+                      <NumberField
+                        label={t.settings.port}
+                        value={draft.server.port}
+                        min={1}
+                        onChange={(value) =>
+                          updateDraft((next) => {
+                            next.server.port = value;
+                          })
+                        }
+                      />
+                      <p className="text-xs leading-relaxed text-ink-faint">
+                        {t.settings.serverDesc}
+                      </p>
+                    </div>
+                  </Panel>
+
+                  <Panel title={t.settings.loginSession} eyebrow="auth">
+                    <div className="grid grid-cols-2 gap-2 rounded-md border border-line bg-bg p-1">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          updateDraft((next) => {
+                            next.auth.sessionTtlSec = SESSION_TTL_24H_SEC;
+                          })
+                        }
+                        className={[
+                          "h-8 rounded text-xs font-medium transition-colors",
+                          draft.auth.sessionTtlSec === SESSION_TTL_24H_SEC
+                            ? "bg-accent text-bg"
+                            : "text-ink-dim hover:bg-bg-panel hover:text-ink",
+                        ].join(" ")}
+                      >
+                        24h
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          updateDraft((next) => {
+                            next.auth.sessionTtlSec = null;
+                          })
+                        }
+                        className={[
+                          "h-8 rounded text-xs font-medium transition-colors",
+                          draft.auth.sessionTtlSec == null
+                            ? "bg-accent text-bg"
+                            : "text-ink-dim hover:bg-bg-panel hover:text-ink",
+                        ].join(" ")}
+                      >
+                        {t.settings.keepSignedIn}
+                      </button>
+                    </div>
+                    <p className="mt-2 text-xs leading-relaxed text-ink-faint">
+                      {t.settings.sessionDesc}
+                    </p>
+                  </Panel>
+
+                  <Panel title={t.settings.password} eyebrow={t.settings.admin}>
+                    <div className="space-y-3">
+                      <TextField
+                        label={t.settings.currentPassword}
+                        type="password"
+                        value={password.current}
+                        onChange={(value) =>
+                          setPassword((next) => ({ ...next, current: value }))
+                        }
+                      />
+                      <TextField
+                        label={t.settings.newPassword}
+                        type="password"
+                        value={password.next}
+                        onChange={(value) =>
+                          setPassword((next) => ({ ...next, next: value }))
+                        }
+                      />
+                      <Button
+                        onClick={() => void changePassword()}
+                        disabled={busy != null || !password.current || !password.next}
+                        icon={KeyRound}
+                        className="w-full"
+                      >
+                        {busy === "password"
+                          ? t.settings.changing
+                          : t.settings.changePassword}
+                      </Button>
+                    </div>
+                  </Panel>
                 </div>
-              </Panel>
-            </aside>
+              ) : null}
+
+              {activeTab === "diagnostics" ? (
+                <div className="grid gap-4 lg:grid-cols-2">
+                  <Panel title={t.settings.tools} eyebrow={t.settings.detected}>
+                    <div className="space-y-2">
+                      {state?.tools.map((tool) => (
+                        <ToolRow key={tool.name} tool={tool} />
+                      ))}
+                    </div>
+                  </Panel>
+
+                  <Panel title={t.settings.configFiles} eyebrow={t.settings.paths}>
+                    <div className="space-y-2 font-mono text-[11px] text-ink-faint">
+                      <PathLine label="default" path={state?.configPaths.default} />
+                      <PathLine label="local" path={state?.configPaths.local} />
+                    </div>
+                  </Panel>
+                </div>
+              ) : null}
+            </section>
           </div>
         </main>
       )}
     </div>
+  );
+}
+
+function SettingsTabButton({
+  tab,
+  active,
+  onClick,
+}: {
+  tab: {
+    id: SettingsTabId;
+    label: string;
+    description: string;
+    icon: LucideIcon;
+  };
+  active: boolean;
+  onClick: () => void;
+}) {
+  const Icon = tab.icon;
+
+  return (
+    <button
+      type="button"
+      aria-current={active ? "page" : undefined}
+      onClick={onClick}
+      className={cx(
+        "group flex min-w-52 items-start gap-3 rounded-md border px-3 py-2.5 text-left transition-colors xl:min-w-0",
+        active
+          ? "border-accent bg-accent/10 text-ink shadow-[inset_3px_0_0_rgb(var(--color-accent))]"
+          : "border-transparent text-ink-dim hover:border-line hover:bg-bg-panel/72 hover:text-ink",
+      )}
+    >
+      <span
+        className={cx(
+          "mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md border transition-colors",
+          active
+            ? "border-accent/40 bg-accent text-white"
+            : "border-line bg-bg text-ink-faint group-hover:text-ink",
+        )}
+      >
+        <Icon aria-hidden className="h-4 w-4" />
+      </span>
+      <span className="min-w-0">
+        <span className="block text-sm font-semibold">{tab.label}</span>
+        <span className="mt-0.5 line-clamp-2 block text-xs leading-relaxed text-ink-faint">
+          {tab.description}
+        </span>
+      </span>
+    </button>
   );
 }
 

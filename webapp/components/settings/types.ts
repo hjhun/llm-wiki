@@ -50,6 +50,7 @@ export type SettingsConfig = {
     language: "ko" | "en";
     theme: "default" | "light" | "dark";
     defaultTab: "chat" | "explorer" | "graph" | "automations" | "settings";
+    agentEdgePanelEnabled: boolean;
   };
   auth: {
     passwordSet: boolean;
