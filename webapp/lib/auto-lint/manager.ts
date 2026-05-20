@@ -264,6 +264,7 @@ export class AutoLintManager {
         const session = await newSession({
           subject: `auto-lint ${source}`,
           agent,
+          origin: "background",
         });
         sessionPath = session.path;
         const cfgNow = await loadConfig();

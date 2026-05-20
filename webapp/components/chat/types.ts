@@ -10,6 +10,7 @@ export type ChatMessage = {
 export type SessionMeta = {
   title: string;
   agent: string | null;
+  origin?: "chat" | "background";
   created: string;
   updated: string;
 };

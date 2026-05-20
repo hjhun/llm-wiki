@@ -64,7 +64,7 @@ async function buildWorkers(
   cfg: Config,
   managerCli: CliName,
 ): Promise<Worker[]> {
-  const detected = await detectAllCli();
+  const detected = await detectAllCli({ includeVersion: false });
   const ready = new Set(
     detected.filter((info) => info.path).map((info) => info.name),
   );

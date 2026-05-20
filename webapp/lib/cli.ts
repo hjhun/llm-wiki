@@ -21,6 +21,19 @@ export type CliInfo = {
   source: "config" | "PATH" | "missing";
 };
 
+type DetectOptions = {
+  includeVersion?: boolean;
+};
+
+type DetectCacheEntry = {
+  expiresAt: number;
+  includeVersion: boolean;
+  info: CliInfo;
+};
+
+const DETECT_CACHE_MS = 30_000;
+const detectCache = new Map<CliName, DetectCacheEntry>();
+
 /** PATH 검색. 빌트인 which 대용. */
 async function whichBin(bin: string): Promise<string | null> {
   const PATH = process.env.PATH ?? "";
@@ -68,33 +81,68 @@ async function runVersion(absPath: string): Promise<string | null> {
   });
 }
 
-export async function detectCli(name: CliName): Promise<CliInfo> {
+export async function detectCli(
+  name: CliName,
+  opts: DetectOptions = {},
+): Promise<CliInfo> {
+  const includeVersion = opts.includeVersion ?? true;
+  const cached = detectCache.get(name);
+  if (
+    cached &&
+    cached.expiresAt > Date.now() &&
+    (cached.includeVersion || !includeVersion)
+  ) {
+    return includeVersion || cached.info.version
+      ? cached.info
+      : { ...cached.info, version: null };
+  }
+
   const cfg = await loadConfig();
   const explicit = (cfg.agent.paths as Record<string, string | undefined>)[
     name
   ];
   if (explicit && existsSync(explicit)) {
-    return {
+    const info: CliInfo = {
       name,
       path: explicit,
-      version: await runVersion(explicit),
+      version: includeVersion ? await runVersion(explicit) : null,
       source: "config",
     };
+    detectCache.set(name, {
+      expiresAt: Date.now() + DETECT_CACHE_MS,
+      includeVersion,
+      info,
+    });
+    return info;
   }
   const found = await whichBin(name);
   if (found) {
-    return {
+    const info: CliInfo = {
       name,
       path: found,
-      version: await runVersion(found),
+      version: includeVersion ? await runVersion(found) : null,
       source: "PATH",
     };
+    detectCache.set(name, {
+      expiresAt: Date.now() + DETECT_CACHE_MS,
+      includeVersion,
+      info,
+    });
+    return info;
   }
-  return { name, path: null, version: null, source: "missing" };
+  const info = { name, path: null, version: null, source: "missing" as const };
+  detectCache.set(name, {
+    expiresAt: Date.now() + DETECT_CACHE_MS,
+    includeVersion,
+    info,
+  });
+  return info;
 }
 
-export async function detectAllCli(): Promise<CliInfo[]> {
-  return Promise.all(CLI_NAMES.map((n) => detectCli(n)));
+export async function detectAllCli(
+  opts: DetectOptions = {},
+): Promise<CliInfo[]> {
+  return Promise.all(CLI_NAMES.map((n) => detectCli(n, opts)));
 }
 
 function buildArgs(

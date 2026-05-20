@@ -128,8 +128,10 @@ export default function Chat() {
   useEffect(() => {
     (async () => {
       const list = await refreshSessions();
-      if (list.length > 0) {
-        await openSession(list[0]);
+      const firstChatSession =
+        list.find((session) => session.meta.origin !== "background") ?? null;
+      if (firstChatSession) {
+        await openSession(firstChatSession);
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -237,8 +239,10 @@ export default function Chat() {
         setActive(null);
       }
       const list = await refreshSessions();
-      if (active && paths.includes(active.path) && list.length > 0) {
-        await openSession(list[0]);
+      const firstChatSession =
+        list.find((session) => session.meta.origin !== "background") ?? null;
+      if (active && paths.includes(active.path) && firstChatSession) {
+        await openSession(firstChatSession);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));

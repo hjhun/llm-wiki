@@ -235,6 +235,7 @@ export class AutoIngestManager {
         const session = await newSession({
           subject: `auto-ingest ${source}`,
           agent,
+          origin: "background",
         });
         sessionPath = session.path;
         const cfgNow = await loadConfig();

@@ -16,6 +16,7 @@ export type ChatMessage = {
 export type SessionMeta = {
   title: string;
   agent: string | null;
+  origin: "chat" | "background";
   created: string; // ISO
   updated: string; // ISO
 };
@@ -82,6 +83,7 @@ function parseFrontmatter(src: string): {
       meta: {
         title: "untitled",
         agent: null,
+        origin: "chat",
         created: new Date(0).toISOString(),
         updated: new Date(0).toISOString(),
       },
@@ -106,10 +108,15 @@ function parseFrontmatter(src: string): {
     }
     meta[mm[1]] = value;
   }
+  const title = meta.title ?? "untitled";
   return {
     meta: {
-      title: meta.title ?? "untitled",
+      title,
       agent: meta.agent ? meta.agent : null,
+      origin:
+        meta.origin === "background" || /^auto-(ingest|lint)\b/.test(title)
+          ? "background"
+          : "chat",
       created: meta.created ?? new Date(0).toISOString(),
       updated: meta.updated ?? meta.created ?? new Date(0).toISOString(),
     },
@@ -123,6 +130,7 @@ function renderFrontmatter(meta: SessionMeta): string {
     `title: ${escapeYaml(meta.title)}`,
     "type: chat-session",
     `agent: ${escapeYaml(meta.agent ?? "")}`,
+    `origin: ${meta.origin}`,
     `created: ${meta.created}`,
     `updated: ${meta.updated}`,
     "---",
@@ -158,6 +166,7 @@ async function allocateSessionPath(date: string, time: string, slug: string): Pr
 export async function newSession(opts: {
   subject: string;
   agent: string | null;
+  origin?: "chat" | "background";
 }): Promise<SessionRef> {
   const now = new Date();
   const date = formatDate(now);
@@ -169,6 +178,7 @@ export async function newSession(opts: {
   const meta: SessionMeta = {
     title,
     agent: opts.agent,
+    origin: opts.origin ?? "chat",
     created: now.toISOString(),
     updated: now.toISOString(),
   };

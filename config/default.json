@@ -8,7 +8,7 @@
     "safeMode": false,
     "paths": {},
     "orchestration": {
-      "maxConcurrentAgents": 5,
+      "maxConcurrentAgents": 2,
       "namePrefix": "agent",
       "managerName": "manager"
     }
