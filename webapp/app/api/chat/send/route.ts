@@ -17,11 +17,12 @@ import {
   WIKI_LOG_REL,
   buildProgressReference,
   formatStateSummary,
-  maybeAutoRunGraphify,
-  readProgressSnapshot,
-  runIngestLoop,
   summarizeIngestState,
 } from "@/lib/ingest-loop";
+import {
+  isOrchestratedKind,
+  runMultiAgentOperation,
+} from "@/lib/multi-agent";
 
 const Body = z.object({
   sessionPath: z.string().min(1).optional(),
@@ -290,31 +291,28 @@ export async function POST(req: Request) {
     };
 
     try {
-      if (kind === "ingest-loop") {
-        // -------- /ingest-loop driver --------
-        // Delegates to the shared runIngestLoop helper so the same engine
-        // powers both manual /ingest-loop calls and the AutoIngestManager
-        // background trigger. The HTTP route only adapts streaming and
-        // appends the final assistant message.
-        //
-        // The ingest-loop cancel path remains graceful: the file-based stop
-        // flag halts the loop between sub-chunks. We do not pass the job's
-        // AbortSignal here because aborting mid sub-chunk would lose partial
-        // progress, which is exactly what the file flag was designed to
-        // avoid. The UI Cancel button calls /ingest-loop/stop for this kind.
-        const result = await runIngestLoop({
+      if (isOrchestratedKind(kind)) {
+        // -------- Multi-agent wiki operations --------
+        // /ingest, /ingest-loop, /query, and /lint are dispatched through a
+        // small coordinator that starts named workers up to the configured
+        // concurrency limit and then asks a manager agent to consolidate the
+        // result. /ingest-loop remains graceful: the Stop button uses the
+        // file-based flag, so we avoid passing AbortSignal into that loop.
+        const result = await runMultiAgentOperation({
           cfg,
+          kind,
           agent,
           sessionPath,
-          initialPrompt: prompt,
+          prompt,
           progressRef,
+          signal: kind === "ingest-loop" ? undefined : job.abort.signal,
           onChunk: emitChunk,
         });
         const finalAssistant = await appendMessage(
           sessionPath,
           "assistant",
           result.finalReply,
-          agent,
+          result.assistantAgent,
         );
         send({
           type: "done",
@@ -324,12 +322,7 @@ export async function POST(req: Request) {
           durationMs: result.totalDurationMs,
         });
       } else {
-        // -------- Single CLI call (chat, ingest, query, lint, graph) --------
-        // For ingest, snapshot progress beforehand so the post-call graphify
-        // hook can detect whether this invocation actually advanced any
-        // sub-chunk.
-        const ingestBefore =
-          kind === "ingest" ? await readProgressSnapshot() : null;
+        // -------- Single CLI call (chat, preprocess, graph) --------
         const result = await runCli(agent, prompt, {
           safeMode: cfg.agent.safeMode,
           // null in config means "no timeout for this operation kind".
@@ -350,21 +343,6 @@ export async function POST(req: Request) {
         // makes the cause obvious instead of looking like a silent crash.
         if (job.cancelled) {
           reply = `⛔ 사용자 취소로 중단됨 (exitCode=${result.exitCode}).\n\n${reply}`;
-        }
-
-        if (kind === "ingest" && ingestBefore) {
-          const ingestAfter = await readProgressSnapshot();
-          const incr = await maybeAutoRunGraphify({
-            cfg,
-            agent,
-            sessionPath,
-            lastExitCode: result.exitCode,
-            before: ingestBefore,
-            after: ingestAfter,
-            mode: "incremental",
-            onChunk: emitChunk,
-          });
-          if (incr.note) reply += incr.note;
         }
 
         const assistantMsg = await appendMessage(

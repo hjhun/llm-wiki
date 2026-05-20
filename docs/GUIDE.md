@@ -349,8 +349,9 @@ In **Settings**:
 
 1. Check the detected CLI list.
 2. Click **Use** for the CLI you want.
-3. If the CLI is missing, enter its manual path or install it on the host.
-4. Save settings.
+3. Tune the maximum concurrent agents and worker name prefix used by `/ingest`, `/ingest-loop`, `/query`, and `/lint`. The default is 5 workers named like `agent-1`, `agent-2`.
+4. If the CLI is missing, enter its manual path or install it on the host.
+5. Save settings.
 
 The selected CLI must already be authenticated in the same host account and environment that starts the web app. For example, if `codex` works in your shell but fails in CLIO, restart CLIO from that same shell so the process inherits the right `HOME`, `PATH`, and credential environment.
 
@@ -632,6 +633,7 @@ Useful defaults:
 |---|---:|---|
 | `server.port` | `9091` | Web UI port. |
 | `server.host` | `0.0.0.0` | LAN-reachable host binding. |
+| `agent.orchestration.maxConcurrentAgents` | `5` | Maximum worker agents for ingest/query/lint operations. |
 | `chunking.maxFilesPerInvocation` | `4` | Maximum raw files per ingest agent call. |
 | `chunking.maxBytesPerFile` | `131072` | Large files are read head + tail. |
 | `graph.autoUpdateOnIngest` | `true` | Run graph update after ingest merge pass. |

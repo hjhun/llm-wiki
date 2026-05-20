@@ -29,6 +29,22 @@ export const ConfigSchema = z.object({
         cline: z.string().optional(),
       })
       .default({}),
+    orchestration: z
+      .object({
+        /**
+         * Upper bound for worker CLI processes the chat orchestrator may run
+         * for /ingest, /ingest-loop, /query, and /lint. The coordinator uses
+         * the default CLI and names workers with `namePrefix-N`.
+         */
+        maxConcurrentAgents: z.number().int().min(1).max(16).default(5),
+        namePrefix: z.string().min(1).max(40).default("agent"),
+        managerName: z.string().min(1).max(40).default("manager"),
+      })
+      .default({
+        maxConcurrentAgents: 5,
+        namePrefix: "agent",
+        managerName: "manager",
+      }),
   }),
   chunking: z.object({
     /** Soft cap on the number of files in a single chunk. */

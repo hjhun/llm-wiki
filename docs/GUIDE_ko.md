@@ -343,8 +343,9 @@ CLIO의 ingest/query/lint/graph 작업은 웹앱 자체가 직접 수행하지 �
 
 1. 감지된 CLI 목록을 확인합니다.
 2. 사용할 CLI의 **Use** 버튼을 누릅니다.
-3. CLI가 보이지 않으면 호스트에 설치하거나 수동 경로를 입력합니다.
-4. 저장합니다.
+3. `/ingest`, `/ingest-loop`, `/query`, `/lint`에 사용할 최대 동시 에이전트 수와 이름 prefix를 조정합니다. 기본값은 5개이며 워커 이름은 `agent-1`, `agent-2`처럼 붙습니다.
+4. CLI가 보이지 않으면 호스트에 설치하거나 수동 경로를 입력합니다.
+5. 저장합니다.
 
 선택한 CLI는 웹앱을 실행하는 같은 사용자 계정과 환경에서 로그인되어 있어야 합니다. 예를 들어 쉘에서는 `codex`가 작동하는데 CLIO에서는 실패한다면, 같은 쉘에서 CLIO를 다시 시작하여 `HOME`, `PATH`, 인증 환경이 이어지게 하세요.
 
@@ -625,6 +626,7 @@ config/local.json
 |---|---:|---|
 | `server.port` | `9091` | 웹 UI 포트 |
 | `server.host` | `0.0.0.0` | LAN에서 접근 가능한 host binding |
+| `agent.orchestration.maxConcurrentAgents` | `5` | ingest/query/lint 작업에 동시에 띄울 수 있는 워커 에이전트 수 |
 | `chunking.maxFilesPerInvocation` | `4` | 에이전트 호출 1회당 최대 raw 파일 수 |
 | `chunking.maxBytesPerFile` | `131072` | 큰 파일은 head + tail만 읽음 |
 | `graph.autoUpdateOnIngest` | `true` | ingest merge pass 후 graph update 실행 |

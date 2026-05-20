@@ -24,6 +24,11 @@ export type SettingsConfig = {
     default: CliName | null;
     safeMode: boolean;
     paths: Partial<Record<CliName, string>>;
+    orchestration: {
+      maxConcurrentAgents: number;
+      namePrefix: string;
+      managerName: string;
+    };
   };
   chunking: {
     maxFiles: number;

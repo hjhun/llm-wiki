@@ -31,6 +31,7 @@ function cloneConfig(config: SettingsConfig): SettingsConfig {
     agent: {
       ...config.agent,
       paths: { ...config.agent.paths },
+      orchestration: { ...config.agent.orchestration },
     },
     chunking: { ...config.chunking },
     graph: { ...config.graph },
@@ -253,6 +254,40 @@ export default function Settings() {
                     className="h-4 w-4 accent-accent"
                   />
                 </label>
+                <div className="mt-3 grid gap-3 md:grid-cols-3">
+                  <NumberField
+                    label={t.settings.maxConcurrentAgents}
+                    value={draft.agent.orchestration.maxConcurrentAgents}
+                    min={1}
+                    max={16}
+                    onChange={(value) =>
+                      updateDraft((next) => {
+                        next.agent.orchestration.maxConcurrentAgents = value;
+                      })
+                    }
+                  />
+                  <TextField
+                    label={t.settings.agentNamePrefix}
+                    value={draft.agent.orchestration.namePrefix}
+                    onChange={(value) =>
+                      updateDraft((next) => {
+                        next.agent.orchestration.namePrefix = value;
+                      })
+                    }
+                  />
+                  <TextField
+                    label={t.settings.managerName}
+                    value={draft.agent.orchestration.managerName}
+                    onChange={(value) =>
+                      updateDraft((next) => {
+                        next.agent.orchestration.managerName = value;
+                      })
+                    }
+                  />
+                </div>
+                <p className="mt-2 text-xs leading-relaxed text-ink-faint">
+                  {t.settings.agentOrchestrationDesc}
+                </p>
               </Panel>
 
               <Panel
@@ -681,11 +716,13 @@ function NumberField({
   label,
   value,
   min,
+  max,
   onChange,
 }: {
   label: string;
   value: number;
   min: number;
+  max?: number;
   onChange: (value: number) => void;
 }) {
   return (
@@ -694,6 +731,7 @@ function NumberField({
       <input
         type="number"
         min={min}
+        max={max}
         value={value}
         onChange={(e) => onChange(Number(e.target.value))}
         className="mt-1 block w-full rounded border border-line bg-bg px-2 py-1.5 font-mono text-sm text-ink outline-none focus:border-accent"

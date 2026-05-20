@@ -6,7 +6,12 @@
   "agent": {
     "default": null,
     "safeMode": false,
-    "paths": {}
+    "paths": {},
+    "orchestration": {
+      "maxConcurrentAgents": 5,
+      "namePrefix": "agent",
+      "managerName": "manager"
+    }
   },
   "chunking": {
     "maxFiles": 8,
