@@ -254,7 +254,31 @@ export default function Settings() {
                     className="h-4 w-4 accent-accent"
                   />
                 </label>
-                <div className="mt-3 grid gap-3 md:grid-cols-3">
+                <div className="mt-3 grid gap-3 md:grid-cols-4">
+                  <label className="rounded border border-line bg-bg px-3 py-2">
+                    <span className="text-xs text-ink-faint">
+                      {t.settings.multiAgentCli}
+                    </span>
+                    <select
+                      value={draft.agent.orchestration.cli ?? ""}
+                      onChange={(e) =>
+                        updateDraft((next) => {
+                          next.agent.orchestration.cli =
+                            e.target.value === ""
+                              ? null
+                              : (e.target.value as CliName);
+                        })
+                      }
+                      className="mt-1 block w-full rounded border border-line bg-bg-panel px-2 py-1.5 text-sm text-ink outline-none focus:border-accent"
+                    >
+                      <option value="">{t.settings.followDefaultCli}</option>
+                      {CLI_NAMES.map((name) => (
+                        <option key={name} value={name}>
+                          {name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
                   <NumberField
                     label={t.settings.maxConcurrentAgents}
                     value={draft.agent.orchestration.maxConcurrentAgents}

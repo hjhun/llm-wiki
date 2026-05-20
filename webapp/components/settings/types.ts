@@ -25,6 +25,7 @@ export type SettingsConfig = {
     safeMode: boolean;
     paths: Partial<Record<CliName, string>>;
     orchestration: {
+      cli: CliName | null;
       maxConcurrentAgents: number;
       namePrefix: string;
       managerName: string;

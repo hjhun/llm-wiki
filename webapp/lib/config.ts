@@ -32,15 +32,26 @@ export const ConfigSchema = z.object({
     orchestration: z
       .object({
         /**
+         * Optional CLI used by multi-agent wiki operations. When null, the
+         * operation uses the caller/default CLI. When set, every worker and
+         * manager pass uses this single CLI instead of rotating across all
+         * detected CLIs.
+         */
+        cli: z
+          .enum(["codex", "claude", "gemini", "cline"])
+          .nullable()
+          .default(null),
+        /**
          * Upper bound for worker CLI processes the chat orchestrator may run
          * for /ingest, /ingest-loop, /query, and /lint. The coordinator uses
-         * the default CLI and names workers with `namePrefix-N`.
+         * the selected orchestration CLI and names workers with `namePrefix-N`.
          */
         maxConcurrentAgents: z.number().int().min(1).max(16).default(2),
         namePrefix: z.string().min(1).max(40).default("agent"),
         managerName: z.string().min(1).max(40).default("manager"),
       })
       .default({
+        cli: null,
         maxConcurrentAgents: 2,
         namePrefix: "agent",
         managerName: "manager",

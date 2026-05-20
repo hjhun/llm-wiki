@@ -8,6 +8,7 @@
     "safeMode": false,
     "paths": {},
     "orchestration": {
+      "cli": null,
       "maxConcurrentAgents": 2,
       "namePrefix": "agent",
       "managerName": "manager"

@@ -1,6 +1,6 @@
 import "server-only";
 
-import { detectAllCli, runCli, type CliName, type RunResult } from "./cli";
+import { runCli, type CliName, type RunResult } from "./cli";
 import type { Config } from "./config";
 import type { ChatKind } from "./chat-events";
 import { appendMessage } from "./sessions";
@@ -62,25 +62,14 @@ function clampAgentCount(cfg: Config): number {
   );
 }
 
-async function buildWorkers(
+function buildWorkers(
   cfg: Config,
   managerCli: CliName,
-): Promise<Worker[]> {
-  const detected = await detectAllCli({ includeVersion: false });
-  const ready = new Set(
-    detected.filter((info) => info.path).map((info) => info.name),
-  );
-  const roster = [
-    managerCli,
-    ...detected
-      .map((info) => info.name)
-      .filter((name) => name !== managerCli && ready.has(name)),
-  ];
-  const uniqueRoster = [...new Set(roster)];
+): Worker[] {
+  const cli = cfg.agent.orchestration.cli ?? managerCli;
   const count = clampAgentCount(cfg);
   const prefix = cfg.agent.orchestration.namePrefix.trim() || "agent";
   return Array.from({ length: count }, (_, index) => {
-    const cli = uniqueRoster[index % uniqueRoster.length] ?? managerCli;
     return {
       index,
       name: `${prefix}-${index + 1}`,
@@ -291,7 +280,8 @@ async function runSingleRoundOperation(input: {
   signal?: AbortSignal;
   onChunk?: (text: string) => void;
 }): Promise<MultiAgentResult> {
-  const workers = await buildWorkers(input.cfg, input.agent);
+  const orchestrationCli = input.cfg.agent.orchestration.cli ?? input.agent;
+  const workers = buildWorkers(input.cfg, orchestrationCli);
   const ingestBefore =
     input.kind === "ingest" ? await readProgressSnapshot() : null;
   const runs = await runWorkerBatch({
@@ -316,7 +306,7 @@ async function runSingleRoundOperation(input: {
     const bestExit = runs.some((run) => run.result?.exitCode === 0) ? 0 : 1;
     const graph = await maybeAutoRunGraphify({
       cfg: input.cfg,
-      agent: input.agent,
+      agent: orchestrationCli,
       sessionPath: input.sessionPath,
       lastExitCode: bestExit,
       before: ingestBefore,
@@ -329,7 +319,7 @@ async function runSingleRoundOperation(input: {
     if (progressAdvanced && graph.action !== "update") {
       const finalGraph = await maybeAutoRunGraphify({
         cfg: input.cfg,
-        agent: input.agent,
+        agent: orchestrationCli,
         sessionPath: input.sessionPath,
         lastExitCode: bestExit,
         before: ingestBefore,
@@ -343,7 +333,7 @@ async function runSingleRoundOperation(input: {
 
   const manager = await runManager({
     cfg: input.cfg,
-    agent: input.agent,
+    agent: orchestrationCli,
     kind: input.kind,
     sessionPath: input.sessionPath,
     userPrompt: input.prompt,
@@ -378,7 +368,8 @@ async function runLoopOperation(input: {
   onChunk?: (text: string) => void;
 }): Promise<MultiAgentResult> {
   await clearStopFlag(input.sessionPath);
-  const workers = await buildWorkers(input.cfg, input.agent);
+  const orchestrationCli = input.cfg.agent.orchestration.cli ?? input.agent;
+  const workers = buildWorkers(input.cfg, orchestrationCli);
   const maxRounds = input.cfg.cli.ingestLoop.maxIterations;
   const timeoutMs = input.cfg.cli.timeouts["ingest-loop"] ?? undefined;
   const loopBefore = await readProgressSnapshot();
@@ -442,7 +433,7 @@ async function runLoopOperation(input: {
     const snap = await readProgressSnapshot();
     const graph = await maybeAutoRunGraphify({
       cfg: input.cfg,
-      agent: input.agent,
+      agent: orchestrationCli,
       sessionPath: input.sessionPath,
       lastExitCode,
       before: prevSnap,
@@ -452,7 +443,11 @@ async function runLoopOperation(input: {
     });
     if (graph.note) {
       allRuns.push({
-        worker: { index: workers.length, name: "auto-graph", cli: input.agent },
+        worker: {
+          index: workers.length,
+          name: "auto-graph",
+          cli: orchestrationCli,
+        },
         round,
         result: {
           stdout: graph.note,
@@ -511,7 +506,7 @@ async function runLoopOperation(input: {
         }
       : await maybeAutoRunGraphify({
           cfg: input.cfg,
-          agent: input.agent,
+          agent: orchestrationCli,
           sessionPath: input.sessionPath,
           lastExitCode,
           before: loopBefore,
@@ -521,7 +516,11 @@ async function runLoopOperation(input: {
         });
     if (finalGraph.note) {
       allRuns.push({
-        worker: { index: workers.length + 1, name: "auto-graph-final", cli: input.agent },
+        worker: {
+          index: workers.length + 1,
+          name: "auto-graph-final",
+          cli: orchestrationCli,
+        },
         round,
         result: {
           stdout: finalGraph.note,
@@ -538,7 +537,7 @@ async function runLoopOperation(input: {
 
   const manager = await runManager({
     cfg: input.cfg,
-    agent: input.agent,
+    agent: orchestrationCli,
     kind: "ingest-loop",
     sessionPath: input.sessionPath,
     userPrompt: input.prompt,

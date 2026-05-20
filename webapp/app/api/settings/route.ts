@@ -28,6 +28,7 @@ const Body = z.object({
       safeMode: z.boolean(),
       paths: AgentPaths,
       orchestration: z.object({
+        cli: z.enum(["codex", "claude", "gemini", "cline"]).nullable(),
         maxConcurrentAgents: z.number().int().min(1).max(16),
         namePrefix: z.string().min(1).max(40),
         managerName: z.string().min(1).max(40),
