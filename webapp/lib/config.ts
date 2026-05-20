@@ -198,6 +198,14 @@ export const ConfigSchema = z.object({
     sessionSecret: z.string().nullable().default(null),
     /** 세션 유효 시간(초). null이면 만료 시각 없는 장기 로그인. */
     sessionTtlSec: z.number().int().min(60).nullable().default(60 * 60 * 24),
+    /**
+     * Long-lived bearer token used by the local `clio` CLI to authenticate
+     * against the same API surface as the web UI. Generated on demand when
+     * the CLI first calls /api/cli/token (or via Settings). Stored in plain
+     * text because the CLI reads it directly from local.json; the whole
+     * file is already protected by filesystem permissions.
+     */
+    cliToken: z.string().nullable().default(null),
   }),
   /**
    * Auto-ingest trigger. When enabled, a background watcher or scheduler

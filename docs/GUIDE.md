@@ -102,6 +102,9 @@ The repository includes local instructions in `.agents/skills/`. These tell the 
 
 ### Optional Helpers
 
+- A Rust toolchain (`cargo`) to build the `clio` CLI. `setup.sh` builds it
+  automatically when `cargo` is on `PATH`, and skips the build with a
+  warning otherwise. The web app works without it.
 - `graphify` from the official `graphifyy` Python package
 - `qmd` for search/reranking
 - Marp CLI for slide-style answers
@@ -116,17 +119,17 @@ Run:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/hjhun/llm-wiki/main/scripts/install.sh | bash -s -- --start
-cd clio
+cd ~/.clio
 ```
 
 What this does:
 
 1. Resolves the latest GitHub release and downloads its source archive.
-2. Installs it into `./clio`.
-3. Runs `setup.sh`.
+2. Installs it into `~/.clio` (the default install directory).
+3. Runs `setup.sh`, which builds the web app and the `clio` CLI.
 4. Starts the web app in the background.
 
-The installer never overwrites an existing directory. If `./clio` already exists, choose another path:
+The installer never overwrites an existing directory. If `~/.clio` already exists, choose another path:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/hjhun/llm-wiki/main/scripts/install.sh | bash -s -- --dir ./my-clio --start
@@ -136,7 +139,7 @@ cd my-clio
 To update an existing install while preserving your source and wiki data:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/hjhun/llm-wiki/main/scripts/install.sh | bash -s -- update --dir ./clio --start
+curl -fsSL https://raw.githubusercontent.com/hjhun/llm-wiki/main/scripts/install.sh | bash -s -- update --dir ~/.clio --start
 ```
 
 Or, from inside the installed CLIO directory:
@@ -166,7 +169,7 @@ curl -fsSL https://raw.githubusercontent.com/hjhun/llm-wiki/main/scripts/install
 |---|---|
 | `install` | Default command. Create a new install directory. |
 | `update`, `upgrade` | Update an existing install from the selected release/ref while preserving `raw/`, `wiki/`, `sessions/`, local config, runtime files, and webapp build/dependency outputs. |
-| `--dir <path>` | Install directory. Default: `./clio`. |
+| `--dir <path>` | Install directory. Default: `~/.clio`. |
 | `--version <ver>` | GitHub release tag to install, or `latest`. Default: `latest`. |
 | `--ref <ref>` | GitHub tag, branch, or commit to install exactly. Overrides `--version`. |
 | `--repo <repo>` | GitHub repository. Default: `hjhun/llm-wiki`. |
@@ -260,6 +263,55 @@ sudo journalctl -u clio-web.service -f
 sudo systemctl restart clio-web.service
 sudo systemctl disable --now clio-web.service
 ```
+
+### Use the `clio` Command-Line Interface
+
+`setup.sh` builds a native Rust CLI and installs it to
+`<install-dir>/bin/clio`. It runs the same operations as the Chat tab, so
+you can manage a wiki without opening the browser.
+
+Add the binary to your `PATH` (the installer prints this line when needed):
+
+```bash
+export PATH="$HOME/.clio/bin:$PATH"
+```
+
+Manage source material — these commands work offline; they only touch the
+filesystem:
+
+```bash
+clio raw add ~/Downloads/paper.pdf            # copy into raw/
+clio raw add ./notes/ --dest research/notes   # copy a folder under raw/research/notes
+clio raw list                                 # list everything under raw/
+clio raw remove research/old.md               # soft-delete to raw/.trash/
+```
+
+Re-running `clio raw add` on a path that already exists in `raw/` replaces
+it and backs the previous bytes up to `raw/.trash/` first, so an "add" of an
+existing file is effectively an update.
+
+Drive the wiki — these commands call the running web app, so start it first
+with `./setup.sh --start`:
+
+```bash
+clio ingest raw/research                      # one /ingest pass
+clio ingest-loop                              # /ingest-loop until raw/ is drained
+clio query "What does the wiki say about retrieval?"
+clio lint --fix                               # wiki-lint health check
+clio status                                   # show project, webapp URL, token
+```
+
+Because `ingest`, `ingest-loop`, `query`, and `lint` go through the web
+app's HTTP API, they use the coding agent configured in **Settings** and
+produce the same session logs, progress dashboard, and graph updates as the
+Chat tab.
+
+The CLI finds its project automatically: it checks `$CLIO_HOME`, then
+`~/.clio`, then walks up from the current directory. It reads the web app
+port and the bearer token (`auth.cliToken`) from `config/local.json`, which
+`setup.sh` generates. Override any of these with `--home`, `--base-url`, or
+`--token` (or the matching `CLIO_HOME` / `CLIO_BASE_URL` / `CLIO_TOKEN`
+environment variables).
 
 ## 6. First Login
 

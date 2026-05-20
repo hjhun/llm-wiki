@@ -53,12 +53,15 @@ The important split is ownership:
 
 ## Quick Start
 
-Install the latest GitHub release into `./clio`, run setup, and start the web app:
+Install the latest GitHub release into `~/.clio`, run setup, and start the web app:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/hjhun/llm-wiki/main/scripts/install.sh | bash -s -- --start
-cd clio
+cd ~/.clio
 ```
+
+The installer defaults to `~/.clio`. Pass `--dir <path>` (or set `CLIO_INSTALL_DIR`)
+to install somewhere else; the installer never overwrites an existing directory.
 
 Open:
 
@@ -88,6 +91,8 @@ The project setup and full workflows need:
 - npm
 - Python 3
 - At least one supported coding agent CLI: `codex`, `claude`, `gemini`, or `cline`
+- Optional: a Rust toolchain (`cargo`) to build the `clio` CLI — `setup.sh`
+  skips the CLI build with a warning when `cargo` is missing
 - Optional: `graphify`, `qmd`, and Marp CLI
 
 `setup.sh` detects installed agent CLIs and writes the result to `config/cli-detected.json`. Missing CLIs can be installed manually or configured by path in Settings.
@@ -144,6 +149,40 @@ Run graph workflows from the **Graph** tab:
 
 The web app does not execute `graphify` directly. The selected coding agent reads the `wiki-graphify` skill and uses the global `graphify` command from `PATH`, or `python3 -m graphify` when appropriate.
 
+## Command-Line Interface (`clio`)
+
+`setup.sh` builds a native Rust CLI and installs it to `<install-dir>/bin/clio`.
+It runs the same operations as the Chat tab, so you can drive a wiki from a
+terminal or a script.
+
+Add it to your `PATH` (the installer prints this line when needed):
+
+```bash
+export PATH="$HOME/.clio/bin:$PATH"
+```
+
+| Command | What it does |
+|---|---|
+| `clio raw add <path>...` | Copy files or folders into `raw/`. Re-adding an existing path replaces it and backs the previous bytes up to `raw/.trash/`. |
+| `clio raw remove <raw-path>...` | Soft-delete a file from `raw/` (moves it to `raw/.trash/`). |
+| `clio raw list [raw-path]` | List files currently under `raw/`. |
+| `clio ingest [path]` | Run one `/ingest` pass through the configured coding agent. |
+| `clio ingest-loop` | Run `/ingest-loop` until the progress state is drained. |
+| `clio query <question>` | Ask the wiki a question. |
+| `clio lint [--fix]` | Run the wiki-lint health check. |
+| `clio status` | Show the resolved project, webapp URL, and token status. |
+
+`ingest`, `ingest-loop`, `query`, and `lint` call the **running webapp's HTTP
+API**, so they behave exactly like the Chat tab — same coding agent, same
+ingest-loop orchestration, same session logs. Start the webapp first
+(`./setup.sh --start`). `raw` subcommands work offline; they only touch the
+filesystem.
+
+The CLI finds its project by checking `$CLIO_HOME`, then `~/.clio`, then
+walking up from the current directory. It reads the webapp port and the
+`auth.cliToken` from `config/local.json`. Override any of these with
+`--home`, `--base-url`, or `--token` (or the matching `CLIO_*` env vars).
+
 ## Adding Your Own Raw Data
 
 `raw/` is the only place you should put original material.
@@ -172,6 +211,7 @@ Tips:
 - Do not put secrets, API keys, private tokens, or unnecessary personal data into `raw/`.
 - If a PDF or image is scanned and has no selectable text, OCR it first or add a companion `.md` note.
 - After adding files, run `/ingest-loop raw/<folder>` or enable Auto Ingest in Settings.
+- From a terminal, `clio raw add <file>` copies material in and `clio ingest-loop` processes it.
 
 ## Web UI
 
@@ -208,7 +248,7 @@ Installer options:
 |---|---|
 | `install` | Default command. Create a new install directory. |
 | `update`, `upgrade` | Update an existing install from the selected release/ref. Preserves `raw/`, `wiki/`, `sessions/`, `config/local.json`, `.run/`, `webapp/node_modules/`, `webapp/.next/`, and `webapp/.env*`. |
-| `--dir <path>` | Install directory. Default: `./clio`. The installer never overwrites an existing path. |
+| `--dir <path>` | Install directory. Default: `~/.clio`. The installer never overwrites an existing path. |
 | `--version <ver>` | GitHub release tag to install, or `latest`. Default: `latest`. |
 | `--ref <ref>` | GitHub tag, branch, or commit to install exactly. Overrides `--version`. |
 | `--repo <repo>` | GitHub repo as `owner/name` or a `github.com` URL. Default: `hjhun/llm-wiki`. |
@@ -241,6 +281,7 @@ Common `setup.sh` options:
 | `--skip-graphify` | Do not install or upgrade graphify. |
 | `--skip-npm-install` | Skip `webapp/` dependency checks and installation. |
 | `--skip-build` | Skip `npm run build`. |
+| `--skip-cli` | Skip building the Rust `clio` CLI. |
 | `--with-qmd` | Best-effort optional qmd setup. |
 | `--with-marp` | Best-effort optional Marp CLI setup. |
 | `--install-cli=<names>` | Best-effort CLI install for `codex`, `claude`, `gemini`, or `cline`. |
@@ -336,6 +377,7 @@ latest release, or when users pass `--version vX.Y.Z`.
 .
 ├── .agents/skills/       # Project-local agent skills
 ├── .github/workflows/     # GitHub Actions release automation
+├── cli-rs/               # Native Rust `clio` CLI source
 ├── config/               # Default and local configuration
 ├── docs/                 # User guides, QA notes, release notes
 ├── examples/raw/         # Sample source material

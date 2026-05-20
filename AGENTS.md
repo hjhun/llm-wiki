@@ -38,6 +38,7 @@
 | `tools/` | setup.sh | System | Project-local helper tools such as qmd. graphify uses the global install. |
 | `.agents/skills/` | Project | Change via PR | Project-local skills. **They take priority over global skills.** |
 | `webapp/`, `config/` | System | User/admin | Next.js full-stack web UI and settings. Do not touch during wiki operations (`/ingest`, `/query`, `/lint`). |
+| `cli-rs/`, `bin/` | System | User/admin | Rust `clio` CLI source and the binary `setup.sh` builds from it. Do not touch during wiki operations. |
 
 ## 3. Operations - Preprocess / Ingest / Query / Lint
 

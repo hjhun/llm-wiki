@@ -42,6 +42,65 @@ export async function ensureSessionSecret(): Promise<string> {
   return secret;
 }
 
+const CLI_TOKEN_PREFIX = "clio_";
+
+function newCliTokenValue(): string {
+  return CLI_TOKEN_PREFIX + randomBytes(32).toString("hex");
+}
+
+/**
+ * cliToken이 없으면 32바이트 랜덤 토큰을 만들어 local.json에 저장하고
+ * 반환한다. 이미 있으면 그대로 반환. 로컬 `clio` CLI가 웹앱 HTTP API에
+ * 인증하기 위해 사용한다.
+ */
+export async function ensureCliToken(): Promise<string> {
+  const cfg = await loadConfig();
+  if (cfg.auth.cliToken) return cfg.auth.cliToken;
+  const token = newCliTokenValue();
+  await patchLocalConfig({ auth: { ...cfg.auth, cliToken: token } });
+  return token;
+}
+
+/**
+ * cliToken을 새로 발급해 기존 값을 덮어쓴다. Settings UI 또는
+ * `clio auth rotate` 호출 시 사용. 반환값은 새 토큰이다.
+ */
+export async function rotateCliToken(): Promise<string> {
+  const cfg = await loadConfig();
+  const token = newCliTokenValue();
+  await patchLocalConfig({ auth: { ...cfg.auth, cliToken: token } });
+  return token;
+}
+
+/**
+ * 주어진 Bearer 토큰이 저장된 cliToken과 일치하는지 검증.
+ * 시간차 공격을 막기 위해 길이가 다르면 즉시 false.
+ */
+export async function verifyCliToken(
+  token: string | undefined | null,
+): Promise<boolean> {
+  if (!token) return false;
+  const cfg = await loadConfig();
+  const expected = cfg.auth.cliToken;
+  if (!expected || expected.length !== token.length) return false;
+  let diff = 0;
+  for (let i = 0; i < expected.length; i += 1) {
+    diff |= expected.charCodeAt(i) ^ token.charCodeAt(i);
+  }
+  return diff === 0;
+}
+
+/**
+ * Authorization 헤더에서 Bearer 토큰을 추출. 형식이 맞지 않으면 null.
+ */
+export function extractBearerToken(
+  authHeader: string | null | undefined,
+): string | null {
+  if (!authHeader) return null;
+  const match = /^Bearer\s+(.+)$/i.exec(authHeader.trim());
+  return match ? match[1].trim() : null;
+}
+
 export async function isFirstRun(): Promise<boolean> {
   const cfg = await loadConfig();
   return cfg.auth.passwordHash == null;

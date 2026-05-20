@@ -4,7 +4,11 @@ set -euo pipefail
 DEFAULT_REPO="hjhun/llm-wiki"
 DEFAULT_VERSION="latest"
 DEFAULT_FALLBACK_REF="main"
-DEFAULT_DIR="clio"
+# When the caller does not pass --dir, fall back to ${HOME}/.clio so a fresh
+# install lands in a hidden home directory by default. Anyone who needs the
+# pre-1.0 behaviour of installing into ./clio can still pass --dir or set
+# CLIO_INSTALL_DIR explicitly.
+DEFAULT_DIR="${HOME:-${USERPROFILE:-.}}/.clio"
 
 INSTALL_DIR="${CLIO_INSTALL_DIR:-${DEFAULT_DIR}}"
 INSTALL_DIR_SET=0
@@ -47,7 +51,7 @@ Commands:
                     webapp/node_modules/, webapp/.next/, and webapp/.env*.
 
 Installer options:
-  --dir <path>       Install directory (default: ./clio)
+  --dir <path>       Install directory (default: ~/.clio).
                     For update/upgrade, defaults to . when run inside CLIO.
   --version <ver>    GitHub release tag to install, or "latest" (default: latest)
   --ref <ref>        GitHub tag, branch, or commit to install exactly.
@@ -370,6 +374,7 @@ run_update() {
   local extracted_root=""
   local update_paths=(
     ".agents/skills"
+    "cli-rs"
     "config/default.json"
     "docs"
     "scripts"

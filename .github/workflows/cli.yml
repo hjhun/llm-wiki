@@ -1,0 +1,60 @@
+name: CLI
+
+# Build, lint, and test the native Rust `clio` CLI (cli-rs/). Runs on any
+# change that can affect the crate so a broken CLI never reaches a release.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "cli-rs/**"
+      - ".github/workflows/cli.yml"
+  pull_request:
+    paths:
+      - "cli-rs/**"
+      - ".github/workflows/cli.yml"
+  workflow_dispatch:
+
+defaults:
+  run:
+    working-directory: cli-rs
+
+jobs:
+  test:
+    name: build & test
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            cli-rs/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('cli-rs/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
+
+      - name: Format check
+        run: cargo fmt --all -- --check
+
+      - name: Clippy
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: Build (release)
+        run: cargo build --release --locked
+
+      - name: Test
+        run: cargo test --locked

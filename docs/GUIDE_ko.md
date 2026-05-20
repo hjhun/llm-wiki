@@ -99,6 +99,9 @@ CLIO는 단순히 문서에 채팅하는 도구가 아닙니다. 중요한 결�
 
 ### 선택 도구
 
+- `clio` CLI를 빌드하기 위한 Rust 툴체인(`cargo`). `cargo`가 `PATH`에 있으면
+  `setup.sh`가 자동으로 빌드하고, 없으면 경고만 남기고 건너뜁니다. 웹앱은
+  CLI 없이도 동작합니다.
 - 공식 `graphifyy` Python 패키지의 `graphify` 명령
 - 검색/재랭킹 보조용 `qmd`
 - 슬라이드 답변 생성을 위한 Marp CLI
@@ -109,21 +112,21 @@ CLIO는 단순히 문서에 채팅하는 도구가 아닙니다. 중요한 결�
 
 ### 권장 릴리스 설치
 
-아래 명령은 최신 GitHub 릴리스를 `./clio`에 설치하고 설정 후 웹앱을 시작합니다.
+아래 명령은 최신 GitHub 릴리스를 `~/.clio`에 설치하고 설정 후 웹앱을 시작합니다.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/hjhun/llm-wiki/main/scripts/install.sh | bash -s -- --start
-cd clio
+cd ~/.clio
 ```
 
 이 명령이 하는 일:
 
 1. 최신 GitHub 릴리스 태그를 확인하고 해당 소스 아카이브를 내려받습니다.
-2. `./clio` 디렉터리에 압축을 풉니다.
-3. `setup.sh`를 실행합니다.
+2. 기본 설치 디렉터리인 `~/.clio`에 압축을 풉니다.
+3. `setup.sh`를 실행해 웹앱과 `clio` CLI를 빌드합니다.
 4. 웹앱을 백그라운드로 시작합니다.
 
-설치 스크립트는 기존 디렉터리를 덮어쓰지 않습니다. `./clio`가 이미 있으면 다른 경로를 지정하세요.
+설치 스크립트는 기존 디렉터리를 덮어쓰지 않습니다. `~/.clio`가 이미 있으면 다른 경로를 지정하세요.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/hjhun/llm-wiki/main/scripts/install.sh | bash -s -- --dir ./my-clio --start
@@ -133,7 +136,7 @@ cd my-clio
 기존 설치본을 업데이트하면서 원본 자료와 위키 데이터는 보존하려면 다음처럼 실행합니다.
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/hjhun/llm-wiki/main/scripts/install.sh | bash -s -- update --dir ./clio --start
+curl -fsSL https://raw.githubusercontent.com/hjhun/llm-wiki/main/scripts/install.sh | bash -s -- update --dir ~/.clio --start
 ```
 
 이미 설치 디렉터리 안에 있다면 `--dir`은 생략할 수 있습니다.
@@ -163,7 +166,7 @@ curl -fsSL https://raw.githubusercontent.com/hjhun/llm-wiki/main/scripts/install
 |---|---|
 | `install` | 기본 command. 새 설치 디렉터리를 만듭니다 |
 | `update`, `upgrade` | 선택한 릴리스/ref에서 기존 설치본을 업데이트합니다. `raw/`, `wiki/`, `sessions/`, 로컬 설정, 런타임 파일, 웹앱 빌드/의존성 산출물은 보존합니다 |
-| `--dir <path>` | 설치 디렉터리. 기본값은 `./clio` |
+| `--dir <path>` | 설치 디렉터리. 기본값은 `~/.clio` |
 | `--version <ver>` | 설치할 GitHub 릴리스 태그 또는 `latest`. 기본값은 `latest` |
 | `--ref <ref>` | GitHub 태그, 브랜치, 커밋을 정확히 설치. `--version`보다 우선합니다 |
 | `--repo <repo>` | GitHub 저장소. 기본값은 `hjhun/llm-wiki` |
@@ -257,6 +260,52 @@ sudo journalctl -u clio-web.service -f
 sudo systemctl restart clio-web.service
 sudo systemctl disable --now clio-web.service
 ```
+
+### `clio` 명령줄 인터페이스 사용하기
+
+`setup.sh`는 네이티브 Rust CLI를 빌드해 `<설치 디렉터리>/bin/clio`에
+설치합니다. 이 CLI는 Chat 탭과 동일한 작업을 수행하므로 브라우저 없이도
+터미널에서 위키를 관리할 수 있습니다.
+
+바이너리를 `PATH`에 추가합니다(필요할 때 설치 스크립트가 이 줄을 출력합니다).
+
+```bash
+export PATH="$HOME/.clio/bin:$PATH"
+```
+
+원본 자료 관리 — 다음 명령은 웹앱 없이 동작하며 파일 시스템만 다룹니다.
+
+```bash
+clio raw add ~/Downloads/paper.pdf            # raw/ 안으로 복사
+clio raw add ./notes/ --dest research/notes   # 폴더를 raw/research/notes 로 복사
+clio raw list                                 # raw/ 아래 전체 목록
+clio raw remove research/old.md               # raw/.trash/ 로 소프트 삭제
+```
+
+`raw/`에 이미 있는 경로에 `clio raw add`를 다시 실행하면, 기존 바이트를
+먼저 `raw/.trash/`에 백업한 뒤 새 내용으로 교체합니다. 즉 기존 파일을
+다시 add하면 사실상 업데이트로 동작합니다.
+
+위키 작업 — 다음 명령은 실행 중인 웹앱을 호출하므로 먼저
+`./setup.sh --start`로 웹앱을 띄워야 합니다.
+
+```bash
+clio ingest raw/research                      # /ingest 1회 패스
+clio ingest-loop                              # raw/ 가 비워질 때까지 /ingest-loop
+clio query "위키가 검색에 대해 뭐라고 하나요?"
+clio lint --fix                               # wiki-lint 건강 점검
+clio status                                   # 프로젝트, 웹앱 URL, 토큰 표시
+```
+
+`ingest`, `ingest-loop`, `query`, `lint`는 웹앱 HTTP API를 거치므로
+Settings에서 설정한 코딩 에이전트를 그대로 사용하고, Chat 탭과 동일한
+세션 로그·진행 대시보드·그래프 업데이트를 생성합니다.
+
+CLI는 프로젝트를 자동으로 찾습니다. `$CLIO_HOME`, 그다음 `~/.clio`,
+마지막으로 현재 디렉터리에서 위로 거슬러 올라가며 탐색합니다. 웹앱 포트와
+베어러 토큰(`auth.cliToken`)은 `setup.sh`가 생성하는 `config/local.json`에서
+읽습니다. `--home`, `--base-url`, `--token` 옵션(또는 대응하는 `CLIO_HOME` /
+`CLIO_BASE_URL` / `CLIO_TOKEN` 환경 변수)으로 각 값을 덮어쓸 수 있습니다.
 
 ## 6. 첫 로그인
 

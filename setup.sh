@@ -9,6 +9,8 @@ WIKI_DIR="${ROOT_DIR}/wiki"
 RAW_DIR="${ROOT_DIR}/raw"
 SESSIONS_DIR="${ROOT_DIR}/sessions"
 RUN_DIR="${ROOT_DIR}/.run"
+CLI_RS_DIR="${ROOT_DIR}/cli-rs"
+BIN_DIR="${ROOT_DIR}/bin"
 SERVER_PID_FILE="${RUN_DIR}/webapp.pid"
 SERVER_LOG_FILE="${RUN_DIR}/webapp.log"
 
@@ -18,6 +20,7 @@ DEV_MODE=0
 SKIP_GRAPHIFY=0
 SKIP_NPM_INSTALL=0
 SKIP_BUILD=0
+SKIP_CLI=0
 START_SERVER=0
 SHUTDOWN_SERVER=0
 RESTART_EXISTING=1
@@ -55,6 +58,7 @@ Options:
   --skip-graphify               Do not install graphify; use existing global graphify if available
   --skip-npm-install            Do not run npm install in webapp/ (default skips when dependencies are present)
   --skip-build                  Do not run npm run build
+  --skip-cli                    Do not build the Rust `clio` CLI (cli-rs/)
   --with-qmd                    Best-effort optional qmd clone into tools/qmd
   --with-marp                   Best-effort optional Marp CLI install
   --with-agent-browser          Best-effort optional agent-browser install
@@ -106,6 +110,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --skip-build)
       SKIP_BUILD=1
+      shift
+      ;;
+    --skip-cli)
+      SKIP_CLI=1
       shift
       ;;
     --with-qmd)
@@ -605,6 +613,51 @@ EOF
   write_if_missing "${SESSIONS_DIR}/.gitkeep" ""
 }
 
+build_clio_cli() {
+  if [[ "${SKIP_CLI}" -eq 1 ]]; then
+    log "skipping Rust clio CLI build (--skip-cli)"
+    return
+  fi
+  if [[ ! -d "${CLI_RS_DIR}" ]]; then
+    warn "cli-rs/ not found; skipping clio CLI build"
+    return
+  fi
+  if ! command -v cargo >/dev/null 2>&1; then
+    warn "cargo not found on PATH; skipping clio CLI build"
+    warn "install the Rust toolchain (https://rustup.rs) and re-run setup, or pass --skip-cli"
+    return
+  fi
+
+  log "building Rust clio CLI (release)"
+  if ! (cd "${CLI_RS_DIR}" && cargo build --release --quiet); then
+    warn "clio CLI build failed; the webapp still works. Re-run setup after fixing the toolchain."
+    return
+  fi
+
+  local built="${CLI_RS_DIR}/target/release/clio"
+  if [[ ! -x "${built}" ]]; then
+    warn "expected binary not found at ${built}; skipping install"
+    return
+  fi
+
+  mkdir -p "${BIN_DIR}"
+  install -m 0755 "${built}" "${BIN_DIR}/clio"
+  log "installed clio CLI to ${BIN_DIR}/clio"
+  if ! command -v clio >/dev/null 2>&1; then
+    log "add it to PATH:  export PATH=\"${BIN_DIR}:\$PATH\""
+  fi
+}
+
+ensure_cli_token() {
+  local script="${WEBAPP_DIR}/scripts/ensure-cli-token.mjs"
+  if [[ ! -f "${script}" ]]; then
+    return
+  fi
+  if ! PROJECT_ROOT="${ROOT_DIR}" node "${script}"; then
+    warn "could not ensure auth.cliToken in config/local.json; the clio CLI may need CLIO_TOKEN set manually"
+  fi
+}
+
 install_webapp() {
   [[ -d "${WEBAPP_DIR}" ]] || fail "webapp/ directory not found"
   require_command npm
@@ -858,6 +911,8 @@ main() {
   fi
 
   install_webapp
+  ensure_cli_token
+  build_clio_cli
 
   log "setup complete"
   log "open http://${HOST}:${PORT}"

@@ -1,0 +1,42 @@
+[package]
+name = "clio-cli"
+version = "0.1.0"
+edition = "2021"
+description = "Local CLI for the CLIO LLM wiki: manage raw/ and drive ingest/query/lint over the webapp HTTP API."
+license = "Apache-2.0"
+authors = ["CLIO contributors"]
+repository = "https://github.com/hjhun/llm-wiki"
+publish = false
+
+[[bin]]
+name = "clio"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = "1"
+clap = { version = "4.5", features = ["derive", "env"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "fs", "io-util", "signal"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "stream", "rustls-tls"] }
+futures-util = "0.3"
+bytes = "1"
+url = "2"
+sha2 = "0.10"
+hex = "0.4"
+dirs = "5"
+walkdir = "2"
+indicatif = "0.17"
+console = "0.15"
+chrono = { version = "0.4", default-features = false, features = ["clock", "serde"] }
+
+[dev-dependencies]
+assert_cmd = "2"
+predicates = "3"
+tempfile = "3"
+httpmock = "0.7"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = true
