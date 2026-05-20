@@ -37,6 +37,13 @@ export type SettingsConfig = {
   graph: {
     minCommunitySize: number;
     autoUpdateOnIngest: boolean;
+    autoUpdateStrategy: "auto" | "finalOnly" | "partialAndFinal";
+    partialThresholds: {
+      minLeaves: number;
+      minFiles: number;
+      minBytes: number;
+      minSubChunks: number;
+    };
   };
   ui: {
     language: "ko" | "en";

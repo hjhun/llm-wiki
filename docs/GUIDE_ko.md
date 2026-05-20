@@ -631,7 +631,9 @@ config/local.json
 | `agent.orchestration.maxConcurrentAgents` | `5` | ingest/query/lint 작업에 동시에 띄울 수 있는 워커 에이전트 수 |
 | `chunking.maxFilesPerInvocation` | `4` | 에이전트 호출 1회당 최대 raw 파일 수 |
 | `chunking.maxBytesPerFile` | `131072` | 큰 파일은 head + tail만 읽음 |
-| `graph.autoUpdateOnIngest` | `true` | ingest merge pass 후 graph update 실행 |
+| `graph.autoUpdateOnIngest` | `true` | ingest 진행 후 graph 동기화 실행 |
+| `graph.autoUpdateStrategy` | `auto` | `auto`는 작은 ingest에서는 partial graph update를 생략하고 큰 작업에서만 실행합니다. `finalOnly`는 partial을 항상 생략하고, `partialAndFinal`은 항상 실행합니다. |
+| `graph.partialThresholds` | `{ minLeaves: 4, minFiles: 16, minBytes: 1048576, minSubChunks: 4 }` | `auto`가 최종 graph update 전 `update-partial` 실행 여부를 판단할 때 쓰는 작업 규모 임계값 |
 | `autoIngest.enabled` | `false` | 자동 인제스트 기본 비활성화 |
 | `automation.enabled` | `false` | 자동화 스케줄러 기본 비활성화 |
 

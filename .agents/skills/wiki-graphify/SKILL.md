@@ -64,6 +64,25 @@ such as `graphify.detect`, `graphify.extract`, `graphify.build`,
 | `update-partial` | One or more `<leafPath>` (POSIX, trailing `/`) | Build per-leaf partials in `wiki/graph/parts/<sha1(leafPath)>.json` for the listed leaves only. **Skip the merge pass.** Do NOT touch `graph.json`, `GRAPH_REPORT.md`, or rerun community clustering. Update `wiki/graph/.state.json` entries for the affected leaves. Used by the webapp between `/ingest-loop` iterations so partials grow in lockstep with ingest while the merge cost is paid just once at the end. |
 | `query` | One natural-language question, optional `--k=<neighbor-count>` | Graph candidate/context notes, cited nodes, and optional Markdown answer when invoked directly |
 
+## Auto Update Strategy
+
+The webapp controls whether ingest calls `update-partial` between loop
+iterations with `graph.autoUpdateStrategy`.
+
+- `auto` (default): infer workload size from
+  `wiki/.progress/ingest/.state.json`. Run `update-partial` only when at least
+  one `graph.partialThresholds` value is met (`minLeaves`, `minFiles`,
+  `minBytes`, or `minSubChunks`). Smaller ingests skip partials and rely on the
+  final `update`.
+- `finalOnly`: never run ingest-time partials; run `update` after the ingest
+  merge pass.
+- `partialAndFinal`: run partials for completed leaves and still run final
+  `update`.
+
+Regardless of strategy, final `update` must rebuild changed/missing partials
+before merging. This keeps small multi-agent ingests quality-first while large
+ingests remain resumable.
+
 ## Preflight
 
 1. Confirm graphify execution path using the rules above.

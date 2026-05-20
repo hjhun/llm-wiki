@@ -27,8 +27,12 @@ export type StateSummary = {
 };
 
 export type ProgressSnapshot = {
+  leavesTotal: number;
   leavesDone: number;
+  subChunksTotal: number;
   subChunksDone: number;
+  filesTotal: number;
+  bytesTotal: number;
   sourcePagesWritten: number;
   mergeDone: boolean;
   /** Sorted POSIX paths of leaves whose status === "done". */
@@ -36,8 +40,12 @@ export type ProgressSnapshot = {
 };
 
 export const EMPTY_SNAPSHOT: ProgressSnapshot = {
+  leavesTotal: 0,
   leavesDone: 0,
+  subChunksTotal: 0,
   subChunksDone: 0,
+  filesTotal: 0,
+  bytesTotal: 0,
   sourcePagesWritten: 0,
   mergeDone: false,
   doneLeaves: [],
@@ -67,9 +75,14 @@ export async function readProgressSnapshot(): Promise<ProgressSnapshot> {
       leaves?: Record<string, unknown>;
     };
     const doneLeaves: string[] = [];
+    const filePaths = new Set<string>();
     const snap: ProgressSnapshot = {
+      leavesTotal: 0,
       leavesDone: 0,
+      subChunksTotal: 0,
       subChunksDone: 0,
+      filesTotal: 0,
+      bytesTotal: 0,
       sourcePagesWritten: 0,
       mergeDone: parsed.merge_pass?.status === "done",
       doneLeaves,
@@ -77,13 +90,29 @@ export async function readProgressSnapshot(): Promise<ProgressSnapshot> {
     if (parsed.leaves && typeof parsed.leaves === "object") {
       for (const [leafPath, value] of Object.entries(parsed.leaves)) {
         const leaf = (value ?? {}) as Record<string, unknown>;
+        if (leaf.status !== "stale") {
+          snap.leavesTotal += 1;
+        }
         if (leaf.status === "done") {
           snap.leavesDone += 1;
           doneLeaves.push(leafPath);
         }
         if (Array.isArray(leaf.sub_chunks)) {
-          for (const sc of leaf.sub_chunks as Array<Record<string, unknown>>) {
-            if (sc && typeof sc === "object" && sc.status === "done") {
+          for (const rawSc of leaf.sub_chunks) {
+            const sc =
+              rawSc && typeof rawSc === "object"
+                ? (rawSc as Record<string, unknown>)
+                : null;
+            if (!sc) continue;
+            snap.subChunksTotal += 1;
+            if (Array.isArray(sc.files)) {
+              for (const filePath of sc.files) {
+                if (typeof filePath === "string" && filePath) {
+                  filePaths.add(filePath);
+                }
+              }
+            }
+            if (sc.status === "done") {
               snap.subChunksDone += 1;
               if (Array.isArray(sc.source_pages_written)) {
                 snap.sourcePagesWritten += sc.source_pages_written.length;
@@ -94,10 +123,30 @@ export async function readProgressSnapshot(): Promise<ProgressSnapshot> {
       }
     }
     doneLeaves.sort();
+    snap.filesTotal = filePaths.size;
+    snap.bytesTotal = await totalRelativeFileBytes(filePaths);
     return snap;
   } catch {
     return { ...EMPTY_SNAPSHOT, doneLeaves: [] };
   }
+}
+
+async function totalRelativeFileBytes(filePaths: Iterable<string>): Promise<number> {
+  let total = 0;
+  for (const filePath of filePaths) {
+    const normalized = filePath.replace(/\\/g, "/").replace(/^\/+/, "");
+    if (!normalized) continue;
+    const abs = path.resolve(PROJECT_ROOT, normalized);
+    const root = `${PROJECT_ROOT}${path.sep}`;
+    if (abs !== PROJECT_ROOT && !abs.startsWith(root)) continue;
+    try {
+      const st = await fs.stat(abs);
+      if (st.isFile()) total += st.size;
+    } catch {
+      // Best-effort workload estimate; missing files simply do not count.
+    }
+  }
+  return total;
 }
 
 export function ingestMadeProgress(
@@ -550,6 +599,46 @@ export type MaybeAutoRunGraphifyResult = {
   action: GraphifyAction | null;
 };
 
+function graphPartialDecision(
+  cfg: Config,
+  snapshot: ProgressSnapshot,
+): { enabled: boolean; reason: string } {
+  const strategy = cfg.graph.autoUpdateStrategy;
+  if (strategy === "partialAndFinal") {
+    return { enabled: true, reason: "strategy=partialAndFinal" };
+  }
+  if (strategy === "finalOnly") {
+    return { enabled: false, reason: "strategy=finalOnly" };
+  }
+
+  const thresholds = cfg.graph.partialThresholds;
+  const hits = [
+    snapshot.leavesTotal >= thresholds.minLeaves
+      ? `leaves ${snapshot.leavesTotal} >= ${thresholds.minLeaves}`
+      : null,
+    snapshot.filesTotal >= thresholds.minFiles
+      ? `files ${snapshot.filesTotal} >= ${thresholds.minFiles}`
+      : null,
+    snapshot.bytesTotal >= thresholds.minBytes
+      ? `bytes ${snapshot.bytesTotal} >= ${thresholds.minBytes}`
+      : null,
+    snapshot.subChunksTotal >= thresholds.minSubChunks
+      ? `sub-chunks ${snapshot.subChunksTotal} >= ${thresholds.minSubChunks}`
+      : null,
+  ].filter((hit): hit is string => hit !== null);
+
+  if (hits.length > 0) {
+    return { enabled: true, reason: `strategy=auto; ${hits.join(", ")}` };
+  }
+  return {
+    enabled: false,
+    reason:
+      `strategy=auto; workload below thresholds ` +
+      `(leaves=${snapshot.leavesTotal}, files=${snapshot.filesTotal}, ` +
+      `bytes=${snapshot.bytesTotal}, subChunks=${snapshot.subChunksTotal})`,
+  };
+}
+
 export async function maybeAutoRunGraphify(
   input: MaybeAutoRunGraphifyInput,
 ): Promise<MaybeAutoRunGraphifyResult> {
@@ -577,9 +666,18 @@ export async function maybeAutoRunGraphify(
     action = "update";
     progressLabel = "merge pass 완료";
   } else if (justDoneLeaves.length > 0) {
+    const partialDecision = graphPartialDecision(input.cfg, input.after);
+    if (!partialDecision.enabled) {
+      return {
+        note:
+          `\n\n---\n\n[auto graph · partial skipped] ` +
+          `${partialDecision.reason}; final \`wiki-graphify update\` will handle changed partials.\n`,
+        action: null,
+      };
+    }
     action = "update-partial";
     leafPaths = justDoneLeaves;
-    progressLabel = `leaf 완료 ${justDoneLeaves.length}건 · partial only`;
+    progressLabel = `leaf 완료 ${justDoneLeaves.length}건 · partial only · ${partialDecision.reason}`;
   } else {
     return noop;
   }

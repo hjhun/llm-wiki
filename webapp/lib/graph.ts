@@ -110,7 +110,7 @@ export function buildGraphifyPrompt(
           "- This is intentionally cheap: extract just the new leaf's content, write the partial, exit.",
         ].join("\n")
       : action === "update"
-        ? "For this `update` run, prefer reading wiki/.progress/ingest/.state.json and wiki/graph/.state.json to scope work to only the leaves whose content_hash changed since the previous build, then rerun the merge pass to produce a connected wiki/graph/graph.json + GRAPH_REPORT.md. If per-leaf partials already exist (because /ingest-loop fired `update-partial` between iterations), most leaves will be up to date — the bulk of this run is the merge pass."
+        ? "For this `update` run, prefer reading wiki/.progress/ingest/.state.json and wiki/graph/.state.json to scope work to only the leaves whose content_hash changed since the previous build, then rerun the merge pass to produce a connected wiki/graph/graph.json + GRAPH_REPORT.md. Per-leaf partials may already exist when graph.autoUpdateStrategy allowed adaptive `update-partial`; if not, build the changed partials now before the merge pass."
         : "For this `build` run, enumerate all leaves under wiki/ (and raw/ if relevant), build per-leaf partials, then run the merge pass.";
 
   return [
@@ -132,6 +132,7 @@ export function buildGraphifyPrompt(
     "   - If you do invoke `graphify update`, pass `--out wiki/graph` so output lands in the correct directory: `graphify update wiki/ --out wiki/graph`.",
     "   - For Markdown wiki content (the common case here), `graphify update` alone will NOT extract entities/concepts — it is code-only. Use the Python package modules `graphify.detect`, `graphify.extract`, `graphify.build`, `graphify.cluster`, `graphify.report`, and `graphify.export` to assemble per-leaf partials in wiki/graph/parts/, then (for `update`/`build` only) merge into wiki/graph/graph.json. Follow the leaf-first chunk policy in §Chunk Policy of the SKILL.",
     "3. There is no literal `graphify build` subcommand; `wiki-graphify build` is an agent-level operation name, not a CLI command.",
+    "4. During `/ingest-loop`, the webapp may skip `update-partial` for small workloads when `graph.autoUpdateStrategy` is `auto`; final `wiki-graphify update` still performs changed-partial rebuilds plus the merge pass.",
     "",
     actionGuidance,
     "",

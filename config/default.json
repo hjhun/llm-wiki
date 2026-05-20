@@ -22,7 +22,14 @@
   },
   "graph": {
     "minCommunitySize": 3,
-    "autoUpdateOnIngest": true
+    "autoUpdateOnIngest": true,
+    "autoUpdateStrategy": "auto",
+    "partialThresholds": {
+      "minLeaves": 4,
+      "minFiles": 16,
+      "minBytes": 1048576,
+      "minSubChunks": 4
+    }
   },
   "chat": {
     "contextTurns": 6,

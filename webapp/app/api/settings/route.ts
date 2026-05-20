@@ -44,6 +44,17 @@ const Body = z.object({
     .object({
       minCommunitySize: z.number().int().min(1).max(1000),
       autoUpdateOnIngest: z.boolean(),
+      autoUpdateStrategy: z
+        .enum(["auto", "finalOnly", "partialAndFinal"])
+        .optional(),
+      partialThresholds: z
+        .object({
+          minLeaves: z.number().int().min(1).max(10_000).optional(),
+          minFiles: z.number().int().min(1).max(1_000_000).optional(),
+          minBytes: z.number().int().min(1).max(1024 * 1024 * 1024).optional(),
+          minSubChunks: z.number().int().min(1).max(1_000_000).optional(),
+        })
+        .optional(),
     })
     .optional(),
   ui: z
@@ -143,7 +154,16 @@ export async function PUT(req: Request) {
       chunking: parsed.data.chunking
         ? { ...current.chunking, ...parsed.data.chunking }
         : undefined,
-      graph: parsed.data.graph,
+      graph: parsed.data.graph
+        ? {
+            ...current.graph,
+            ...parsed.data.graph,
+            partialThresholds: {
+              ...current.graph.partialThresholds,
+              ...parsed.data.graph.partialThresholds,
+            },
+          }
+        : undefined,
       ui: parsed.data.ui,
       auth: parsed.data.auth
         ? {

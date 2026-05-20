@@ -638,7 +638,9 @@ Useful defaults:
 | `agent.orchestration.maxConcurrentAgents` | `5` | Maximum worker agents for ingest/query/lint operations. |
 | `chunking.maxFilesPerInvocation` | `4` | Maximum raw files per ingest agent call. |
 | `chunking.maxBytesPerFile` | `131072` | Large files are read head + tail. |
-| `graph.autoUpdateOnIngest` | `true` | Run graph update after ingest merge pass. |
+| `graph.autoUpdateOnIngest` | `true` | Run graph synchronization after ingest progress. |
+| `graph.autoUpdateStrategy` | `auto` | `auto` skips partial graph updates for small ingests and runs them for large workloads; `finalOnly` never runs partials; `partialAndFinal` always does. |
+| `graph.partialThresholds` | `{ minLeaves: 4, minFiles: 16, minBytes: 1048576, minSubChunks: 4 }` | Workload thresholds used by `auto` to decide whether `update-partial` is worth running before the final graph update. |
 | `autoIngest.enabled` | `false` | Auto Ingest starts disabled. |
 | `automation.enabled` | `false` | Automation scheduler starts disabled. |
 

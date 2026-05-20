@@ -168,7 +168,7 @@ This applies to both ingest and graphify. Never start by throwing the whole root
 - The web app Graph tab does not execute graphify directly. It sends `wiki-graphify build/update` requests to the coding agent CLI selected in Settings, and the coding agent follows this repository's rules and skills to run graphify, chunk processing, and the merge pass.
 - Wiki pages must not call the `graphify` binary directly. The coding agent running `wiki-graphify` chooses the execution path: global `graphify`, or `python3 -m graphify` when needed.
 - `wiki-query` may optionally use graph context from `wiki/graph/GRAPH_REPORT.md`, node adjacency, or `wiki-graphify query` as an auxiliary candidate/context source; it must still ground final answers in wiki/source pages.
-- At the end of an ingest merge pass, calling `wiki-graphify update` is recommended, depending on user settings.
+- At the end of an ingest merge pass, calling `wiki-graphify update` is recommended, depending on user settings. Ingest-time `update-partial` is adaptive: `graph.autoUpdateStrategy=auto` should run partials only when leaf/file/byte/sub-chunk thresholds indicate a large workload, while small ingests rely on the final `update`.
 - If `/lint --fix` reorganizes existing source pages into dated source
   directories, update affected wiki references and then run `wiki-graphify
   update` as a separate graph operation when `wiki/graph/graph.json` exists.

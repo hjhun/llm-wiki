@@ -73,6 +73,27 @@ export const ConfigSchema = z.object({
   graph: z.object({
     minCommunitySize: z.number().int().min(1).default(3),
     autoUpdateOnIngest: z.boolean().default(true),
+    /**
+     * Controls whether ingest runs build per-leaf graph partials between
+     * iterations. "auto" keeps small ingests quality-first and large ingests
+     * resumable.
+     */
+    autoUpdateStrategy: z
+      .enum(["auto", "finalOnly", "partialAndFinal"])
+      .default("auto"),
+    partialThresholds: z
+      .object({
+        minLeaves: z.number().int().min(1).default(4),
+        minFiles: z.number().int().min(1).default(16),
+        minBytes: z.number().int().min(1).default(1024 * 1024),
+        minSubChunks: z.number().int().min(1).default(4),
+      })
+      .default({
+        minLeaves: 4,
+        minFiles: 16,
+        minBytes: 1024 * 1024,
+        minSubChunks: 4,
+      }),
   }),
   chat: z.object({
     /**
