@@ -129,16 +129,15 @@ export default function Composer({
           className="block w-full resize-none rounded-md border border-line bg-bg px-3 py-2.5 text-sm leading-relaxed text-ink outline-none transition-colors placeholder:text-ink-faint focus:border-accent"
         />
         {loopStop ? (
-          <Button
+          <IconButton
             onClick={loopStop.onStop}
             disabled={loopStop.stopping}
+            label={loopStop.stopping ? t.chat.stopping : t.chat.stopLoop}
             title={t.chat.stopLoopHint}
             variant="danger"
-            size="md"
             icon={StopCircle}
-          >
-            {loopStop.stopping ? t.chat.stopping : t.chat.stopLoop}
-          </Button>
+            className="h-10 w-10 shrink-0"
+          />
         ) : null}
         {cancel ? (
           <Button
@@ -152,15 +151,14 @@ export default function Composer({
             {cancel.cancelling ? t.chat.cancelling : t.chat.cancel}
           </Button>
         ) : null}
-        <Button
+        <IconButton
           onClick={submit}
           disabled={disabled || !value.trim()}
           variant="primary"
-          size="md"
+          label={t.chat.send}
           icon={Send}
-        >
-          {t.chat.send}
-        </Button>
+          className="h-10 w-10 shrink-0"
+        />
       </div>
       <div className="mt-1 px-1 text-[10px] text-ink-faint">
         {t.chat.hint}
