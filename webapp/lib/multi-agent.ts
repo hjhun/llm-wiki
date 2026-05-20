@@ -15,6 +15,7 @@ import {
   readIngestStateSummary,
   readProgressSnapshot,
   stopFlagExists,
+  type ProgressSnapshot,
 } from "./ingest-loop";
 
 export type OrchestratedKind = Extract<
@@ -294,10 +295,11 @@ async function runSingleRoundOperation(input: {
 
   if (input.kind === "ingest" && ingestBefore) {
     const ingestAfter = await readProgressSnapshot();
-    progressNote = `ingest progress advanced=${ingestMadeProgress(
+    const progressAdvanced = ingestMadeProgress(
       ingestBefore,
       ingestAfter,
-    )}`;
+    );
+    progressNote = `ingest progress advanced=${progressAdvanced}`;
     const bestExit = runs.some((run) => run.result?.exitCode === 0) ? 0 : 1;
     const graph = await maybeAutoRunGraphify({
       cfg: input.cfg,
@@ -310,6 +312,20 @@ async function runSingleRoundOperation(input: {
       onChunk: input.onChunk,
     });
     if (graph.note) progressNote += `\n${graph.note}`;
+
+    if (progressAdvanced && graph.action !== "update") {
+      const finalGraph = await maybeAutoRunGraphify({
+        cfg: input.cfg,
+        agent: input.agent,
+        sessionPath: input.sessionPath,
+        lastExitCode: bestExit,
+        before: ingestBefore,
+        after: ingestAfter,
+        mode: "final",
+        onChunk: input.onChunk,
+      });
+      if (finalGraph.note) progressNote += `\n${finalGraph.note}`;
+    }
   }
 
   const manager = await runManager({
@@ -360,6 +376,7 @@ async function runLoopOperation(input: {
   let allRuns: WorkerRun[] = [];
   let totalDurationMs = 0;
   let lastExitCode = 0;
+  let lastMergedSnap: ProgressSnapshot | null = null;
   const initialProgressRef =
     input.progressRef !== undefined
       ? input.progressRef
@@ -431,6 +448,7 @@ async function runLoopOperation(input: {
         error: null,
       });
     }
+    if (graph.action === "update") lastMergedSnap = snap;
     prevSnap = snap;
 
     const decision = decideLoopHalt({
@@ -458,16 +476,26 @@ async function runLoopOperation(input: {
 
   const loopAfter = await readProgressSnapshot();
   if (haltKind !== "error") {
-    const finalGraph = await maybeAutoRunGraphify({
-      cfg: input.cfg,
-      agent: input.agent,
-      sessionPath: input.sessionPath,
-      lastExitCode,
-      before: loopBefore,
-      after: loopAfter,
-      mode: "final",
-      onChunk: input.onChunk,
-    });
+    const alreadyCoversLatest =
+      lastMergedSnap !== null &&
+      loopAfter.leavesDone <= lastMergedSnap.leavesDone &&
+      loopAfter.mergeDone === lastMergedSnap.mergeDone;
+    const finalGraph = alreadyCoversLatest
+      ? {
+          note:
+            "\n\n---\n\n[auto graph] 루프 중에 full merge가 이미 실행되어 final merge는 생략합니다.",
+          action: null,
+        }
+      : await maybeAutoRunGraphify({
+          cfg: input.cfg,
+          agent: input.agent,
+          sessionPath: input.sessionPath,
+          lastExitCode,
+          before: loopBefore,
+          after: loopAfter,
+          mode: "final",
+          onChunk: input.onChunk,
+        });
     if (finalGraph.note) {
       allRuns.push({
         worker: { index: workers.length + 1, name: "auto-graph-final", cli: input.agent },
