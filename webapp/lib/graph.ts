@@ -107,6 +107,7 @@ export function buildGraphifyPrompt(
           "- Output: write or overwrite wiki/graph/parts/<sha1(leafPath)>.json for those leaves only.",
           "- Update wiki/graph/.state.json entries for those leaves with `built_at` + `content_hash`.",
           "- Do NOT touch wiki/graph/graph.json, wiki/graph/GRAPH_REPORT.md, or rerun community clustering. The merge pass runs as a separate `wiki-graphify update` call later (typically at /ingest-loop end).",
+          "- Canonical ids: if wiki/graph/graph.json already exists, read its `nodes` first and reuse the existing `id` (and `aliases`) for any entity that already appears there — including case/spacing/language/slug variants. Only mint a new id for genuinely new entities. Aligned partials leave the merge pass far less to reconcile.",
           "- This is intentionally cheap: extract just the new leaf's content, write the partial, exit.",
         ].join("\n")
       : action === "update"
@@ -323,6 +324,20 @@ async function attachDocuments(graph: GraphData): Promise<GraphData> {
   return { ...graph, nodes, edges };
 }
 
+/**
+ * Fuzzy key for matching edge endpoints back to a node: NFKD + accent-strip,
+ * lowercase, non-alphanumeric runs collapsed to `-`. Lets an edge that points
+ * at an un-reconciled id variant be remapped instead of silently dropped.
+ */
+function graphIdKey(s: string): string {
+  return s
+    .normalize("NFKD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9가-힣]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
 function normalizeGraph(raw: unknown): GraphData {
   const root = isRecord(raw) ? raw : {};
   const nodes = Array.isArray(root.nodes)
@@ -331,12 +346,34 @@ function normalizeGraph(raw: unknown): GraphData {
         .filter((node): node is GraphNode => node !== null)
     : [];
   const nodeIds = new Set(nodes.map((node) => node.id));
+  // Index every node surface form (id, label, aliases) to its canonical id so
+  // edges referencing a variant the merge pass failed to reconcile can be
+  // remapped. Dropping is the last resort, not the default.
+  const aliasIndex = new Map<string, string>();
+  for (const node of nodes) {
+    for (const surface of [node.id, node.label, ...node.aliases]) {
+      if (!surface) continue;
+      const key = graphIdKey(surface);
+      if (key && !aliasIndex.has(key)) aliasIndex.set(key, node.id);
+    }
+  }
+  const resolveEndpoint = (id: string): string | null => {
+    if (nodeIds.has(id)) return id;
+    return aliasIndex.get(graphIdKey(id)) ?? null;
+  };
   const edges = Array.isArray(root.edges)
     ? root.edges
         .map(normalizeEdge)
-        .filter((edge): edge is GraphEdge => {
-          return edge !== null && nodeIds.has(edge.src) && nodeIds.has(edge.dst);
+        .filter((edge): edge is GraphEdge => edge !== null)
+        .map((edge): GraphEdge | null => {
+          const src = resolveEndpoint(edge.src);
+          const dst = resolveEndpoint(edge.dst);
+          if (!src || !dst) return null;
+          return src === edge.src && dst === edge.dst
+            ? edge
+            : { ...edge, src, dst };
         })
+        .filter((edge): edge is GraphEdge => edge !== null)
     : [];
   const communities = Array.isArray(root.communities)
     ? root.communities

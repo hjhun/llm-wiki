@@ -11,9 +11,9 @@ allowed-cli: [codex, claude, gemini, cline]
 Read material newly dropped by the user into `raw/` and perform the following.
 
 1. Write one `wiki/sources/<YYYY>/<YYYY-MM>/<slug>.md` summary page per original source.
-2. Create or update related entity/concept pages.
+2. Create or update related entity/concept pages, reusing existing pages instead of creating near-duplicates (see Step 2.3).
 3. Keep `wiki/index.md` and `wiki/log.md` consistent.
-4. Optionally call `wiki-graphify update` to synchronize the knowledge graph.
+4. Graph synchronization is **not** performed by this skill. The webapp triggers `wiki-graphify` as separate invocations after ingest progress is detected. Ingest workers must not run graphify or write anything under `wiki/graph/`.
 
 This skill **always follows the leaf-first + merge pass** principle, and is built
 to survive interruption (OOM, SIGTERM, manual cancel) because progress is
@@ -124,6 +124,7 @@ For exactly **one** sub-chunk whose `status === "pending"`:
    - Update the per-leaf JSON entry: `processed: true`, `summary_page: "wiki/sources/<YYYY>/<YYYY-MM>/<slug>.md"`.
    - **Discard the file body from working memory** before opening the next file. Do not keep two file bodies in context simultaneously.
 3. Update entity/concept pages **from the takeaways only** (the per-leaf JSON), not by re-opening the raw files. If a raw file truly must be re-read, open it, read just the needed span, and close it before moving on.
+   - **Reuse before creating.** Before adding a new `wiki/entities/` or `wiki/concepts/` page, check `wiki/index.md` for an existing page naming the same target — including case, spacing, punctuation, and English/Korean variants (`Transformer` ≈ `트랜스포머` ≈ `transformer-model`). If one exists, update it and link with the index's exact `[[Page Name]]`. Create a new page only when no existing page covers the target. Parallel workers each see only part of the input, so this is the main safeguard against near-duplicate pages — and therefore against duplicate, disconnected graph nodes.
 4. **Contradictions**: if a new claim disagrees with an existing wiki page, add a block quote on that page:
    ```markdown
    > ⚠️ Conflicts with [[wiki/sources/<YYYY>/<YYYY-MM>/<slug>]]: this source claims X. Follow-up review needed.

@@ -6,6 +6,7 @@ import type { ChatKind } from "./chat-events";
 import { appendMessage } from "./sessions";
 import { errorMessage } from "./api";
 import {
+  buildEntityRegistryReference,
   buildLoopContinuationPrompt,
   buildProgressReference,
   clearStopFlag,
@@ -105,11 +106,13 @@ function operationPolicy(kind: OrchestratedKind): string {
     return [
       "You are an ingest worker in a backend-managed loop. Follow wiki-ingest and process at most one sub-chunk or one merge-pass parent, then exit.",
       "If wiki/.progress/ingest/.lock is held by another live process, report that you are standing by and exit successfully. The manager will launch the next round.",
+      "Do NOT run wiki-graphify and do NOT write anything under wiki/graph/. The backend triggers graph updates as separate invocations after the round completes.",
     ].join("\n");
   }
   return [
     "You are an ingest worker. Follow wiki-ingest and process exactly one sub-chunk or one merge-pass parent, then exit.",
     "If wiki/.progress/ingest/.lock is held by another live process, report that you are standing by and exit successfully.",
+    "Do NOT run wiki-graphify and do NOT write anything under wiki/graph/. The backend triggers graph updates as separate invocations after the round completes.",
   ].join("\n");
 }
 
@@ -119,8 +122,9 @@ function wrapWorkerPrompt(input: {
   worker: Worker;
   round: number;
   totalWorkers: number;
+  entityRegistryRef?: string | null;
 }): string {
-  return [
+  const lines = [
     "You are operating as a named worker in an LLM Wiki multi-agent run.",
     `Worker name: ${input.worker.name}`,
     `Worker CLI: ${input.worker.cli}`,
@@ -129,10 +133,13 @@ function wrapWorkerPrompt(input: {
     "A central manager agent will review all worker outputs, decide whether the operation is complete, and report to the user.",
     "The host webapp already created the active chat session. Do not create, rename, delete, or allocate any sessions/*.md file; use the Active session log supplied in the manager task.",
     operationPolicy(input.kind),
-    "",
-    "===== MANAGER-PROVIDED TASK =====",
-    input.basePrompt,
-  ].join("\n");
+  ];
+  // Round 1 only: continuation rounds already carry the registry in basePrompt.
+  if (input.round === 1 && input.entityRegistryRef) {
+    lines.push(input.entityRegistryRef);
+  }
+  lines.push("", "===== MANAGER-PROVIDED TASK =====", input.basePrompt);
+  return lines.join("\n");
 }
 
 function shortOutput(run: WorkerRun, cap = 3500): string {
@@ -160,6 +167,10 @@ async function runWorkerBatch(input: {
       .map((worker) => `${worker.name}:${worker.cli}`)
       .join(", ")}\n`,
   );
+  const entityRegistryRef =
+    input.kind === "ingest" || input.kind === "ingest-loop"
+      ? await buildEntityRegistryReference()
+      : null;
   return Promise.all(
     input.workers.map(async (worker): Promise<WorkerRun> => {
       const prompt = wrapWorkerPrompt({
@@ -168,6 +179,7 @@ async function runWorkerBatch(input: {
         worker,
         round: input.round,
         totalWorkers: input.workers.length,
+        entityRegistryRef,
       });
       const started = Date.now();
       input.onChunk?.(`[${worker.name}] start\n`);
@@ -378,6 +390,9 @@ async function runLoopOperation(input: {
   let totalDurationMs = 0;
   let lastExitCode = 0;
   let lastMergedSnap: ProgressSnapshot | null = null;
+  // True when an `update-partial` ran after the last full merge — the final
+  // merge must not be skipped while partials are newer than graph.json.
+  let partialsDirtySinceMerge = false;
   const initialProgressRef =
     input.progressRef !== undefined
       ? input.progressRef
@@ -405,6 +420,7 @@ async function runLoopOperation(input: {
             iteration: round,
             progressRef:
               initialProgressRef ?? (await buildProgressReference()),
+            entityRegistryRef: await buildEntityRegistryReference(),
           });
     const runs = await runWorkerBatch({
       cfg: input.cfg,
@@ -449,7 +465,12 @@ async function runLoopOperation(input: {
         error: null,
       });
     }
-    if (graph.action === "update") lastMergedSnap = snap;
+    if (graph.action === "update") {
+      lastMergedSnap = snap;
+      partialsDirtySinceMerge = false;
+    } else if (graph.action === "update-partial") {
+      partialsDirtySinceMerge = true;
+    }
     prevSnap = snap;
 
     const decision = decideLoopHalt({
@@ -479,6 +500,7 @@ async function runLoopOperation(input: {
   if (haltKind !== "error") {
     const alreadyCoversLatest =
       lastMergedSnap !== null &&
+      !partialsDirtySinceMerge &&
       loopAfter.leavesDone <= lastMergedSnap.leavesDone &&
       loopAfter.mergeDone === lastMergedSnap.mergeDone;
     const finalGraph = alreadyCoversLatest

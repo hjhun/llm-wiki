@@ -14,6 +14,7 @@ export const PROGRESS_STOP_PATH = "wiki/.progress/ingest/.stop";
 export const PROGRESS_STOP_DIR = "wiki/.progress/ingest/stops";
 export const PROGRESS_LOCK_PATH = "wiki/.progress/ingest/.lock";
 export const WIKI_LOG_REL = "wiki/log.md";
+export const WIKI_INDEX_REL = "wiki/index.md";
 
 export type StateSummary = {
   total: number;
@@ -62,6 +63,57 @@ export async function buildProgressReference(): Promise<string | null> {
     if ((err as NodeJS.ErrnoException).code === "ENOENT") return null;
     return null;
   }
+}
+
+const ENTITY_REGISTRY_MAX = 400;
+
+/**
+ * Compact reference of existing entity/concept page names from wiki/index.md.
+ * Injected into ingest worker prompts so parallel, stateless workers reuse
+ * canonical page names and [[wikilinks]] instead of minting near-duplicates —
+ * the root cause of duplicate, poorly connected graph nodes in multi-agent
+ * runs.
+ */
+export async function buildEntityRegistryReference(): Promise<string | null> {
+  let text: string;
+  try {
+    text = await fs.readFile(
+      path.join(PROJECT_ROOT, WIKI_INDEX_REL),
+      "utf8",
+    );
+  } catch {
+    return null;
+  }
+  const names: string[] = [];
+  let inSection = false;
+  for (const line of text.split(/\r?\n/)) {
+    const heading = /^#{1,6}\s+(.+?)\s*$/.exec(line);
+    if (heading) {
+      const title = heading[1].toLowerCase();
+      inSection = title.includes("entit") || title.includes("concept");
+      continue;
+    }
+    if (!inSection) continue;
+    for (const m of line.matchAll(/\[\[([^\]]+)\]\]/g)) {
+      const name = m[1].split("|")[0].trim();
+      if (name) names.push(name);
+    }
+  }
+  if (names.length === 0) return null;
+  const unique = [...new Set(names)].sort((a, b) => a.localeCompare(b));
+  const shown = unique.slice(0, ENTITY_REGISTRY_MAX);
+  const suffix =
+    unique.length > ENTITY_REGISTRY_MAX
+      ? ` … (+${unique.length - ENTITY_REGISTRY_MAX} more)`
+      : "";
+  return (
+    `Existing entity/concept pages (${WIKI_INDEX_REL}) — before creating a ` +
+    `new entity/concept page, reuse one of these exact names and its ` +
+    `[[wikilink]] when it refers to the same target (incl. case/spacing/` +
+    `language variants):\n` +
+    shown.map((n) => `[[${n}]]`).join(", ") +
+    suffix
+  );
 }
 
 export async function readProgressSnapshot(): Promise<ProgressSnapshot> {
@@ -292,6 +344,7 @@ export function buildLoopContinuationPrompt(input: {
   sessionPath: string;
   iteration: number;
   progressRef: string | null;
+  entityRegistryRef?: string | null;
 }): string {
   const lines: string[] = [
     "You are operating an LLM Wiki repository.",
@@ -299,6 +352,7 @@ export function buildLoopContinuationPrompt(input: {
     `Active session log: sessions/${input.sessionPath}`,
   ];
   if (input.progressRef) lines.push(input.progressRef);
+  if (input.entityRegistryRef) lines.push(input.entityRegistryRef);
   lines.push(
     `This is /ingest-loop iteration ${input.iteration}. Pick the next pending sub-chunk from wiki/.progress/ingest/.state.json and process exactly one sub-chunk per the wiki-ingest skill, then exit. Do not loop yourself — the backend will spawn the next iteration.`,
     "",
@@ -782,6 +836,9 @@ export async function runIngestLoop(
   const loopBefore = await readProgressSnapshot();
   let prevSnap: ProgressSnapshot = loopBefore;
   let lastMergedSnap: ProgressSnapshot | null = null;
+  // True when an `update-partial` ran after the last full merge — the final
+  // merge must not be skipped while partials are newer than graph.json.
+  let partialsDirtySinceMerge = false;
   let iteration = 0;
   let lastExitCode = 0;
   let lastDurationMs = 0;
@@ -814,6 +871,7 @@ export async function runIngestLoop(
             sessionPath,
             iteration,
             progressRef: progressRef ?? (await buildProgressReference()),
+            entityRegistryRef: await buildEntityRegistryReference(),
           });
 
     const banner = `\n\n---\n[loop iter ${iteration}/${maxIter}]\n`;
@@ -866,7 +924,12 @@ export async function runIngestLoop(
         onChunk,
       });
       if (incr.note) aggregateReply += incr.note;
-      if (incr.action === "update") lastMergedSnap = snap;
+      if (incr.action === "update") {
+        lastMergedSnap = snap;
+        partialsDirtySinceMerge = false;
+      } else if (incr.action === "update-partial") {
+        partialsDirtySinceMerge = true;
+      }
     }
     prevSnap = snap;
 
@@ -897,6 +960,7 @@ export async function runIngestLoop(
   if (haltKind !== "error") {
     const alreadyCoversLatest =
       lastMergedSnap !== null &&
+      !partialsDirtySinceMerge &&
       loopAfter.leavesDone <= lastMergedSnap.leavesDone &&
       loopAfter.mergeDone === lastMergedSnap.mergeDone;
     if (!alreadyCoversLatest) {

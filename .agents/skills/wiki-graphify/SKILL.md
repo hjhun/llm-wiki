@@ -110,13 +110,38 @@ This follows the same principle as `wiki-ingest`.
 
 ## Merge Algorithm
 
+Partial graphs are produced by independent, stateless invocations (one per
+leaf), so the **same real-world entity routinely appears under different
+ids/labels across partials** — case, spacing, accents, English vs Korean, and
+slug variants such as `transformer` vs `transformer-model`. Exact-id matching
+alone leaves these as duplicate, poorly connected nodes. The merge pass is
+responsible for reconciling them.
+
 1. **Collect nodes**: read every `parts/*.json` and collect nodes/edges into one collection.
-2. **Normalize**:
-   - Standardize `id` as `normalize(name)`: lowercase, spaces -> `-`, remove accents, and if English/Korean are mixed, preserve original text in an `aliases` field.
-   - Merge properties for nodes with the same `id`. Conflict priority: `wiki/` source > `raw/` source. If source grade is equal, the more recently updated value wins.
-3. **Normalize edges**: deduplicate by `(src, dst, type)`. Accumulate weight by occurrence count.
-4. **Recompute communities**: run the selected graphify community algorithm once more on the merged graph. Absorb communities that are too small (`size < min_community_size`) into adjacent communities.
-5. **Output**: standard `wiki/graph/graph.json` schema below plus `GRAPH_REPORT.md`.
+2. **Resolve entities (cross-partial, do this first)**: before any id-keyed
+   merge, cluster nodes that refer to the **same real-world entity** even when
+   their ids differ.
+   - Treat as the same entity: case/spacing/punctuation variants, accent
+     differences, English/Korean variants of one name, slug variants
+     (`transformer` ≈ `transformer-model` ≈ `트랜스포머`), and any node whose
+     label or alias matches another node's `[[wikilink]]` target.
+   - For each cluster pick one **canonical id** via `normalize(name)`:
+     lowercase, spaces -> `-`, remove accents. Preserve every other surface
+     form in the canonical node's `aliases` (keep original English/Korean text).
+   - Build an alias table `surface form -> canonical id`, then **rewrite every
+     edge endpoint** (`src`/`dst`) from a member id to its canonical id.
+3. **Merge node properties**: merge nodes that share the canonical `id`. Conflict
+   priority: `wiki/` source > `raw/` source. If source grade is equal, the more
+   recently updated value wins. Union `tags`, `sources`, and `aliases`.
+4. **Normalize edges**: deduplicate by `(src, dst, type)`. Accumulate weight by
+   occurrence count. If an endpoint is still missing from the node set, resolve
+   it through the step-2 alias table before considering it dangling; drop an
+   edge only when no canonical node can be found.
+5. **Recompute communities**: run the selected graphify community algorithm once more on the merged graph. Absorb communities that are too small (`size < min_community_size`) into adjacent communities.
+6. **Output**: standard `wiki/graph/graph.json` schema below plus
+   `GRAPH_REPORT.md`. Enforce the invariant that every `edges[].src`/`dst`
+   exists in `nodes[].id`, and report how many dangling edges were resolved or
+   dropped in `GRAPH_REPORT.md`.
 
 ### Standard graph.json Schema
 
