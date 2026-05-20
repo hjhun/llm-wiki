@@ -94,12 +94,14 @@ function operationPolicy(kind: OrchestratedKind): string {
   if (kind === "ingest-loop") {
     return [
       "You are an ingest worker in a backend-managed loop. Follow wiki-ingest and process at most one sub-chunk or one merge-pass parent, then exit.",
+      "A symlink located under raw/ is a valid source entry: follow it read-only even if its real target is outside the repository, preserve logical raw/... paths in state/citations, and reject only broken links or loops.",
       "If wiki/.progress/ingest/.lock is held by another live process, report that you are standing by and exit successfully. The manager will launch the next round.",
       "Do NOT run wiki-graphify and do NOT write anything under wiki/graph/. The backend triggers graph updates as separate invocations after the round completes.",
     ].join("\n");
   }
   return [
     "You are an ingest worker. Follow wiki-ingest and process exactly one sub-chunk or one merge-pass parent, then exit.",
+    "A symlink located under raw/ is a valid source entry: follow it read-only even if its real target is outside the repository, preserve logical raw/... paths in state/citations, and reject only broken links or loops.",
     "If wiki/.progress/ingest/.lock is held by another live process, report that you are standing by and exit successfully.",
     "Do NOT run wiki-graphify and do NOT write anything under wiki/graph/. The backend triggers graph updates as separate invocations after the round completes.",
   ].join("\n");

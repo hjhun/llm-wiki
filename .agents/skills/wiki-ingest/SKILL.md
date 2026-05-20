@@ -41,7 +41,10 @@ externalized to `wiki/.progress/ingest/`.
 
 - Single file path, such as `raw/foo.pdf` or `raw/notes/bar.md`.
 - Single URL, downloaded to `raw/<slug>.<ext>` before processing.
-- Folder path, such as `raw/dir/`, including its subtree.
+- Folder path, such as `raw/dir/`, including its subtree. If the folder or a
+  descendant entry is a user-approved symlink located under `raw/`, follow it
+  read-only while preserving logical `raw/...` paths in state, source
+  frontmatter, citations, and logs.
 - If input is omitted, default to all of `raw/`.
 
 ## Output
@@ -71,7 +74,13 @@ conversation. The host webapp also slims the prompt to the last N turns
 ## Preflight
 
 1. Confirm that `wiki/index.md` and `wiki/log.md` exist. If missing, create Phase 1 templates first.
-2. Validate that the input path is inside `raw/`. **Reject processing outside `raw/`.**
+2. Validate that the requested input path is lexically inside `raw/` after
+   normalizing `.` and `..`. **Reject direct processing outside `raw/`.**
+   User-approved symlink entries located under `raw/` are valid source entries:
+   follow them read-only even if their real target is outside the repository,
+   but keep every recorded path in logical `raw/...` form and never write to
+   the symlink target. Reject broken symlinks and symlink loops with a clear
+   warning.
 3. Read knobs from `config/default.json` (merged with `config/local.json`):
    - `chunking.maxFiles`, `chunking.maxBytes` — soft cap per chunk.
    - `chunking.maxFilesPerInvocation` — **hard cap per LLM call**. Defaults to 4.
@@ -101,10 +110,11 @@ conversation. The host webapp also slims the prompt to the last N turns
 
 ### Step 1 — Enumerate Leaves (idempotent)
 
-1. From the requested input root (default `raw/`), list every leaf directory (no child directories). A single file or URL counts as a virtual leaf whose path is its parent directory.
+1. From the requested input root (default `raw/`), list every leaf directory (no child directories). A single file or URL counts as a virtual leaf whose path is its parent directory. Follow symlinked files/directories that are located under `raw/`, but track visited real paths/inodes to avoid cycles and do not traverse the same real directory twice under one target.
 2. For each leaf compute a stable identity:
-   - `leafPath` = POSIX-style relative path (always ends with `/`).
-   - `hash` = sha1 of `JSON.stringify(sortedFileList.map(f => [f.path, f.size, f.mtimeMs]))`.
+   - `leafPath` = POSIX-style relative path (always ends with `/`), using the
+     logical `raw/...` path even when the leaf is reached through a symlink.
+   - `hash` = sha1 of `JSON.stringify(sortedFileList.map(f => [f.path, f.size, f.mtimeMs]))`, where `f.path` is the logical `raw/...` path and `size`/`mtimeMs` are read from the target file.
 3. Update `wiki/.progress/ingest/.state.json`:
    - New leaves are added with `status: "pending"`, an empty `sub_chunks` list, and `attempts: 0`.
    - Existing leaves whose `hash` changed have their status reset to `"pending"` and their `sub_chunks` cleared. (Re-ingest is intentional when content changed.)
@@ -117,6 +127,9 @@ For exactly **one** sub-chunk whose `status === "pending"`:
 
 1. Mark the sub-chunk `status: "in_progress"`, set `started_at`, increment `leaves[<leafPath>].attempts`. Persist immediately.
 2. Open files **one at a time**, in the order recorded in the sub-chunk:
+   - Read files through their logical `raw/...` paths. If a path crosses a
+     symlink, treat the target as read-only source material and continue to
+     cite/store only the logical `raw/...` path.
    - If the file is larger than `chunking.maxBytesPerFile`, read only `head (N/2)` + a marker + `tail (N/2)` bytes. Record `truncated: true` in the per-leaf JSON.
    - Write `wiki/sources/<YYYY>/<YYYY-MM>/<slug>.md` for that file with the required frontmatter (`title`, `type: source`, `tags`, `sources: [raw/...]`, `updated`) and optional source-page field `source_date: YYYY-MM-DD | YYYY-MM`.
    - Choose `<YYYY>/<YYYY-MM>` by this priority: explicit `source_date` or source text date -> raw path/metadata date -> raw file mtime -> ingest date. If only the year is known, use that year with the fallback month from the next available source.
@@ -181,7 +194,8 @@ call; each graph step must be a follow-up invocation that uses the
 
 ## Prohibited (hard rules)
 
-- Do **not** modify, delete, or move files under `raw/`.
+- Do **not** modify, delete, or move files under `raw/` or any real filesystem
+  target reached through a `raw/` symlink.
 - Do **not** delete wiki pages. Retire them by moving to `wiki/archive/<original-path>` with a one-line reason.
 - Do **not** invent external URLs. If a source is ambiguous, mark it as "source unknown".
 - Do **not** group files beyond `chunking.maxFilesPerInvocation` in one call.

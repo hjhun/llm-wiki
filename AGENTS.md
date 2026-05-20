@@ -23,7 +23,7 @@
 
 | Path | Owner | Mutability | Purpose |
 |---|---|---|---|
-| `raw/` | User | **Immutable** except via `/preprocess` (Section 3.4) | Original material: articles, papers, notes, images. Outside the `/preprocess` workflow, never modify, delete, or move. |
+| `raw/` | User | **Immutable** except via `/preprocess` (Section 3.4) | Original material: articles, papers, notes, images. May contain user-approved symlinks to external source folders/files; agents may follow them read-only for ingest/query, but must keep all recorded source paths in `raw/...` form. Outside the `/preprocess` workflow, never modify, delete, or move. |
 | `raw/chat/` | User via Chat UI | Append-only capture | User-approved external captures from Chat, such as browser/search/tool findings. These are source candidates for later `/ingest`, not full conversation logs. |
 | `raw/.trash/` | LLM via `/preprocess`, UI soft-delete | Append-only quarantine | Files moved out of `raw/` by `/preprocess` or by the Explorer's delete button. Filename is `<ISO8601>_<basename>`; recoverable. |
 | `wiki/` | LLM | LLM may freely write/update | Main wiki body. All generated artifacts go here. |
@@ -45,7 +45,7 @@
 Each of the four operations maps to one skill. If these rules conflict with a skill body, **the skill body takes precedence** within its scope.
 
 ### 3.1 Ingest (`/ingest`, [`.agents/skills/wiki-ingest/SKILL.md`](.agents/skills/wiki-ingest/SKILL.md))
-- Input: new material under `raw/`, either a single file, URL, or folder.
+- Input: new material under `raw/`, either a single file, URL, folder, or user-approved symlink entry under `raw/`.
 - Always follow the **leaf-directory chunks + merge pass** principle (Section 7).
 - Trigger: manual (`/ingest`, `/ingest-loop`) or **automatic** via the Settings → Auto Ingest panel (`raw/` file events or interval schedule). The auto trigger is driven by the manager in `webapp/lib/auto-ingest/`, which calls the same `runIngestLoop()` helper; by default (`skipIfBusy: true`) it is skipped while `.lock` exists.
 - Outputs:
@@ -148,7 +148,7 @@ use that year with the fallback month from the next available source.
 
 This applies to both ingest and graphify. Never start by throwing the whole root into one operation.
 
-1. **Find leaf directories**: in the target tree (`raw/`, `wiki/`), find directories with no child directories.
+1. **Find leaf directories**: in the target tree (`raw/`, `wiki/`), find directories with no child directories. For `raw/`, follow symlinked files/directories that are themselves located under `raw/`, keep their logical `raw/...` paths in state and citations, and track visited real paths/inodes to avoid symlink loops.
 2. **Process by chunk**: group only the files in each leaf and process them once.
 3. **Preserve partial outputs**:
    - ingest: immediately save chunk-level summaries/entity pages.
@@ -179,6 +179,7 @@ This applies to both ingest and graphify. Never start by throwing the whole root
   - move whole files into `raw/.trash/<ISO-ts>_<basename>`, and
   - rewrite a file in place after backing the original up to `raw/.trash/`.
   The only other allowed `raw/` mutation is creating a new, user-approved Chat external-capture file under `raw/chat/<YYYY-MM-DD>/...`; never rewrite or delete existing `raw/chat/` captures. All other paths and operations on `raw/` remain forbidden.
+- User-approved symlinks located under `raw/` are valid source entries. Following such links read-only during ingest/query is not considered a workspace escape, even when the real target is outside the repository. Do not mutate the real target, do not cite the real target path as the source path, and reject broken links or symlink loops with a clear warning.
 - Do **not** arbitrarily delete files under `wiki/`. Retire pages by moving them to `wiki/archive/` and recording the reason.
 - Do **not** invent external URLs. If there is no source, mark it as "source unknown" and record it in the operation log.
 - Do **not** manually edit `sessions/`, `config/local.json`, or `.env*`.
@@ -197,7 +198,7 @@ This repository is operated through one of the coding agent CLIs installed on th
 | `cline` | `cline -y "<prompt>"` | `-y` (auto-approval) |
 
 - Any agent entering this repository treats these operating rules as the primary local rules.
-- yolo mode must apply **only inside this repository**. The adapter forces `cwd`, so behavior that leaks outside the wiki path must be rejected.
+- yolo mode must apply **only inside this repository**. The adapter forces `cwd`, so behavior that leaks outside the wiki path must be rejected, except for read-only traversal of user-approved source symlinks that are located under `raw/` and are being processed through `raw/...` paths.
 
 ## 11. Writing Language
 
