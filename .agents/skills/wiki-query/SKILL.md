@@ -28,7 +28,7 @@ Answer the user's question in this order.
 - One natural-language question, with optional attachments such as images.
 - Inline option flags in the chat body:
   - `--scope=wiki|wiki+raw|wiki+graph` (default: use `wiki+graph` automatically when graph exists; otherwise `wiki`; graph context is auxiliary).
-  - `--format=md|table|marp|chart` (default: `md`; `marp` only when `wiki-marp` is active).
+  - `--format=md|table|marp|chart` (default: `md`; use non-`md` formats only when the user explicitly requests them; `marp` only when `wiki-marp` is active).
   - `--save` explicitly enables answer feedback. If omitted, ask with a toggle at the end.
 
 ## Output
@@ -58,11 +58,9 @@ Answer the user's question in this order.
 4. If information is insufficient, read original files in `raw/`. **`raw/` is read-only.**
 
 ### Step 3 - Write the Answer
-1. Auto-select answer format:
-   - Comparison/contrast questions -> table (`--format=table`).
-   - Presentation/sharing -> Marp slides (`--format=marp`, only when `wiki-marp` is active).
-   - Numeric/time-series questions -> chart code block + explanation.
-   - Otherwise, default Markdown.
+1. Select answer format:
+   - If the user explicitly requests a format with `--format=table|marp|chart` or natural language ("표로", "슬라이드로", "차트로", "as a table", "as slides", "as a chart"), use that format.
+   - Otherwise, answer in Markdown (`--format=md`) with headings, paragraphs, bullets, and citations as appropriate.
 2. Cite every factual claim. Formats:
    - Wikilink: `... ([[wiki/sources/2026/2026-05/foo]])`.
    - Original source: `... (raw/articles/foo/bar.md L42-58)`.
@@ -112,7 +110,7 @@ Skill behavior:
 1. Select candidates from `wiki/index.md`, such as `llm-wiki-pattern`, `leaf-first-merge` (hypothetical), and `wiki-ingest`.
 2. If qmd or graph context is active, use it to refine or expand the candidate list.
 3. Read candidate pages and find the chunk-limit/context-protection rationale.
-4. Write a 3-4 paragraph answer with two citations and a short table.
+4. Write a 3-4 paragraph Markdown answer with two citations and concise bullets.
 5. Add a save toggle at the end: `wiki/answers/why-merge-pass.md` [ ].
 6. If the user clicks the toggle, feed the answer back and update `index.md` and `log.md`.
 

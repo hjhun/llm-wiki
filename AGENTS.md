@@ -58,7 +58,7 @@ Each of the four operations maps to one skill. If these rules conflict with a sk
 - Read `wiki/index.md` first to narrow candidate pages. Use original material in `raw/` only as a fallback when the wiki is insufficient.
 - If optional `wiki-search-qmd` is active, delegate search to it.
 - If `wiki/graph/graph.json` exists, `wiki-graphify` may be used as an auxiliary graph-context tool, similar to qmd: use it for related nodes, 1-hop neighbors, communities, and cited-page clues, but still read candidate wiki/source pages before answering.
-- Choose the response shape freely: Markdown, table, Marp slides, chart, and so on.
+- Unless the user explicitly requests another format, answer in Markdown. Use table, Marp slides, chart, or other formats only when requested by flag or natural language.
 - With user consent, feed the answer back into `wiki/answers/<slug>.md` and update `index.md` and `log.md`.
 
 ### 3.3 Lint (`/lint`, [`.agents/skills/wiki-lint/SKILL.md`](.agents/skills/wiki-lint/SKILL.md))

@@ -81,7 +81,7 @@ function buildWorkers(
 function operationPolicy(kind: OrchestratedKind): string {
   if (kind === "query") {
     return [
-      "You are a read-only query worker. Use wiki-query to find candidate pages, read evidence, and draft an answer with citations.",
+      "You are a read-only query worker. Use wiki-query to find candidate pages, read evidence, and draft a Markdown answer with citations unless the user explicitly requested another format.",
       "Do not create or edit wiki/answers, wiki/index.md, wiki/log.md, or any other file. If the user requested --save, describe the proposed save target for the manager.",
     ].join("\n");
   }
@@ -212,7 +212,7 @@ function buildManagerPrompt(input: {
   );
   const writePolicy =
     input.kind === "query"
-      ? "For /query, write the final answer in Korean with citations. Only save to wiki/answers if the user explicitly requested it."
+      ? "For /query, write the final answer in Korean Markdown with citations unless the original task explicitly requested another format. Only save to wiki/answers if the user explicitly requested it."
       : input.kind === "lint"
         ? "For /lint, use worker findings as inspection input, then perform exactly one manager write pass following wiki-lint, including report/log/index updates and --fix only if requested."
         : "For ingest operations, do not re-run ingest work in this manager pass. Review progress and worker outputs, then report complete/stopped/error status clearly.";
