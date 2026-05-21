@@ -12,7 +12,14 @@ type AutoIngestEvent =
   | {
       type: "done";
       source: "watch" | "schedule" | "manual";
-      halt: "normal" | "error" | "stopped" | "capped" | "skipped" | "noop";
+      halt:
+        | "normal"
+        | "error"
+        | "stopped"
+        | "capped"
+        | "stalled"
+        | "skipped"
+        | "noop";
       reason: string;
       iterations: number;
       durationMs: number;

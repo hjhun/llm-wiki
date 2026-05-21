@@ -36,6 +36,8 @@ export type ProgressSnapshot = {
   bytesTotal: number;
   sourcePagesWritten: number;
   mergeDone: boolean;
+  /** Count of parent dirs still queued in merge_pass.pending_parents. */
+  mergePendingParents: number;
   /** Sorted POSIX paths of leaves whose status === "done". */
   doneLeaves: string[];
 };
@@ -49,6 +51,7 @@ export const EMPTY_SNAPSHOT: ProgressSnapshot = {
   bytesTotal: 0,
   sourcePagesWritten: 0,
   mergeDone: false,
+  mergePendingParents: 0,
   doneLeaves: [],
 };
 
@@ -123,11 +126,12 @@ export async function readProgressSnapshot(): Promise<ProgressSnapshot> {
       "utf8",
     );
     const parsed = JSON.parse(raw) as {
-      merge_pass?: { status?: unknown };
+      merge_pass?: { status?: unknown; pending_parents?: unknown };
       leaves?: Record<string, unknown>;
     };
     const doneLeaves: string[] = [];
     const filePaths = new Set<string>();
+    const pendingParents = parsed.merge_pass?.pending_parents;
     const snap: ProgressSnapshot = {
       leavesTotal: 0,
       leavesDone: 0,
@@ -137,6 +141,9 @@ export async function readProgressSnapshot(): Promise<ProgressSnapshot> {
       bytesTotal: 0,
       sourcePagesWritten: 0,
       mergeDone: parsed.merge_pass?.status === "done",
+      mergePendingParents: Array.isArray(pendingParents)
+        ? pendingParents.length
+        : 0,
       doneLeaves,
     };
     if (parsed.leaves && typeof parsed.leaves === "object") {
@@ -209,7 +216,10 @@ export function ingestMadeProgress(
     after.subChunksDone > before.subChunksDone ||
     after.leavesDone > before.leavesDone ||
     after.sourcePagesWritten > before.sourcePagesWritten ||
-    (after.mergeDone && !before.mergeDone)
+    (after.mergeDone && !before.mergeDone) ||
+    // A merge pass drained a parent from merge_pass.pending_parents — real
+    // progress even though no sub-chunk or leaf counter moved.
+    after.mergePendingParents < before.mergePendingParents
   );
 }
 
@@ -288,14 +298,23 @@ export type LoopDecision =
   | { halt: false }
   | {
       halt: true;
-      kind: "normal" | "error" | "stopped" | "capped";
+      kind: "normal" | "error" | "stopped" | "capped" | "stalled";
       reason: string;
     };
+
+/**
+ * Consecutive progress-free rounds tolerated before the loop is declared
+ * stalled. A stuck `in_progress` sub-chunk or a stale `.lock` would otherwise
+ * spin every remaining iteration up to `maxIterations`.
+ */
+export const LOOP_STAGNATION_LIMIT = 3;
 
 export function decideLoopHalt(input: {
   exitCode: number;
   summary: StateSummary | null;
   mergeDone: boolean;
+  mergePending: boolean;
+  idleRounds: number;
   stopRequested: boolean;
   iteration: number;
   maxIter: number;
@@ -324,17 +343,37 @@ export function decideLoopHalt(input: {
       reason: `최대 반복 ${input.maxIter}회에 도달`,
     };
   }
+  // Completion: every leaf is done and no merge work is outstanding.
+  // This must NOT gate on `mergeDone` alone. `merge_pass.status` only flips to
+  // "done" after a merge pass drains `pending_parents`; a run with no parent to
+  // merge (single leaf, already-ingested scope, empty raw/) leaves the status
+  // at "idle" forever. Gating on `mergeDone` then makes the loop spin to
+  // maxIter even though every worker already reports the work complete.
   if (
     input.summary &&
     input.summary.pending === 0 &&
     input.summary.in_progress === 0 &&
     input.summary.partial === 0 &&
-    input.mergeDone
+    (input.mergeDone || !input.mergePending)
   ) {
     return {
       halt: true,
       kind: "normal",
-      reason: `모든 leaf 완료 + merge pass done (${input.summary.done}/${input.summary.total})`,
+      reason: input.mergeDone
+        ? `모든 leaf 완료 + merge pass done (${input.summary.done}/${input.summary.total})`
+        : `모든 leaf 완료 · 남은 merge 작업 없음 (${input.summary.done}/${input.summary.total})`,
+    };
+  }
+  // Stagnation guard: aside from error/stop/cap and the completion branch
+  // above, the loop has no other exit. If several consecutive rounds advance
+  // nothing — a stuck `in_progress` sub-chunk, a stale `.lock`, or a merge
+  // pass that cannot proceed — spinning to maxIter is pure waste. Halt and let
+  // the manager report the stall.
+  if (input.idleRounds >= LOOP_STAGNATION_LIMIT) {
+    return {
+      halt: true,
+      kind: "stalled",
+      reason: `연속 ${input.idleRounds}개 라운드에서 진행이 없어 중단`,
     };
   }
   return { halt: false };
@@ -410,8 +449,14 @@ export function summarizeIngestState(
     ) {
       continue;
     }
-    summary.total += 1;
     const status = typeof leaf.status === "string" ? leaf.status : "pending";
+    // A "stale" leaf is one whose source files vanished from disk
+    // (wiki-ingest §Step 1). It is not actionable work, so exclude it entirely
+    // — matching readProgressSnapshot — instead of letting it fall into the
+    // "pending" bucket, where it would permanently block the loop's completion
+    // check.
+    if (status === "stale") continue;
+    summary.total += 1;
     if (status === "done") summary.done += 1;
     else if (status === "in_progress") summary.in_progress += 1;
     else if (status === "partial") summary.partial += 1;
@@ -811,7 +856,7 @@ export type RunIngestLoopResult = {
   lastExitCode: number;
   totalDurationMs: number;
   iterations: number;
-  haltKind: "normal" | "error" | "stopped" | "capped";
+  haltKind: "normal" | "error" | "stopped" | "capped" | "stalled";
   haltReason: string;
   loopBefore: ProgressSnapshot;
   loopAfter: ProgressSnapshot;
@@ -840,9 +885,11 @@ export async function runIngestLoop(
   // merge must not be skipped while partials are newer than graph.json.
   let partialsDirtySinceMerge = false;
   let iteration = 0;
+  let idleRounds = 0;
   let lastExitCode = 0;
   let lastDurationMs = 0;
-  let haltKind: "normal" | "error" | "stopped" | "capped" = "normal";
+  let haltKind: "normal" | "error" | "stopped" | "capped" | "stalled" =
+    "normal";
   let haltReason = "loop terminated without iterations";
   let aggregateReply = "";
   const kindTimeout = cfg.cli.timeouts["ingest-loop"];
@@ -910,6 +957,7 @@ export async function runIngestLoop(
 
     const summary = await readIngestStateSummary();
     const snap = await readProgressSnapshot();
+    idleRounds = ingestMadeProgress(prevSnap, snap) ? 0 : idleRounds + 1;
 
     if (result.exitCode === 0) {
       const incr = await maybeAutoRunGraphify({
@@ -937,6 +985,8 @@ export async function runIngestLoop(
       exitCode: result.exitCode,
       summary,
       mergeDone: snap.mergeDone,
+      mergePending: snap.mergePendingParents > 0,
+      idleRounds,
       stopRequested: await stopFlagExists(sessionPath),
       iteration,
       maxIter,

@@ -148,7 +148,7 @@ For exactly **one** sub-chunk whose `status === "pending"`:
    - Changed files: `wiki/sources/2026/2026-05/foo.md`, `wiki/entities/bar.md`
    - Notes: <files done>/<files total> in leaf
    ```
-6. Mark the sub-chunk `status: "done"`, set `ended_at`, record `source_pages_written`. If this was the leaf's last sub-chunk, set `leaves[<leafPath>].status = "done"`. Persist `.state.json`.
+6. Mark the sub-chunk `status: "done"`, set `ended_at`, record `source_pages_written`. If this was the leaf's last sub-chunk, set `leaves[<leafPath>].status = "done"` **and queue the merge pass**: add the leaf's immediate parent directory (a POSIX path ending in `/`; use `raw/` for a leaf sitting directly under `raw/`) to `merge_pass.pending_parents` unless it is already listed. This is the only place `pending_parents` is filled — Step 3 and the `/ingest-loop` backend driver both rely on it to know merge work is outstanding, so skipping it leaves the loop unable to detect completion. Persist `.state.json`.
 7. **Regenerate `wiki/.progress/ingest/DASHBOARD.md`** from `.state.json` (idempotent — overwrite, do not append).
 8. **Release `.lock` and return.** Do **not** start the next sub-chunk in the same call. The next `/ingest` invocation will read `.state.json` and pick up the next `pending` sub-chunk.
 
@@ -162,7 +162,7 @@ If an exception is raised during this step:
 Only run when **every** leaf in the input scope has `status === "done"` and `merge_pass.status !== "done"`.
 
 1. Acquire the same lock with mode `merge`.
-2. Pick **one** parent directory from `merge_pass.pending_parents`. For that parent:
+2. If `merge_pass.pending_parents` is empty there is nothing to merge: set `merge_pass.status = "done"`, regenerate `DASHBOARD.md`, release the lock, and return. Otherwise pick **one** parent directory from `merge_pass.pending_parents`. For that parent:
    - Combine child-leaf summaries into or onto `wiki/concepts/<topic>.md` (or wherever appropriate).
    - If useful, write/append the root synthesis note at `wiki/synthesis/<batch>.md`.
 3. Append a merge entry to `wiki/log.md`:

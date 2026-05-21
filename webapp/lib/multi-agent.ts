@@ -377,7 +377,9 @@ async function runLoopOperation(input: {
   const loopBefore = await readProgressSnapshot();
   let prevSnap = loopBefore;
   let round = 0;
-  let haltKind: "normal" | "error" | "stopped" | "capped" = "normal";
+  let idleRounds = 0;
+  let haltKind: "normal" | "error" | "stopped" | "capped" | "stalled" =
+    "normal";
   let haltReason = "";
   let allRuns: WorkerRun[] = [];
   let totalDurationMs = 0;
@@ -433,6 +435,7 @@ async function runLoopOperation(input: {
 
     const summary = await readIngestStateSummary();
     const snap = await readProgressSnapshot();
+    idleRounds = ingestMadeProgress(prevSnap, snap) ? 0 : idleRounds + 1;
     const graph = await maybeAutoRunGraphify({
       cfg: input.cfg,
       agent: orchestrationCli,
@@ -474,6 +477,8 @@ async function runLoopOperation(input: {
       exitCode: lastExitCode,
       summary,
       mergeDone: snap.mergeDone,
+      mergePending: snap.mergePendingParents > 0,
+      idleRounds,
       stopRequested: await stopFlagExists(input.sessionPath),
       iteration: round,
       maxIter: maxRounds,

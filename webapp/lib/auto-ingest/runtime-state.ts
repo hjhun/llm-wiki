@@ -13,7 +13,15 @@ export const AutoIngestRuntimeSchema = z.object({
   lastRunAt: z.string().nullable().default(null),
   lastResult: z
     .object({
-      halt: z.enum(["normal", "error", "stopped", "capped", "skipped", "noop"]),
+      halt: z.enum([
+        "normal",
+        "error",
+        "stopped",
+        "capped",
+        "stalled",
+        "skipped",
+        "noop",
+      ]),
       reason: z.string(),
       iterations: z.number().int().min(0),
       durationMs: z.number().int().min(0),
