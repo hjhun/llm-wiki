@@ -675,8 +675,8 @@ config/local.json
 | `chunking.maxFilesPerInvocation` | `4` | 에이전트 호출 1회당 최대 raw 파일 수 |
 | `chunking.maxBytesPerFile` | `131072` | 큰 파일은 head + tail만 읽음 |
 | `graph.autoUpdateOnIngest` | `true` | ingest 진행 후 graph 동기화 실행 |
-| `graph.autoUpdateStrategy` | `auto` | `auto`는 작은 ingest에서는 partial graph update를 생략하고 큰 작업에서만 실행합니다. `finalOnly`는 partial을 항상 생략하고, `partialAndFinal`은 항상 실행합니다. |
-| `graph.partialThresholds` | `{ minLeaves: 4, minFiles: 16, minBytes: 1048576, minSubChunks: 4 }` | `auto`가 최종 graph update 전 `update-partial` 실행 여부를 판단할 때 쓰는 작업 규모 임계값 |
+| `graph.autoUpdateStrategy` | `auto` | `auto`는 작은 ingest에서는 scoped graph update를 생략하고 큰 작업에서만 실행합니다. `finalOnly`는 최종 update만 기다리고, `partialAndFinal`은 scoped update와 최종 update를 모두 실행합니다. scoped update는 대상 leaf partial을 갱신한 뒤 전체 graph parts를 병합합니다. |
+| `graph.partialThresholds` | `{ minLeaves: 4, minFiles: 16, minBytes: 1048576, minSubChunks: 4 }` | `auto`가 최종 graph update 전 scoped graph update 실행 여부를 판단할 때 쓰는 작업 규모 임계값 |
 | `autoIngest.enabled` | `false` | 자동 인제스트 기본 비활성화 |
 | `autoLint.enabled` | `false` | 자동 Lint 기본 비활성화 |
 | `autoLint.counter.threshold` | `10` | lint 권장을 표시하는 ingest 로그 entry 수 |

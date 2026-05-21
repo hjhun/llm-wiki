@@ -4,7 +4,10 @@ import path from "node:path";
 import { runCli, type CliName, type RunResult } from "./cli";
 import type { Config } from "./config";
 import { buildGraphifyPrompt } from "./graph";
-import { PROJECT_ROOT } from "./paths";
+import {
+  PROJECT_ROOT,
+  WIKI_GRAPH_PATH,
+} from "./paths";
 import { appendMessage } from "./sessions";
 import { errorMessage } from "./api";
 
@@ -679,7 +682,7 @@ async function runCliWithIngestLoopRetries(input: {
   };
 }
 
-export type GraphifyAction = "update" | "update-partial";
+export type GraphifyAction = "update";
 
 export type MaybeAutoRunGraphifyInput = {
   cfg: Config;
@@ -696,9 +699,10 @@ export type MaybeAutoRunGraphifyInput = {
 export type MaybeAutoRunGraphifyResult = {
   note: string;
   action: GraphifyAction | null;
+  succeeded: boolean;
 };
 
-function graphPartialDecision(
+function graphIncrementalDecision(
   cfg: Config,
   snapshot: ProgressSnapshot,
 ): { enabled: boolean; reason: string } {
@@ -738,10 +742,44 @@ function graphPartialDecision(
   };
 }
 
+async function validateGraphifyArtifacts(
+  snapshot: ProgressSnapshot,
+): Promise<string | null> {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(await fs.readFile(WIKI_GRAPH_PATH, "utf8"));
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException).code;
+    return code === "ENOENT"
+      ? "`wiki/graph/graph.json`이 생성되지 않았습니다."
+      : `\`wiki/graph/graph.json\`을 읽거나 파싱하지 못했습니다: ${errorMessage(err)}`;
+  }
+  const root =
+    parsed && typeof parsed === "object"
+      ? (parsed as Record<string, unknown>)
+      : null;
+  const nodes = Array.isArray(root?.nodes) ? root.nodes : null;
+  const edges = Array.isArray(root?.edges) ? root.edges : null;
+  if (!nodes || !edges) {
+    return "`wiki/graph/graph.json` schema가 유효하지 않습니다: nodes/edges 배열이 필요합니다.";
+  }
+  if (snapshot.sourcePagesWritten > 0 && nodes.length === 0) {
+    return (
+      "ingest가 source page를 생성했지만 graph update 결과가 빈 그래프입니다. " +
+      "대상 leaf extraction 또는 merge pass를 다시 확인해야 합니다."
+    );
+  }
+  return null;
+}
+
 export async function maybeAutoRunGraphify(
   input: MaybeAutoRunGraphifyInput,
 ): Promise<MaybeAutoRunGraphifyResult> {
-  const noop: MaybeAutoRunGraphifyResult = { note: "", action: null };
+  const noop: MaybeAutoRunGraphifyResult = {
+    note: "",
+    action: null,
+    succeeded: true,
+  };
   if (input.lastExitCode !== 0) return noop;
   if (!input.cfg.graph.autoUpdateOnIngest) return noop;
   if (!ingestMadeProgress(input.before, input.after)) return noop;
@@ -765,25 +803,28 @@ export async function maybeAutoRunGraphify(
     action = "update";
     progressLabel = "merge pass 완료";
   } else if (justDoneLeaves.length > 0) {
-    const partialDecision = graphPartialDecision(input.cfg, input.after);
-    if (!partialDecision.enabled) {
+    const incrementalDecision = graphIncrementalDecision(input.cfg, input.after);
+    if (!incrementalDecision.enabled) {
       return {
         note:
-          `\n\n---\n\n[auto graph · partial skipped] ` +
-          `${partialDecision.reason}; final \`wiki-graphify update\` will handle changed partials.\n`,
+          `\n\n---\n\n[auto graph · scoped update skipped] ` +
+          `${incrementalDecision.reason}; final \`wiki-graphify update\` will handle changed leaves.\n`,
         action: null,
+        succeeded: true,
       };
     }
-    action = "update-partial";
+    action = "update";
     leafPaths = justDoneLeaves;
-    progressLabel = `leaf 완료 ${justDoneLeaves.length}건 · partial only · ${partialDecision.reason}`;
+    progressLabel =
+      `leaf 완료 ${justDoneLeaves.length}건 · scoped update + full merge · ` +
+      incrementalDecision.reason;
   } else {
     return noop;
   }
 
   const commandLabel =
-    action === "update-partial" && leafPaths && leafPaths.length > 0
-      ? `wiki-graphify update-partial (${leafPaths.join(", ")})`
+    leafPaths && leafPaths.length > 0
+      ? `wiki-graphify ${action} (${leafPaths.join(", ")})`
       : `wiki-graphify ${action}`;
 
   await appendMessage(
@@ -812,9 +853,29 @@ export async function maybeAutoRunGraphify(
       graphResult.stdout.trim() ||
       graphResult.stderr.trim() ||
       `(그래프 업데이트가 빈 응답을 반환했습니다. exitCode=${graphResult.exitCode})`;
+    if (graphResult.exitCode !== 0) {
+      return {
+        note:
+          `${note}\n\n---\n\n[auto graph blocker · ${commandLabel}]\n` +
+          `그래프 호출이 실패했습니다: exitCode=${graphResult.exitCode}\n\n${graphReply}`,
+        action: null,
+        succeeded: false,
+      };
+    }
+    const validationError = await validateGraphifyArtifacts(input.after);
+    if (validationError) {
+      return {
+        note:
+          `${note}\n\n---\n\n[auto graph blocker · ${commandLabel}]\n` +
+          `${validationError}\n\n${graphReply}`,
+        action: null,
+        succeeded: false,
+      };
+    }
     return {
       note: `${note}\n\n---\n\n[auto graph result · ${commandLabel}]\n${graphReply}`,
       action,
+      succeeded: true,
     };
   } catch (err) {
     const graphError = errorMessage(err);
@@ -827,7 +888,8 @@ export async function maybeAutoRunGraphify(
       note:
         `${note}\n\n---\n\n[auto graph blocker · ${commandLabel}]\n` +
         `ingest는 진행됐지만 자동 그래프 호출이 실패했습니다: ${graphError}`,
-      action,
+      action: null,
+      succeeded: false,
     };
   }
 }
@@ -881,9 +943,6 @@ export async function runIngestLoop(
   const loopBefore = await readProgressSnapshot();
   let prevSnap: ProgressSnapshot = loopBefore;
   let lastMergedSnap: ProgressSnapshot | null = null;
-  // True when an `update-partial` ran after the last full merge — the final
-  // merge must not be skipped while partials are newer than graph.json.
-  let partialsDirtySinceMerge = false;
   let iteration = 0;
   let idleRounds = 0;
   let lastExitCode = 0;
@@ -974,9 +1033,6 @@ export async function runIngestLoop(
       if (incr.note) aggregateReply += incr.note;
       if (incr.action === "update") {
         lastMergedSnap = snap;
-        partialsDirtySinceMerge = false;
-      } else if (incr.action === "update-partial") {
-        partialsDirtySinceMerge = true;
       }
     }
     prevSnap = snap;
@@ -1010,7 +1066,6 @@ export async function runIngestLoop(
   if (haltKind !== "error") {
     const alreadyCoversLatest =
       lastMergedSnap !== null &&
-      !partialsDirtySinceMerge &&
       loopAfter.leavesDone <= lastMergedSnap.leavesDone &&
       loopAfter.mergeDone === lastMergedSnap.mergeDone;
     if (!alreadyCoversLatest) {

@@ -184,7 +184,7 @@ allowed-cli: [codex, claude, gemini, cline]
   5. Store progress in `wiki/graph/.state.json` as leaf path -> last build time/hash, so runs can resume.
 - **Source**: <https://github.com/safishamsi/graphify>.
 - **Integration point**: the Graph tab visualizes `wiki/graph/graph.json`. Build/Update buttons do not call graphify from the web server; they ask the default coding agent CLI in Settings to run `wiki-graphify build/update`. `wiki-query` can optionally use graph context as an auxiliary retrieval/context signal, similar to qmd, while keeping final answers grounded in wiki/source pages.
-- **Adaptive ingest update**: after multi-agent ingest, `graph.autoUpdateStrategy=auto` uses leaf/file/byte/sub-chunk thresholds to decide whether to run `update-partial` between loop iterations. Small ingests prioritize the final `update` quality pass; large ingests keep partials for resumability.
+- **Adaptive ingest update**: after multi-agent ingest, `graph.autoUpdateStrategy=auto` uses leaf/file/byte/sub-chunk thresholds to decide whether to run scoped `update` between loop iterations. Small ingests prioritize the final `update` quality pass; large ingests refresh target leaf partials and immediately merge the full parts set for a connected graph.
 
 ### 5.5 Optional Tool Skills, Active When Installed
 - `wiki-search-qmd` - if [qmd](https://github.com/tobi/qmd) exists, delegate BM25 + vector + LLM reranking search to `wiki-query`.

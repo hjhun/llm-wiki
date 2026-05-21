@@ -178,8 +178,10 @@ Only run when **every** leaf in the input scope has `status === "done"` and `mer
 
 If `graph.autoUpdateOnIngest` is `true`, graph synchronization is handled as
 separate coding-agent CLI invocations after ingest progress is detected. The
-webapp may run `wiki-graphify update-partial` between loop iterations only when
-`graph.autoUpdateStrategy` allows it (`auto` uses workload thresholds). After
+webapp may run scoped `wiki-graphify update` between loop iterations only when
+`graph.autoUpdateStrategy` allows it (`auto` uses workload thresholds). A
+scoped update rebuilds the completed leaf's partial graph and then merges all
+valid `wiki/graph/parts/*.json` into the connected final `graph.json`. After
 the final merge completes, always run `wiki-graphify update` as the quality
 merge/normalization pass. Do not bundle graph work into the same merge-pass LLM
 call; each graph step must be a follow-up invocation that uses the

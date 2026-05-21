@@ -682,8 +682,8 @@ Useful defaults:
 | `chunking.maxFilesPerInvocation` | `4` | Maximum raw files per ingest agent call. |
 | `chunking.maxBytesPerFile` | `131072` | Large files are read head + tail. |
 | `graph.autoUpdateOnIngest` | `true` | Run graph synchronization after ingest progress. |
-| `graph.autoUpdateStrategy` | `auto` | `auto` skips partial graph updates for small ingests and runs them for large workloads; `finalOnly` never runs partials; `partialAndFinal` always does. |
-| `graph.partialThresholds` | `{ minLeaves: 4, minFiles: 16, minBytes: 1048576, minSubChunks: 4 }` | Workload thresholds used by `auto` to decide whether `update-partial` is worth running before the final graph update. |
+| `graph.autoUpdateStrategy` | `auto` | `auto` skips scoped graph updates for small ingests and runs them for large workloads; `finalOnly` waits for the final update; `partialAndFinal` runs scoped updates and still runs the final update. Scoped updates refresh target leaf partials and then merge all graph parts. |
+| `graph.partialThresholds` | `{ minLeaves: 4, minFiles: 16, minBytes: 1048576, minSubChunks: 4 }` | Workload thresholds used by `auto` to decide whether a scoped graph update is worth running before the final graph update. |
 | `autoIngest.enabled` | `false` | Auto Ingest starts disabled. |
 | `autoLint.enabled` | `false` | Auto Lint starts disabled. |
 | `autoLint.counter.threshold` | `10` | Ingest count that triggers a lint recommendation. |

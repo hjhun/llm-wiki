@@ -80,9 +80,9 @@ export type GraphRunAction = "build" | "update" | "update-partial";
 
 export type BuildGraphifyPromptOptions = {
   /**
-   * For `update-partial`: list of leaf directory paths (POSIX, trailing `/`)
-   * whose partials should be (re)built. The agent must NOT touch leaves
-   * outside this list and must NOT run the merge pass.
+   * For scoped `update`: leaves whose partials should be rebuilt before the
+   * full merge pass. For `update-partial`: leaves whose cache files should be
+   * rebuilt without touching graph.json.
    */
   leafPaths?: string[];
 };
@@ -96,8 +96,8 @@ export function buildGraphifyPrompt(
     (p): p is string => typeof p === "string" && p.length > 0,
   );
   const commandLabel =
-    action === "update-partial" && leafList.length > 0
-      ? `wiki-graphify update-partial (leaves: ${leafList.join(", ")})`
+    leafList.length > 0
+      ? `wiki-graphify ${action} (leaves: ${leafList.join(", ")})`
       : `wiki-graphify ${action}`;
 
   const actionGuidance: string =
@@ -114,7 +114,15 @@ export function buildGraphifyPrompt(
           "- This is intentionally cheap: extract just the new leaf's content, write the partial, exit.",
         ].join("\n")
       : action === "update"
-        ? "For this `update` run, prefer reading wiki/.progress/ingest/.state.json and wiki/graph/.state.json to scope work to only the leaves whose content_hash changed since the previous build, then rerun the merge pass to produce a connected wiki/graph/graph.json + GRAPH_REPORT.md. Per-leaf partials may already exist when graph.autoUpdateStrategy allowed adaptive `update-partial`; if not, build the changed partials now before the merge pass."
+        ? [
+            "For this `update` run, rebuild per-leaf partial graphs only for the scoped leaves when a leaf list is supplied, or for changed/missing leaves discovered from wiki/.progress/ingest/.state.json and wiki/graph/.state.json when no leaf list is supplied.",
+            leafList.length > 0
+              ? `- Scoped leaves to refresh before merge: ${leafList.map((p) => `\`${p}\``).join(", ")}.`
+              : "- Scoped leaves: auto-detect changed/missing leaves.",
+            "- After refreshing those partials, ALWAYS run the merge pass across ALL valid wiki/graph/parts/*.json so the target path is connected back into the existing graph.",
+            "- Output connected artifacts: wiki/graph/graph.json and wiki/graph/GRAPH_REPORT.md.",
+            "- Do not treat a scoped partial refresh as complete until graph.json has been rewritten from the full parts set.",
+          ].join("\n")
         : "For this `build` run, enumerate all leaves under wiki/ (and raw/ if relevant), build per-leaf partials, then run the merge pass.";
 
   return [
@@ -136,7 +144,7 @@ export function buildGraphifyPrompt(
     "   - If you do invoke `graphify update`, pass `--out wiki/graph` so output lands in the correct directory: `graphify update wiki/ --out wiki/graph`.",
     "   - For Markdown wiki content (the common case here), `graphify update` alone will NOT extract entities/concepts — it is code-only. Use the Python package modules `graphify.detect`, `graphify.extract`, `graphify.build`, `graphify.cluster`, `graphify.report`, and `graphify.export` to assemble per-leaf partials in wiki/graph/parts/, then (for `update`/`build` only) merge into wiki/graph/graph.json. Follow the leaf-first chunk policy in §Chunk Policy of the SKILL.",
     "3. There is no literal `graphify build` subcommand; `wiki-graphify build` is an agent-level operation name, not a CLI command.",
-    "4. During `/ingest-loop`, the webapp may skip `update-partial` for small workloads when `graph.autoUpdateStrategy` is `auto`; final `wiki-graphify update` still performs changed-partial rebuilds plus the merge pass.",
+    "4. During `/ingest-loop`, the webapp may skip scoped incremental updates for small workloads when `graph.autoUpdateStrategy` is `auto`; whenever an incremental update does run, it is `wiki-graphify update` with scoped leaves and MUST still merge all existing parts into graph.json.",
     "",
     actionGuidance,
     "",

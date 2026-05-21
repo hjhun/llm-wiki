@@ -385,9 +385,6 @@ async function runLoopOperation(input: {
   let totalDurationMs = 0;
   let lastExitCode = 0;
   let lastMergedSnap: ProgressSnapshot | null = null;
-  // True when an `update-partial` ran after the last full merge — the final
-  // merge must not be skipped while partials are newer than graph.json.
-  let partialsDirtySinceMerge = false;
   const initialProgressRef =
     input.progressRef !== undefined
       ? input.progressRef
@@ -457,7 +454,7 @@ async function runLoopOperation(input: {
         result: {
           stdout: graph.note,
           stderr: "",
-          exitCode: 0,
+          exitCode: graph.succeeded ? 0 : 1,
           durationMs: 0,
           stdoutTruncated: null,
           stderrTruncated: null,
@@ -467,9 +464,6 @@ async function runLoopOperation(input: {
     }
     if (graph.action === "update") {
       lastMergedSnap = snap;
-      partialsDirtySinceMerge = false;
-    } else if (graph.action === "update-partial") {
-      partialsDirtySinceMerge = true;
     }
     prevSnap = snap;
 
@@ -502,7 +496,6 @@ async function runLoopOperation(input: {
   if (haltKind !== "error") {
     const alreadyCoversLatest =
       lastMergedSnap !== null &&
-      !partialsDirtySinceMerge &&
       loopAfter.leavesDone <= lastMergedSnap.leavesDone &&
       loopAfter.mergeDone === lastMergedSnap.mergeDone;
     const finalGraph = alreadyCoversLatest
@@ -510,6 +503,7 @@ async function runLoopOperation(input: {
           note:
             "\n\n---\n\n[auto graph] 루프 중에 full merge가 이미 실행되어 final merge는 생략합니다.",
           action: null,
+          succeeded: true,
         }
       : await maybeAutoRunGraphify({
           cfg: input.cfg,
@@ -532,7 +526,7 @@ async function runLoopOperation(input: {
         result: {
           stdout: finalGraph.note,
           stderr: "",
-          exitCode: 0,
+          exitCode: finalGraph.succeeded ? 0 : 1,
           durationMs: 0,
           stdoutTruncated: null,
           stderrTruncated: null,

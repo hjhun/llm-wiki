@@ -60,28 +60,28 @@ such as `graphify.detect`, `graphify.extract`, `graphify.build`,
 | Command | Input | Output |
 |---|---|---|
 | `build` | Optional: `--scope=wiki|raw|wiki+raw` (default `wiki+raw`) | Agent-level full refresh of `graph.json`, `GRAPH_REPORT.md`, `parts/*`, `.state.json`; do not call a literal `graphify build` command |
-| `update` | Optional: `--since=<date>` or automatic change detection | Agent-level incremental rebuild of changed leaves -> rerun merge pass |
-| `update-partial` | One or more `<leafPath>` (POSIX, trailing `/`) | Build per-leaf partials in `wiki/graph/parts/<sha1(leafPath)>.json` for the listed leaves only. **Skip the merge pass.** Do NOT touch `graph.json`, `GRAPH_REPORT.md`, or rerun community clustering. Update `wiki/graph/.state.json` entries for the affected leaves. Used by the webapp between `/ingest-loop` iterations so partials grow in lockstep with ingest while the merge cost is paid just once at the end. |
+| `update` | Optional: `--since=<date>`, automatic change detection, or scoped `<leafPath>` list supplied by the webapp | Agent-level incremental rebuild of changed/scoped leaves -> rerun merge pass across **all** valid `parts/*.json` so the changed target is connected into `graph.json` |
+| `update-partial` | One or more `<leafPath>` (POSIX, trailing `/`) | Cache-only operation: build per-leaf partials in `wiki/graph/parts/<sha1(leafPath)>.json` for the listed leaves only. **Skip the merge pass.** Do NOT touch `graph.json`, `GRAPH_REPORT.md`, or rerun community clustering. Use only when the caller explicitly wants a cache refresh without a connected final graph. |
 | `query` | One natural-language question, optional `--k=<neighbor-count>` | Graph candidate/context notes, cited nodes, and optional Markdown answer when invoked directly |
 
 ## Auto Update Strategy
 
-The webapp controls whether ingest calls `update-partial` between loop
+The webapp controls whether ingest calls scoped `update` between loop
 iterations with `graph.autoUpdateStrategy`.
 
 - `auto` (default): infer workload size from
-  `wiki/.progress/ingest/.state.json`. Run `update-partial` only when at least
+  `wiki/.progress/ingest/.state.json`. Run scoped `update` only when at least
   one `graph.partialThresholds` value is met (`minLeaves`, `minFiles`,
-  `minBytes`, or `minSubChunks`). Smaller ingests skip partials and rely on the
-  final `update`.
-- `finalOnly`: never run ingest-time partials; run `update` after the ingest
+  `minBytes`, or `minSubChunks`). Smaller ingests skip scoped updates and rely
+  on the final `update`.
+- `finalOnly`: never run ingest-time scoped updates; run `update` after the ingest
   merge pass.
-- `partialAndFinal`: run partials for completed leaves and still run final
-  `update`.
+- `partialAndFinal`: run scoped `update` for completed leaves and still run
+  final `update`.
 
-Regardless of strategy, final `update` must rebuild changed/missing partials
-before merging. This keeps small multi-agent ingests quality-first while large
-ingests remain resumable.
+Regardless of strategy, every `update` must rebuild changed/missing/scoped
+partials before merging all valid parts. This keeps small multi-agent ingests
+quality-first while large ingests remain resumable.
 
 ## Preflight
 
@@ -196,8 +196,8 @@ responsible for reconciling them.
 
 ### `update`
 1. Compute current content hashes for all leaves and compare them with previous hashes in `.state.json`.
-2. Rebuild only changed leaves. Remove `parts/*.json` for deleted leaves and delete them from `.state.json`.
-3. Rerun the merge pass.
+2. If the webapp supplied scoped leaves, rebuild partials for exactly those leaves plus any missing/corrupt partials needed for consistency. Otherwise rebuild all changed/missing leaves. Remove `parts/*.json` for deleted leaves and delete them from `.state.json`.
+3. Rerun the merge pass across **all** valid `wiki/graph/parts/*.json`, not only the scoped leaves.
 4. Update `GRAPH_REPORT.md` with a section for nodes added/removed/changed in this increment.
 5. Update log and index.
 
@@ -236,7 +236,7 @@ When called from `wiki-query`, return graph candidates and context first. Do not
 - Do not clone the GitHub repository into `tools/graphify/` or prefer a project-local graphify executable.
 - Do not modify `raw/`.
 - Do not overwrite `wiki/graph/graph.json` with partial results. Replace the final graph only once during the merge pass.
-- For `update-partial`: do not touch `wiki/graph/graph.json`, `wiki/graph/GRAPH_REPORT.md`, or rerun clustering. Those operations are reserved for `build` and `update`, which the webapp fires once at `/ingest-loop` end.
+- For `update-partial`: do not touch `wiki/graph/graph.json`, `wiki/graph/GRAPH_REPORT.md`, or rerun clustering. This command is cache-only. Normal ingest synchronization should use scoped `update`, which refreshes target partials and then merges the full parts set.
 - Do not leave API keys or credentials in plaintext in `GRAPH_REPORT.md` or wiki pages.
 - Do not pass all of `wiki/` + `raw/` to graphify in one call. Always use leaf chunks.
 

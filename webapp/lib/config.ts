@@ -85,8 +85,9 @@ export const ConfigSchema = z.object({
     minCommunitySize: z.number().int().min(1).default(3),
     autoUpdateOnIngest: z.boolean().default(true),
     /**
-     * Controls whether ingest runs build per-leaf graph partials between
-     * iterations. "auto" keeps small ingests quality-first and large ingests
+     * Controls whether ingest runs scoped graph updates between iterations.
+     * A scoped update refreshes completed-leaf partials and then merges all
+     * graph parts. "auto" keeps small ingests quality-first and large ingests
      * resumable.
      */
     autoUpdateStrategy: z
