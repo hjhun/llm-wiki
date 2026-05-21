@@ -2,8 +2,11 @@ import "server-only";
 
 import fs from "node:fs/promises";
 import path from "node:path";
+import { errorMessage } from "./api";
 import { loadConfig } from "./config";
 import { runCli, type CliName } from "./cli";
+import { createChatJob, type ChatJob } from "./chat-jobs";
+import { displayChunk } from "./cli-output";
 import {
   isLikelyText,
   resolveEntry,
@@ -440,17 +443,23 @@ export async function readGraphState(): Promise<GraphState> {
   };
 }
 
-export async function runGraphify(action: GraphRunAction): Promise<{
-  sessionPath: string;
-  stdout: string;
-  stderr: string;
-  exitCode: number;
-  durationMs: number;
-}> {
+/**
+ * Starts a graphify run as a background chat job and returns the job so the
+ * caller can stream its events (start / chunk / done / error). The coding
+ * agent runs inside a detached async task: closing the HTTP stream does not
+ * kill it — only an explicit cancel via ChatJob.abort does. This mirrors the
+ * single-CLI path of /api/chat/send, so a graph build is visible both in the
+ * chat job list (/api/chat/jobs) and in the ambient AgentEdgePanel mascot.
+ */
+export async function startGraphifyJob(
+  action: GraphRunAction,
+): Promise<ChatJob> {
   const cfg = await loadConfig();
   const agent = cfg.agent.default as CliName | null;
   if (!agent) {
-    throw new Error("기본 코딩 에이전트가 지정되지 않았습니다. Settings에서 골라주세요.");
+    throw new Error(
+      "기본 코딩 에이전트가 지정되지 않았습니다. Settings에서 골라주세요.",
+    );
   }
 
   const session = await newSession({
@@ -461,22 +470,58 @@ export async function runGraphify(action: GraphRunAction): Promise<{
   await appendMessage(session.path, "user", command);
 
   const prompt = buildGraphifyPrompt(action, session.path);
-
-  const result = await runCli(agent, prompt, {
-    safeMode: cfg.agent.safeMode,
-    timeoutMs: cfg.cli.timeouts.graph ?? undefined,
-  });
-  const reply =
-    result.stdout.trim() ||
-    result.stderr.trim() ||
-    `(에이전트가 빈 응답을 반환했습니다. exitCode=${result.exitCode})`;
-  await appendMessage(session.path, "assistant", reply, agent);
-
-  return {
+  const job = createChatJob({
     sessionPath: session.path,
-    stdout: result.stdout,
-    stderr: result.stderr,
-    exitCode: result.exitCode,
-    durationMs: result.durationMs,
-  };
+    kind: "graph",
+    agent,
+  });
+
+  // Detached task: drives the CLI and feeds the job's event log. Returning the
+  // job before this resolves lets the route stream events as they arrive.
+  void (async () => {
+    job.append({ type: "start", sessionPath: session.path });
+    try {
+      const result = await runCli(agent, prompt, {
+        safeMode: cfg.agent.safeMode,
+        timeoutMs: cfg.cli.timeouts.graph ?? undefined,
+        // Pair the child to the job's AbortController so an HTTP cancel
+        // request can SIGTERM it, consistent with chat/ingest jobs.
+        signal: job.abort.signal,
+        onStdout: (chunk) => {
+          const text = displayChunk(chunk);
+          if (text) job.append({ type: "chunk", stream: "stdout", text });
+        },
+      });
+      let reply =
+        result.stdout.trim() ||
+        result.stderr.trim() ||
+        `(에이전트가 빈 응답을 반환했습니다. exitCode=${result.exitCode})`;
+      if (job.cancelled) {
+        reply = `⛔ 사용자 취소로 중단됨 (exitCode=${result.exitCode}).\n\n${reply}`;
+      }
+      const assistantMsg = await appendMessage(
+        session.path,
+        "assistant",
+        reply,
+        agent,
+      );
+      job.append({
+        type: "done",
+        sessionPath: session.path,
+        assistant: assistantMsg,
+        exitCode: result.exitCode,
+        durationMs: result.durationMs,
+      });
+    } catch (err) {
+      const msg = errorMessage(err);
+      await appendMessage(
+        session.path,
+        "system",
+        `❌ CLI 호출 실패: ${msg}`,
+      ).catch(() => undefined);
+      job.append({ type: "error", sessionPath: session.path, error: msg });
+    }
+  })();
+
+  return job;
 }

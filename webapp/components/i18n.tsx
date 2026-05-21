@@ -168,6 +168,8 @@ export const TEXT = {
       emptyText:
         "Build를 누르면 웹앱이 graphify를 직접 실행하지 않고 기본 코딩 에이전트에 `wiki-graphify build`를 요청합니다. 에이전트가 `wiki/graph/graph.json`과 `GRAPH_REPORT.md`를 생성합니다.",
       running: "Running...",
+      agentConsole: "에이전트 콘솔",
+      consoleWaiting: "에이전트 출력을 기다리는 중…",
       buildGraph: "Build graph",
       selectedNode: "selected node",
       previousSelection: "이전",
@@ -519,6 +521,8 @@ export const TEXT = {
       emptyText:
         "Build asks the default coding agent to run `wiki-graphify build`; the web app does not run graphify directly. The agent creates `wiki/graph/graph.json` and `GRAPH_REPORT.md`.",
       running: "Running...",
+      agentConsole: "agent console",
+      consoleWaiting: "Waiting for agent output…",
       buildGraph: "Build graph",
       selectedNode: "selected node",
       previousSelection: "Previous",

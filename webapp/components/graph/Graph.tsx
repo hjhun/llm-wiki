@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { GitBranch, Hammer, RefreshCw, RotateCw } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -14,13 +14,17 @@ import type {
   GraphNode,
   GraphState,
 } from "./types";
+import type { ChatJobSnapshot, ChatSendEvent } from "@/lib/chat-events";
 
 type RunResult = {
   sessionPath: string;
-  stdout: string;
-  stderr: string;
   exitCode: number;
   durationMs: number;
+};
+
+type RunOutcome = {
+  done: RunResult | null;
+  error: string | null;
 };
 
 type SelectionHistory = {
@@ -31,6 +35,61 @@ type SelectionHistory = {
 async function asError(res: Response): Promise<Error> {
   const j = (await res.json().catch(() => null)) as { error?: string } | null;
   return new Error(j?.error ?? `request failed (${res.status})`);
+}
+
+function isAbortError(err: unknown): boolean {
+  return (
+    typeof err === "object" &&
+    err !== null &&
+    (err as { name?: unknown }).name === "AbortError"
+  );
+}
+
+/**
+ * Reads an NDJSON chat-job stream (the format /api/graph/run and
+ * /api/chat/stream emit), forwarding `chunk` text to `onChunk` and returning
+ * the terminal `done`/`error` outcome. Lets the Graph tab render the coding
+ * agent's output live instead of waiting for one final JSON blob.
+ */
+async function consumeRunStream(
+  res: Response,
+  onChunk: (text: string) => void,
+): Promise<RunOutcome> {
+  if (!res.body) throw new Error("response has no body");
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let done: RunResult | null = null;
+  let error: string | null = null;
+
+  const handle = (event: ChatSendEvent) => {
+    if (event.type === "chunk") {
+      onChunk(event.text);
+    } else if (event.type === "done") {
+      done = {
+        sessionPath: event.sessionPath,
+        exitCode: event.exitCode,
+        durationMs: event.durationMs,
+      };
+    } else if (event.type === "error") {
+      error = event.error;
+    }
+  };
+
+  for (;;) {
+    const { value, done: streamDone } = await reader.read();
+    if (streamDone) break;
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() ?? "";
+    for (const line of lines) {
+      if (line.trim()) handle(JSON.parse(line) as ChatSendEvent);
+    }
+  }
+  buffer += decoder.decode();
+  if (buffer.trim()) handle(JSON.parse(buffer) as ChatSendEvent);
+
+  return { done, error };
 }
 
 function fmtDate(value: string | null): string {
@@ -86,9 +145,14 @@ export default function Graph() {
   const [selectionHistory, setSelectionHistory] = useState<SelectionHistory>(
     EMPTY_SELECTION_HISTORY,
   );
-  const [busy, setBusy] = useState<"build" | "update" | null>(null);
+  const [busy, setBusy] = useState<"build" | "update" | "running" | null>(
+    null,
+  );
   const [error, setError] = useState<string | null>(null);
   const [lastRun, setLastRun] = useState<RunResult | null>(null);
+  const [runLog, setRunLog] = useState("");
+  const runAbortRef = useRef<AbortController | null>(null);
+  const consoleRef = useRef<HTMLPreElement>(null);
   const selectedId = activeHistoryId(selectionHistory);
 
   const load = useCallback(async () => {
@@ -116,6 +180,78 @@ export default function Graph() {
 
   useEffect(() => {
     void load();
+  }, [load]);
+
+  // Keep the live console pinned to the newest output as chunks arrive.
+  useEffect(() => {
+    const el = consoleRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [runLog]);
+
+  // Abort any in-flight run/reattach stream when the tab unmounts. The job
+  // itself keeps running server-side — closing the stream never kills it.
+  useEffect(() => {
+    return () => {
+      runAbortRef.current?.abort();
+    };
+  }, []);
+
+  // On mount, reattach to a graph job that is already running (e.g. the user
+  // left the tab mid-build and came back) so the console resumes and the
+  // Build/Update buttons stay disabled instead of allowing a second,
+  // conflicting graphify run.
+  useEffect(() => {
+    const controller = new AbortController();
+    let cancelled = false;
+
+    void (async () => {
+      let attached = false;
+      try {
+        const res = await fetch("/api/chat/jobs", {
+          cache: "no-store",
+          signal: controller.signal,
+        });
+        if (!res.ok) return;
+        const data = (await res.json()) as { jobs?: ChatJobSnapshot[] };
+        const graphJob = (data.jobs ?? []).find(
+          (job) => job.kind === "graph" && job.status === "running",
+        );
+        if (!graphJob || cancelled) return;
+
+        attached = true;
+        runAbortRef.current = controller;
+        setBusy("running");
+        setError(null);
+        setLastRun(null);
+        setRunLog("");
+
+        const u = new URL("/api/chat/stream", window.location.origin);
+        u.searchParams.set("jobId", graphJob.id);
+        u.searchParams.set("sessionPath", graphJob.sessionPath);
+        const stream = await fetch(u, { signal: controller.signal });
+        if (!stream.ok || cancelled) return;
+
+        const outcome = await consumeRunStream(stream, (text) =>
+          setRunLog((prev) => prev + text),
+        );
+        if (cancelled) return;
+        if (outcome.error) setError(outcome.error);
+        else if (outcome.done) setLastRun(outcome.done);
+        await load();
+      } catch {
+        // Reattach is best-effort — a failure here must not blank the tab.
+      } finally {
+        if (attached && !cancelled) {
+          if (runAbortRef.current === controller) runAbortRef.current = null;
+          setBusy(null);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
   }, [load]);
 
   const selectNodeId = useCallback((id: string) => {
@@ -150,19 +286,28 @@ export default function Graph() {
     setBusy(action);
     setError(null);
     setLastRun(null);
+    setRunLog("");
+    const controller = new AbortController();
+    runAbortRef.current = controller;
     try {
       const res = await fetch("/api/graph/run", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ action }),
+        signal: controller.signal,
       });
       if (!res.ok) throw await asError(res);
-      const result = (await res.json()) as RunResult;
-      setLastRun(result);
+      const outcome = await consumeRunStream(res, (text) =>
+        setRunLog((prev) => prev + text),
+      );
+      if (outcome.error) throw new Error(outcome.error);
+      if (outcome.done) setLastRun(outcome.done);
       await load();
     } catch (err) {
+      if (isAbortError(err)) return;
       setError(err instanceof Error ? err.message : String(err));
     } finally {
+      if (runAbortRef.current === controller) runAbortRef.current = null;
       setBusy(null);
     }
   }
@@ -223,6 +368,29 @@ export default function Graph() {
         <div className="border-b border-line bg-bg-subtle px-4 py-1 text-[11px] text-ink-faint">
           {t.graph.runSummary(lastRun.exitCode, lastRun.durationMs)}{" "}
           <span className="font-mono text-ink-dim">{lastRun.sessionPath}</span>
+        </div>
+      ) : null}
+      {busy ? (
+        <div className="flex shrink-0 flex-col border-b border-line bg-bg-subtle">
+          <div className="flex items-center gap-2 px-4 py-1.5 text-[11px]">
+            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-accent" />
+            <span className="font-mono uppercase tracking-widest text-ink-faint">
+              {t.graph.agentConsole}
+            </span>
+            <span className="text-ink-dim">
+              {busy === "build"
+                ? t.graph.building
+                : busy === "update"
+                  ? t.graph.updating
+                  : t.graph.running}
+            </span>
+          </div>
+          <pre
+            ref={consoleRef}
+            className="max-h-44 overflow-auto whitespace-pre-wrap border-t border-line bg-bg px-4 py-2 font-mono text-[11px] leading-relaxed text-ink-dim"
+          >
+            {runLog || t.graph.consoleWaiting}
+          </pre>
         </div>
       ) : null}
 

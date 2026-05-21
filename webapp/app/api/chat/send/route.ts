@@ -4,6 +4,7 @@ import { z } from "zod";
 import { requireSession, errorMessage, jsonError } from "@/lib/api";
 import { createChatJob, createChatJobStream } from "@/lib/chat-jobs";
 import type { ChatSendEvent } from "@/lib/chat-events";
+import { displayChunk } from "@/lib/cli-output";
 import { loadConfig } from "@/lib/config";
 import { CLI_NAMES, runCli, type CliName } from "@/lib/cli";
 import { PROJECT_ROOT } from "@/lib/paths";
@@ -160,21 +161,9 @@ function startProgressWatcher(
   };
 }
 
-const ANSI_RE =
-  // eslint-disable-next-line no-control-regex
-  /(?:\u001B\][^\u0007\u001B]*(?:\u0007|\u001B\\)|[\u001B\u009B][[\]()#;?]*(?:[0-?]*[ -/]*[@-~]))/g;
-
 function shorten(s: string, n: number): string {
   const t = s.trim().replace(/\s+/g, " ");
   return t.length > n ? `${t.slice(0, n - 1)}…` : t;
-}
-
-function displayChunk(chunk: string): string {
-  const text = chunk
-    .replace(ANSI_RE, "")
-    .replace(/\r[^\n]*/g, "")
-    .replace(/\u0000/g, "");
-  return text.trim().length > 0 ? text : "";
 }
 
 export async function POST(req: Request) {
