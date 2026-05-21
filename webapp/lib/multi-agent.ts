@@ -96,14 +96,14 @@ function operationPolicy(kind: OrchestratedKind): string {
       "You are an ingest worker in a backend-managed loop. Follow wiki-ingest and process at most one sub-chunk or one merge-pass parent, then exit.",
       "A symlink located under raw/ is a valid source entry: follow it read-only even if its real target is outside the repository, preserve logical raw/... paths in state/citations, and reject only broken links or loops.",
       "If wiki/.progress/ingest/.lock is held by another live process, report that you are standing by and exit successfully. The manager will launch the next round.",
-      "Do NOT run wiki-graphify and do NOT write anything under wiki/graph/. The backend triggers graph updates as separate invocations after the round completes.",
+      "Do NOT run wiki-graphify and do NOT write anything under wiki/graph/. The backend triggers graph updates as separate invocations only after all ingest work and merge passes are complete.",
     ].join("\n");
   }
   return [
     "You are an ingest worker. Follow wiki-ingest and process exactly one sub-chunk or one merge-pass parent, then exit.",
     "A symlink located under raw/ is a valid source entry: follow it read-only even if its real target is outside the repository, preserve logical raw/... paths in state/citations, and reject only broken links or loops.",
     "If wiki/.progress/ingest/.lock is held by another live process, report that you are standing by and exit successfully.",
-    "Do NOT run wiki-graphify and do NOT write anything under wiki/graph/. The backend triggers graph updates as separate invocations after the round completes.",
+    "Do NOT run wiki-graphify and do NOT write anything under wiki/graph/. The backend triggers graph updates as separate invocations only after all ingest work and merge passes are complete.",
   ].join("\n");
 }
 
@@ -272,6 +272,14 @@ async function runManager(input: {
   );
 }
 
+function ingestWorkComplete(snapshot: ProgressSnapshot): boolean {
+  return (
+    snapshot.leavesTotal > 0 &&
+    snapshot.leavesDone === snapshot.leavesTotal &&
+    snapshot.mergePendingParents === 0
+  );
+}
+
 async function runSingleRoundOperation(input: {
   cfg: Config;
   kind: OrchestratedKind;
@@ -306,19 +314,7 @@ async function runSingleRoundOperation(input: {
     );
     progressNote = `ingest progress advanced=${progressAdvanced}`;
     const bestExit = runs.some((run) => run.result?.exitCode === 0) ? 0 : 1;
-    const graph = await maybeAutoRunGraphify({
-      cfg: input.cfg,
-      agent: orchestrationCli,
-      sessionPath: input.sessionPath,
-      lastExitCode: bestExit,
-      before: ingestBefore,
-      after: ingestAfter,
-      mode: "incremental",
-      onChunk: input.onChunk,
-    });
-    if (graph.note) progressNote += `\n${graph.note}`;
-
-    if (progressAdvanced && graph.action !== "update") {
+    if (progressAdvanced && ingestWorkComplete(ingestAfter)) {
       const finalGraph = await maybeAutoRunGraphify({
         cfg: input.cfg,
         agent: orchestrationCli,
@@ -330,6 +326,10 @@ async function runSingleRoundOperation(input: {
         onChunk: input.onChunk,
       });
       if (finalGraph.note) progressNote += `\n${finalGraph.note}`;
+    } else if (progressAdvanced) {
+      progressNote +=
+        "\n[auto graph] multi-agent ingest still has pending work; " +
+        "wiki-graphify update will run after all leaves and merge passes complete.";
     }
   }
 
@@ -384,7 +384,6 @@ async function runLoopOperation(input: {
   let allRuns: WorkerRun[] = [];
   let totalDurationMs = 0;
   let lastExitCode = 0;
-  let lastMergedSnap: ProgressSnapshot | null = null;
   const initialProgressRef =
     input.progressRef !== undefined
       ? input.progressRef
@@ -433,38 +432,6 @@ async function runLoopOperation(input: {
     const summary = await readIngestStateSummary();
     const snap = await readProgressSnapshot();
     idleRounds = ingestMadeProgress(prevSnap, snap) ? 0 : idleRounds + 1;
-    const graph = await maybeAutoRunGraphify({
-      cfg: input.cfg,
-      agent: orchestrationCli,
-      sessionPath: input.sessionPath,
-      lastExitCode,
-      before: prevSnap,
-      after: snap,
-      mode: "incremental",
-      onChunk: input.onChunk,
-    });
-    if (graph.note) {
-      allRuns.push({
-        worker: {
-          index: workers.length,
-          name: "auto-graph",
-          cli: orchestrationCli,
-        },
-        round,
-        result: {
-          stdout: graph.note,
-          stderr: "",
-          exitCode: graph.succeeded ? 0 : 1,
-          durationMs: 0,
-          stdoutTruncated: null,
-          stderrTruncated: null,
-        },
-        error: null,
-      });
-    }
-    if (graph.action === "update") {
-      lastMergedSnap = snap;
-    }
     prevSnap = snap;
 
     const decision = decideLoopHalt({
@@ -493,32 +460,21 @@ async function runLoopOperation(input: {
   await clearStopFlag(input.sessionPath);
 
   const loopAfter = await readProgressSnapshot();
-  if (haltKind !== "error") {
-    const alreadyCoversLatest =
-      lastMergedSnap !== null &&
-      loopAfter.leavesDone <= lastMergedSnap.leavesDone &&
-      loopAfter.mergeDone === lastMergedSnap.mergeDone;
-    const finalGraph = alreadyCoversLatest
-      ? {
-          note:
-            "\n\n---\n\n[auto graph] 루프 중에 full merge가 이미 실행되어 final merge는 생략합니다.",
-          action: null,
-          succeeded: true,
-        }
-      : await maybeAutoRunGraphify({
-          cfg: input.cfg,
-          agent: orchestrationCli,
-          sessionPath: input.sessionPath,
-          lastExitCode,
-          before: loopBefore,
-          after: loopAfter,
-          mode: "final",
-          onChunk: input.onChunk,
-        });
+  if (haltKind !== "error" && ingestWorkComplete(loopAfter)) {
+    const finalGraph = await maybeAutoRunGraphify({
+      cfg: input.cfg,
+      agent: orchestrationCli,
+      sessionPath: input.sessionPath,
+      lastExitCode,
+      before: loopBefore,
+      after: loopAfter,
+      mode: "final",
+      onChunk: input.onChunk,
+    });
     if (finalGraph.note) {
       allRuns.push({
         worker: {
-          index: workers.length + 1,
+          index: workers.length,
           name: "auto-graph-final",
           cli: orchestrationCli,
         },

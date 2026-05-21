@@ -187,6 +187,12 @@ merge/normalization pass. Do not bundle graph work into the same merge-pass LLM
 call; each graph step must be a follow-up invocation that uses the
 `wiki-graphify` skill.
 
+When CLIO runs ingest through multi-agent orchestration, skip all scoped
+between-round graph updates. Run `wiki-graphify update` only once, after every
+leaf is done and every merge-pass parent has been drained. This prevents graph
+normalization from seeing a partial worker state and producing disconnected or
+stale graph artifacts.
+
 ## Error Handling / Resume
 
 - **Crash mid-call**: on next `/ingest`, any sub-chunk left in `status: "in_progress"` is demoted to `"pending"` if its `started_at` is older than 60 seconds and no live pid holds the lock. Resume from it.

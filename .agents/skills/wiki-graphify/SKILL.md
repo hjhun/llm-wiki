@@ -83,6 +83,11 @@ Regardless of strategy, every `update` must rebuild changed/missing/scoped
 partials before merging all valid parts. This keeps small multi-agent ingests
 quality-first while large ingests remain resumable.
 
+CLIO multi-agent ingest is stricter than single-agent ingest: do not run scoped
+graph updates between worker rounds. The backend should call `wiki-graphify
+update` only after all ingest leaves are done and all merge-pass parents are
+drained, so graphify reads a stable wiki state.
+
 ## Preflight
 
 1. Confirm graphify execution path using the rules above.
