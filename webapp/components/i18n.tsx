@@ -145,6 +145,10 @@ export const TEXT = {
       readOnly:
         "이 워크스페이스는 UI 편집이 잠겨 있습니다 (sessions/는 시스템이 append-only로 관리).",
       binary: "텍스트로 열 수 없는 파일입니다.",
+      previewUnavailable: "미리보기를 만들 수 없습니다.",
+      officePreviewHint:
+        "Office 문서 미리보기에는 서버의 LibreOffice/soffice 변환기가 필요합니다.",
+      openFile: "파일 열기",
     },
     graph: {
       title: "Knowledge Graph",
@@ -498,6 +502,10 @@ export const TEXT = {
       readOnly:
         "This workspace is locked for UI edits (sessions/ is managed as system append-only).",
       binary: "This file cannot be opened as text.",
+      previewUnavailable: "Preview is unavailable.",
+      officePreviewHint:
+        "Office document previews require LibreOffice/soffice on the server.",
+      openFile: "Open file",
     },
     graph: {
       title: "Knowledge Graph",

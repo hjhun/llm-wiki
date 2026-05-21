@@ -1,15 +1,18 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Save } from "lucide-react";
+import { Download, ExternalLink, FileWarning, Save } from "lucide-react";
 import { useLanguage } from "../i18n";
-import { Button } from "../ui";
+import { Button, cx } from "../ui";
 import MarkdownPreview from "./MarkdownPreview";
 import type { Entry, WsKey } from "./types";
 
 const TEXT_EXT_RE = /\.(md|mdx|txt|json|jsonc|yaml|yml|ts|tsx|js|jsx|css|html|csv|tsv|log|toml|ini|env|sh|py|go|rs|sql|xml|svg)$/i;
 const IMAGE_EXT_RE = /\.(png|jpe?g|gif|webp|svg)$/i;
 const PDF_EXT_RE = /\.pdf$/i;
+const VIDEO_EXT_RE = /\.(mp4|webm|mov|m4v|ogv)$/i;
+const AUDIO_EXT_RE = /\.(mp3|wav|ogg|oga|m4a|flac)$/i;
+const OFFICE_EXT_RE = /\.(doc|docx|ppt|pptx|xls|xlsx|odt|ods|odp|rtf)$/i;
 
 export default function Editor({
   ws,
@@ -34,6 +37,9 @@ export default function Editor({
   const isText = entry ? TEXT_EXT_RE.test(entry.path) : false;
   const isImage = entry ? IMAGE_EXT_RE.test(entry.path) : false;
   const isPdf = entry ? PDF_EXT_RE.test(entry.path) : false;
+  const isVideo = entry ? VIDEO_EXT_RE.test(entry.path) : false;
+  const isAudio = entry ? AUDIO_EXT_RE.test(entry.path) : false;
+  const isOffice = entry ? OFFICE_EXT_RE.test(entry.path) : false;
   const dirty = entry?.kind === "file" && content !== original;
 
   useEffect(() => {
@@ -177,7 +183,7 @@ export default function Editor({
         ) : isImage ? (
           <div className="flex h-full items-center justify-center p-4">
             <img
-              src={`/api/files/blob?ws=${ws}&path=${encodeURIComponent(entry.path)}`}
+              src={blobHref(ws, entry.path)}
               alt={entry.name}
               className="max-h-full max-w-full"
             />
@@ -185,21 +191,35 @@ export default function Editor({
         ) : isPdf ? (
           <iframe
             title={entry.name}
-            src={`/api/files/blob?ws=${ws}&path=${encodeURIComponent(entry.path)}`}
+            src={blobHref(ws, entry.path)}
             className="h-full w-full bg-white"
           />
-        ) : !isText ? (
-          <div className="p-4 text-sm text-ink-faint">
-            {t.explorer.binary}{" "}
-            <a
-              className="text-accent underline"
-              href={`/api/files/blob?ws=${ws}&path=${encodeURIComponent(entry.path)}`}
-              target="_blank"
-              rel="noreferrer"
-            >
-              {t.common.download}
-            </a>
+        ) : isVideo ? (
+          <div className="flex h-full items-center justify-center bg-black p-4">
+            <video
+              src={blobHref(ws, entry.path)}
+              controls
+              playsInline
+              className="max-h-full max-w-full"
+            />
           </div>
+        ) : isAudio ? (
+          <div className="flex h-full items-center justify-center p-6">
+            <div className="w-full max-w-2xl rounded-md border border-line bg-bg-panel p-5 shadow-sm">
+              <div className="mb-4 truncate font-mono text-xs text-ink-dim">
+                {entry.name}
+              </div>
+              <audio
+                src={blobHref(ws, entry.path)}
+                controls
+                className="w-full"
+              />
+            </div>
+          </div>
+        ) : isOffice ? (
+          <OfficePreview ws={ws} entry={entry} />
+        ) : !isText ? (
+          <BinaryFallback ws={ws} entry={entry} message={t.explorer.binary} />
         ) : isMd ? (
           <div className="grid h-full min-w-0 grid-cols-1 md:grid-cols-2">
             <section className="flex min-h-0 flex-col border-b border-line md:border-b-0 md:border-r">
@@ -233,6 +253,143 @@ export default function Editor({
             className="block h-full w-full resize-none bg-bg px-4 py-3 font-mono text-[12.5px] leading-relaxed text-ink outline-none"
           />
         )}
+      </div>
+    </div>
+  );
+}
+
+function blobHref(ws: WsKey, path: string): string {
+  const params = new URLSearchParams({ ws, path });
+  return `/api/files/blob?${params.toString()}`;
+}
+
+function previewHref(ws: WsKey, path: string): string {
+  const params = new URLSearchParams({ ws, path });
+  return `/api/files/preview?${params.toString()}`;
+}
+
+function OfficePreview({ ws, entry }: { ws: WsKey; entry: Entry }) {
+  const { t } = useLanguage();
+  const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
+  const [objectUrl, setObjectUrl] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    let nextObjectUrl: string | null = null;
+
+    setStatus("loading");
+    setObjectUrl(null);
+    setMessage(null);
+
+    (async () => {
+      try {
+        const res = await fetch(previewHref(ws, entry.path));
+        if (!res.ok) {
+          const j = (await res.json().catch(() => null)) as { error?: string } | null;
+          throw new Error(j?.error ?? `preview failed (${res.status})`);
+        }
+        const blob = await res.blob();
+        nextObjectUrl = URL.createObjectURL(blob);
+        if (cancelled) {
+          URL.revokeObjectURL(nextObjectUrl);
+          return;
+        }
+        setObjectUrl(nextObjectUrl);
+        setStatus("ready");
+      } catch (err) {
+        if (cancelled) return;
+        setMessage(err instanceof Error ? err.message : String(err));
+        setStatus("error");
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      if (nextObjectUrl) URL.revokeObjectURL(nextObjectUrl);
+    };
+  }, [entry.path, ws]);
+
+  if (status === "ready" && objectUrl) {
+    return (
+      <iframe
+        title={entry.name}
+        src={objectUrl}
+        className="h-full w-full bg-white"
+      />
+    );
+  }
+
+  if (status === "loading") {
+    return (
+      <div className="flex h-full items-center justify-center p-4 text-sm text-ink-faint">
+        {t.common.loading}
+      </div>
+    );
+  }
+
+  return (
+    <BinaryFallback
+      ws={ws}
+      entry={entry}
+      message={message ?? t.explorer.previewUnavailable}
+      detail={t.explorer.officePreviewHint}
+    />
+  );
+}
+
+function BinaryFallback({
+  ws,
+  entry,
+  message,
+  detail,
+}: {
+  ws: WsKey;
+  entry: Entry;
+  message: string;
+  detail?: string;
+}) {
+  const { t } = useLanguage();
+  const href = blobHref(ws, entry.path);
+
+  return (
+    <div className="flex h-full items-center justify-center p-6">
+      <div className="w-full max-w-lg rounded-md border border-line bg-bg-panel p-5 shadow-sm">
+        <div className="flex items-start gap-3">
+          <div className="mt-0.5 rounded-md border border-line bg-bg-subtle p-2 text-ink-dim">
+            <FileWarning aria-hidden className="h-5 w-5" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="truncate font-mono text-xs text-ink-dim">
+              {entry.name}
+            </div>
+            <p className="mt-2 text-sm text-ink-faint">{message}</p>
+            {detail ? <p className="mt-1 text-xs text-ink-faint">{detail}</p> : null}
+            <div className="mt-4 flex flex-wrap gap-2">
+              <a
+                className={cx(
+                  "inline-flex h-8 items-center justify-center gap-2 rounded-md border border-line bg-bg-panel/78 px-3 text-xs font-medium text-ink-dim shadow-sm transition-colors hover:border-ink-faint/60 hover:bg-bg-panel hover:text-ink",
+                )}
+                href={href}
+                target="_blank"
+                rel="noreferrer"
+              >
+                <ExternalLink aria-hidden className="h-4 w-4" />
+                {t.explorer.openFile}
+              </a>
+              <a
+                className={cx(
+                  "inline-flex h-8 items-center justify-center gap-2 rounded-md border border-line bg-bg-panel/78 px-3 text-xs font-medium text-ink-dim shadow-sm transition-colors hover:border-ink-faint/60 hover:bg-bg-panel hover:text-ink",
+                )}
+                href={href}
+                download={entry.name}
+              >
+                <Download aria-hidden className="h-4 w-4" />
+                {t.common.download}
+              </a>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
