@@ -505,7 +505,14 @@ export async function startGraphifyJob(
         result.stderr.trim() ||
         `(에이전트가 빈 응답을 반환했습니다. exitCode=${result.exitCode})`;
       if (job.cancelled) {
-        reply = `⛔ 사용자 취소로 중단됨 (exitCode=${result.exitCode}).\n\n${reply}`;
+        reply = [
+          "⛔ 사용자 Stop 요청으로 중단됨.",
+          "",
+          "- kind: graph",
+          `- exitCode: ${result.exitCode}`,
+          `- durationMs: ${result.durationMs}`,
+          "- result: 실행 중이던 CLI 프로세스에 SIGTERM을 보냈고, 추가 에이전트 응답 생성은 건너뛰었습니다.",
+        ].join("\n");
       }
       const assistantMsg = await appendMessage(
         session.path,

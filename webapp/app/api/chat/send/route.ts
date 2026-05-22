@@ -167,6 +167,21 @@ function shorten(s: string, n: number): string {
   return t.length > n ? `${t.slice(0, n - 1)}…` : t;
 }
 
+function formatCancelledReply(input: {
+  kind: string;
+  exitCode: number;
+  durationMs: number;
+}): string {
+  return [
+    "⛔ 사용자 Stop 요청으로 중단됨.",
+    "",
+    `- kind: ${input.kind}`,
+    `- exitCode: ${input.exitCode}`,
+    `- durationMs: ${input.durationMs}`,
+    "- result: 실행 중이던 CLI 프로세스에 SIGTERM을 보냈고, 추가 에이전트 응답 생성은 건너뛰었습니다.",
+  ].join("\n");
+}
+
 export async function POST(req: Request) {
   const unauth = await requireSession();
   if (unauth) return unauth;
@@ -286,8 +301,8 @@ export async function POST(req: Request) {
         // /ingest, /ingest-loop, /query, and /lint are dispatched through a
         // small coordinator that starts named workers up to the configured
         // concurrency limit and then asks a manager agent to consolidate the
-        // result. /ingest-loop remains graceful: the Stop button uses the
-        // file-based flag, so we avoid passing AbortSignal into that loop.
+        // result. The job AbortSignal is shared by all live worker CLIs so a
+        // Stop request interrupts them immediately.
         const result = await runMultiAgentOperation({
           cfg,
           kind,
@@ -295,13 +310,20 @@ export async function POST(req: Request) {
           sessionPath,
           prompt,
           progressRef,
-          signal: kind === "ingest-loop" ? undefined : job.abort.signal,
+          signal: job.abort.signal,
           onChunk: emitChunk,
         });
+        const finalReply = job.cancelled
+          ? formatCancelledReply({
+              kind,
+              exitCode: result.lastExitCode,
+              durationMs: result.totalDurationMs,
+            })
+          : result.finalReply;
         const finalAssistant = await appendMessage(
           sessionPath,
           "assistant",
-          result.finalReply,
+          finalReply,
           result.assistantAgent,
         );
         send({
@@ -328,11 +350,14 @@ export async function POST(req: Request) {
           result.stdout.trim() ||
           result.stderr.trim() ||
           `(에이전트가 빈 응답을 반환했습니다. exitCode=${result.exitCode})`;
-        // When the user cancelled, the child was SIGTERM-ed mid-run. Prefix
-        // the captured tail with a marker so the saved assistant message
-        // makes the cause obvious instead of looking like a silent crash.
+        // When the user stopped the run, save only the stopped-result report
+        // instead of preserving a partial CLI tail as an assistant answer.
         if (job.cancelled) {
-          reply = `⛔ 사용자 취소로 중단됨 (exitCode=${result.exitCode}).\n\n${reply}`;
+          reply = formatCancelledReply({
+            kind,
+            exitCode: result.exitCode,
+            durationMs: result.durationMs,
+          });
         }
 
         const assistantMsg = await appendMessage(

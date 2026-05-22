@@ -1,29 +1,20 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Command, Plus, Send, StopCircle, XCircle } from "lucide-react";
+import { Command, Plus, Send, StopCircle } from "lucide-react";
 import { useLanguage } from "../i18n";
-import { Button, IconButton } from "../ui";
+import { IconButton } from "../ui";
 
 export default function Composer({
   disabled,
   onSend,
-  loopStop,
   cancel,
 }: {
   disabled: boolean;
   onSend: (message: string) => void;
   /**
-   * When the active request is an /ingest-loop run, the parent injects a
-   * stop handler here so the Composer can render a "Stop after current
-   * sub-chunk" control. The button is hidden for every other kind of call.
-   */
-  loopStop?: { onStop: () => void; stopping: boolean } | null;
-  /**
-   * Generic "Cancel CLI" handler. Surfaces whenever a chat-page CLI call is
-   * in-flight (chat/ingest/query/lint/...) so the user can abort a long-running
-   * invocation. For ingest-loop, the parent passes `loopStop` instead so the
-   * user gets the graceful between-sub-chunk variant.
+   * Generic "Stop CLI" handler. Surfaces whenever a chat-page CLI call is
+   * in-flight so the user can abort all running child CLIs immediately.
    */
   cancel?: { onCancel: () => void; cancelling: boolean } | null;
 }) {
@@ -128,28 +119,16 @@ export default function Composer({
           placeholder={t.chat.placeholder}
           className="block w-full resize-none rounded-md border border-line bg-bg px-3 py-2.5 text-sm leading-relaxed text-ink outline-none transition-colors placeholder:text-ink-faint focus:border-accent"
         />
-        {loopStop ? (
+        {cancel ? (
           <IconButton
-            onClick={loopStop.onStop}
-            disabled={loopStop.stopping}
-            label={loopStop.stopping ? t.chat.stopping : t.chat.stopLoop}
-            title={t.chat.stopLoopHint}
+            onClick={cancel.onCancel}
+            disabled={cancel.cancelling}
+            title={t.chat.cancelHint}
+            label={cancel.cancelling ? t.chat.cancelling : t.chat.cancel}
             variant="danger"
             icon={StopCircle}
             className="h-10 w-10 shrink-0"
           />
-        ) : null}
-        {cancel ? (
-          <Button
-            onClick={cancel.onCancel}
-            disabled={cancel.cancelling}
-            title={t.chat.cancelHint}
-            variant="danger"
-            size="md"
-            icon={XCircle}
-          >
-            {cancel.cancelling ? t.chat.cancelling : t.chat.cancel}
-          </Button>
         ) : null}
         <IconButton
           onClick={submit}

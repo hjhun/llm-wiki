@@ -57,11 +57,9 @@ export default function Chat() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [progress, setProgress] = useState<ChatProgress | null>(null);
-  // Tracks whether the in-flight request is an /ingest-loop run so the
-  // Composer can render the "Stop loop" button only while it would help.
+  // Tracks the active operation kind for status/reattach bookkeeping.
   const [activeKind, setActiveKind] = useState<ChatKind | null>(null);
   const [attachedJobId, setAttachedJobId] = useState<string | null>(null);
-  const [stopping, setStopping] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [capturingIndex, setCapturingIndex] = useState<number | null>(null);
   const [renaming, setRenaming] = useState(false);
@@ -122,7 +120,6 @@ export default function Chat() {
     setActiveKind(null);
     setAttachedJobId(null);
     setProgress(null);
-    setStopping(false);
     setCancelling(false);
   }
 
@@ -254,36 +251,11 @@ export default function Chat() {
     }
   }
 
-  async function stopIngestLoop() {
-    if (
-      !pending ||
-      activeKind !== "ingest-loop" ||
-      stopping ||
-      !active ||
-      active.path === "(pending)"
-    ) {
-      return;
-    }
-    setStopping(true);
-    try {
-      const res = await fetch("/api/chat/ingest-loop/stop", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ sessionPath: active.path }),
-      });
-      if (!res.ok) throw await asError(res);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setStopping(false);
-    }
-  }
-
-  // Immediate-cancel for any non-loop CLI call. Sends a server-side SIGTERM
-  // via /api/chat/jobs/cancel; the running job's `done` event still arrives
-  // through the existing stream (now reflecting the cancelled exit code).
+  // Immediate stop for any chat-page CLI call. Sends a server-side SIGTERM via
+  // /api/chat/jobs/cancel; the running job's `done` event still arrives through
+  // the existing stream as a short stopped-result report.
   async function cancelCli() {
-    if (!pending || !attachedJobId || cancelling || activeKind === "ingest-loop") {
+    if (!pending || !attachedJobId || cancelling) {
       return;
     }
     setCancelling(true);
@@ -724,13 +696,8 @@ export default function Chat() {
         <Composer
           disabled={pending}
           onSend={send}
-          loopStop={
-            pending && activeKind === "ingest-loop"
-              ? { onStop: stopIngestLoop, stopping }
-              : null
-          }
           cancel={
-            pending && activeKind !== "ingest-loop" && attachedJobId
+            pending && activeKind && attachedJobId
               ? { onCancel: cancelCli, cancelling }
               : null
           }

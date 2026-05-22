@@ -55,6 +55,24 @@ export function isOrchestratedKind(kind: ChatKind): kind is OrchestratedKind {
   return ORCHESTRATED_KINDS.has(kind);
 }
 
+function signalAborted(signal?: AbortSignal): boolean {
+  return signal?.aborted ?? false;
+}
+
+function cancellationResult(input: {
+  kind: OrchestratedKind;
+  assistantAgent: string;
+  durationMs: number;
+  exitCode?: number;
+}): MultiAgentResult {
+  return {
+    finalReply: `사용자 Stop 요청으로 ${input.kind} 작업이 중단되었습니다.`,
+    lastExitCode: input.exitCode ?? -1,
+    totalDurationMs: input.durationMs,
+    assistantAgent: input.assistantAgent,
+  };
+}
+
 function clampAgentCount(cfg: Config): number {
   return Math.max(
     1,
@@ -304,6 +322,18 @@ async function runSingleRoundOperation(input: {
     signal: input.signal,
     onChunk: input.onChunk,
   });
+  const workerDuration = runs.reduce(
+    (sum, run) => sum + (run.result?.durationMs ?? 0),
+    0,
+  );
+  if (signalAborted(input.signal)) {
+    return cancellationResult({
+      kind: input.kind,
+      assistantAgent: input.cfg.agent.orchestration.managerName || "manager",
+      durationMs: workerDuration,
+      exitCode: runs.find((run) => run.result)?.result?.exitCode ?? -1,
+    });
+  }
   let progressNote: string | null = null;
 
   if (input.kind === "ingest" && ingestBefore) {
@@ -319,6 +349,7 @@ async function runSingleRoundOperation(input: {
         cfg: input.cfg,
         agent: orchestrationCli,
         sessionPath: input.sessionPath,
+        signal: input.signal,
         lastExitCode: bestExit,
         before: ingestBefore,
         after: ingestAfter,
@@ -331,6 +362,14 @@ async function runSingleRoundOperation(input: {
         "\n[auto graph] multi-agent ingest still has pending work; " +
         "wiki-graphify update will run after all leaves and merge passes complete.";
     }
+  }
+  if (signalAborted(input.signal)) {
+    return cancellationResult({
+      kind: input.kind,
+      assistantAgent: input.cfg.agent.orchestration.managerName || "manager",
+      durationMs: workerDuration,
+      exitCode: runs.find((run) => run.result)?.result?.exitCode ?? -1,
+    });
   }
 
   const manager = await runManager({
@@ -349,10 +388,6 @@ async function runSingleRoundOperation(input: {
     manager.stdout.trim() ||
     manager.stderr.trim() ||
     `(manager returned empty output. exitCode=${manager.exitCode})`;
-  const workerDuration = runs.reduce(
-    (sum, run) => sum + (run.result?.durationMs ?? 0),
-    0,
-  );
   return {
     finalReply,
     lastExitCode: manager.exitCode,
@@ -367,6 +402,7 @@ async function runLoopOperation(input: {
   sessionPath: string;
   prompt: string;
   progressRef?: string | null;
+  signal?: AbortSignal;
   onChunk?: (text: string) => void;
 }): Promise<MultiAgentResult> {
   await clearStopFlag(input.sessionPath);
@@ -396,7 +432,10 @@ async function runLoopOperation(input: {
   ).catch(() => undefined);
 
   while (round < maxRounds) {
-    if (await stopFlagExists(input.sessionPath)) {
+    if (
+      signalAborted(input.signal) ||
+      (await stopFlagExists(input.sessionPath))
+    ) {
       haltKind = "stopped";
       haltReason = "사용자 Stop 요청";
       break;
@@ -420,6 +459,7 @@ async function runLoopOperation(input: {
       basePrompt,
       round,
       timeoutMs,
+      signal: input.signal,
       onChunk: input.onChunk,
     });
     allRuns = allRuns.concat(runs);
@@ -428,6 +468,11 @@ async function runLoopOperation(input: {
       0,
     );
     lastExitCode = runs.some((run) => run.result?.exitCode === 0) ? 0 : 1;
+    if (signalAborted(input.signal)) {
+      haltKind = "stopped";
+      haltReason = "사용자 Stop 요청";
+      break;
+    }
 
     const summary = await readIngestStateSummary();
     const snap = await readProgressSnapshot();
@@ -460,11 +505,16 @@ async function runLoopOperation(input: {
   await clearStopFlag(input.sessionPath);
 
   const loopAfter = await readProgressSnapshot();
-  if (haltKind !== "error" && ingestWorkComplete(loopAfter)) {
+  if (
+    !signalAborted(input.signal) &&
+    haltKind !== "error" &&
+    ingestWorkComplete(loopAfter)
+  ) {
     const finalGraph = await maybeAutoRunGraphify({
       cfg: input.cfg,
       agent: orchestrationCli,
       sessionPath: input.sessionPath,
+      signal: input.signal,
       lastExitCode,
       before: loopBefore,
       after: loopAfter,
@@ -490,6 +540,20 @@ async function runLoopOperation(input: {
         error: null,
       });
     }
+  }
+
+  if (signalAborted(input.signal)) {
+    await appendMessage(
+      input.sessionPath,
+      "system",
+      `multi-agent /ingest-loop 중단: ${haltReason} (rounds=${round}).`,
+    ).catch(() => undefined);
+    return cancellationResult({
+      kind: "ingest-loop",
+      assistantAgent: input.cfg.agent.orchestration.managerName || "manager",
+      durationMs: totalDurationMs,
+      exitCode: lastExitCode,
+    });
   }
 
   const manager = await runManager({

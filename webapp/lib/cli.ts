@@ -507,6 +507,8 @@ export async function runCli(
     });
     const stdoutBuf = new TailBuffer(stdoutCap);
     const stderrBuf = new TailBuffer(stderrCap);
+    let closed = false;
+    let abortKillTimer: ReturnType<typeof setTimeout> | null = null;
     child.stdout.on("data", (d: Buffer) => {
       const chunk = d.toString();
       stdoutBuf.push(chunk);
@@ -524,16 +526,31 @@ export async function runCli(
         }, opts.timeoutMs)
       : null;
     const killOnAbort = opts.killOnAbort ?? true;
-    const onAbort = () => child.kill("SIGTERM");
-    if (killOnAbort) opts.signal?.addEventListener("abort", onAbort);
+    const onAbort = () => {
+      child.kill("SIGTERM");
+      abortKillTimer ??= setTimeout(() => {
+        if (!closed) child.kill("SIGKILL");
+      }, 2000);
+    };
+    if (killOnAbort && opts.signal) {
+      if (opts.signal.aborted) {
+        onAbort();
+      } else {
+        opts.signal.addEventListener("abort", onAbort);
+      }
+    }
 
     child.on("error", (err) => {
+      closed = true;
       if (timer) clearTimeout(timer);
+      if (abortKillTimer) clearTimeout(abortKillTimer);
       if (killOnAbort) opts.signal?.removeEventListener("abort", onAbort);
       reject(err);
     });
     child.on("close", (code) => {
+      closed = true;
       if (timer) clearTimeout(timer);
+      if (abortKillTimer) clearTimeout(abortKillTimer);
       if (killOnAbort) opts.signal?.removeEventListener("abort", onAbort);
       resolve({
         stdout: stdoutBuf.toString(),

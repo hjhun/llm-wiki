@@ -844,7 +844,7 @@ export async function maybeAutoRunGraphify(
       safeMode: input.cfg.agent.safeMode,
       timeoutMs: graphTimeout ?? undefined,
       signal: input.signal,
-      killOnAbort: graphTimeout != null,
+      killOnAbort: input.signal ? true : graphTimeout != null,
       onStdout: (chunk) => {
         input.onChunk?.(chunk);
       },
