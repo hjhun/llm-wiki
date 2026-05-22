@@ -293,6 +293,104 @@ Tips:
 | Automations | Schedule draft-only multi-CLI jobs and inspect their run records under `raw/automation/`. |
 | Settings | Configure agent CLI, server host/port, graph behavior, Auto Ingest, Auto Lint, language, theme, default tab, and password. |
 
+## Public CLIO Sharing and Sandboxed CLI Login
+
+Administrators can enable a passwordless, read-only public chat at `/clio`
+from **Settings > Access > Public Query**. Public CLIO never exposes `raw/`,
+`wiki/`, `sessions/`, `config/local.json`, or `.env*` directly to visitors.
+The server selects small wiki excerpts when needed, then runs the selected
+agent CLI inside a `bubblewrap` sandbox with a dedicated CLI home:
+
+```text
+config/public-cli-home/
+```
+
+`setup.sh` installs `bubblewrap` (`bwrap`) on Linux when it can. If your host
+does not have `bwrap`, public CLIO falls back to safe read-only responses
+instead of running the host CLI outside the sandbox.
+
+The public sandbox does not use your normal `~/.codex`, `~/.claude`, or other
+personal CLI login state. Log in once using the dedicated public CLI home:
+
+```bash
+cd ~/.clio
+mkdir -p config/public-cli-home
+chmod 700 config/public-cli-home
+HOME="$PWD/config/public-cli-home" codex login
+```
+
+For the closest match to the runtime isolation, enter a `bubblewrap` shell and
+log in from there. This example prepares a Codex login shell; replace
+`CLI=codex` with another configured CLI when needed:
+
+```bash
+cd ~/.clio
+CLI=codex
+PUBLIC_HOME="$PWD/config/public-cli-home"
+WORKDIR="$(mktemp -d)"
+CLI_BIN="$(command -v "$CLI")"
+CLI_REAL="$(readlink -f "$CLI_BIN")"
+CLI_BIN_DIR="$(dirname "$CLI_BIN")"
+CLI_ROOT="$(node -e '
+const path = require("node:path");
+const real = process.argv[1];
+const parts = real.split(path.sep);
+const i = parts.lastIndexOf("node_modules");
+if (i >= 0) {
+  const end = parts[i + 1]?.startsWith("@") ? i + 3 : i + 2;
+  console.log(parts.slice(0, end).join(path.sep));
+} else {
+  console.log(path.dirname(real));
+}
+' "$CLI_REAL")"
+
+mkdir -p "$PUBLIC_HOME"
+chmod 700 "$PUBLIC_HOME"
+
+bwrap \
+  --die-with-parent \
+  --unshare-pid \
+  --unshare-ipc \
+  --unshare-uts \
+  --proc /proc \
+  --dev /dev \
+  --tmpfs /tmp \
+  --tmpfs /run \
+  --dir /home \
+  --bind "$PUBLIC_HOME" "$HOME" \
+  --ro-bind /usr /usr \
+  --ro-bind /bin /bin \
+  --ro-bind /lib /lib \
+  --ro-bind /lib64 /lib64 \
+  --ro-bind /etc /etc \
+  --ro-bind "$CLI_BIN_DIR" "$CLI_BIN_DIR" \
+  --ro-bind "$CLI_ROOT" "$CLI_ROOT" \
+  --bind "$WORKDIR" "$WORKDIR" \
+  --chdir "$WORKDIR" \
+  --clearenv \
+  --setenv HOME "$HOME" \
+  --setenv PATH "$PATH" \
+  --setenv NODE_ENV production \
+  /usr/bin/env bash --noprofile --norc
+```
+
+Inside that shell, run the CLI login command:
+
+```bash
+codex login
+```
+
+Then verify that public CLIO can use the same sandboxed home:
+
+```bash
+codex exec --skip-git-repo-check "Reply with OK only."
+```
+
+The dedicated public CLI home may contain credentials or refresh tokens, so it
+is ignored by git. Treat it like `config/local.json`: keep it local, back it up
+only through your own secret-management process, and rotate credentials if the
+machine is shared more broadly than intended.
+
 ## Setup Options
 
 The release installer downloads a GitHub source tarball and then runs `setup.sh`.
@@ -350,6 +448,7 @@ Common `setup.sh` options:
 | `--host <addr>` | Web UI host. Default: `0.0.0.0`. Use `127.0.0.1` for local-only. |
 | `--dev` | Use the development server command. |
 | `--skip-graphify` | Do not install or upgrade graphify. |
+| `--skip-bubblewrap` | Do not install `bubblewrap`; public CLI sandboxing will require a manual install. |
 | `--skip-npm-install` | Skip `webapp/` dependency checks and installation. |
 | `--skip-build` | Skip `npm run build`. |
 | `--skip-cli` | Skip building the Rust `clio` CLI. |
