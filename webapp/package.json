@@ -1,7 +1,7 @@
 {
   "name": "llm-wiki-app",
   "private": true,
-  "version": "0.9.9",
+  "version": "0.9.10",
   "license": "Apache-2.0",
   "description": "Local web UI for the LLM Wiki pattern. Chat, Explorer, Graph, Settings on top of raw/ + wiki/.",
   "scripts": {
