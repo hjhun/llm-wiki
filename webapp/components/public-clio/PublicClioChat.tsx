@@ -3,10 +3,13 @@
 import { useEffect, useRef, useState } from "react";
 import {
   Bot,
+  CheckSquare,
   Eraser,
   LoaderCircle,
   LockKeyhole,
+  MessageSquarePlus,
   Send,
+  Trash2,
   UserRound,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
@@ -21,6 +24,14 @@ type PublicMessage = {
   content: string;
 };
 
+type PublicConversation = {
+  id: string;
+  title: string;
+  created: string;
+  updated: string;
+  messages: PublicMessage[];
+};
+
 type PublicQueryResponse = {
   mode: "query";
   question: string;
@@ -30,7 +41,8 @@ type PublicQueryResponse = {
   durationMs: number;
 };
 
-const STORAGE_KEY = "clio.public.messages.v1";
+const LEGACY_MESSAGES_KEY = "clio.public.messages.v1";
+const CONVERSATIONS_KEY = "clio.public.conversations.v1";
 
 function nowStamp(): string {
   return new Date().toTimeString().slice(0, 8);
@@ -40,22 +52,70 @@ function newId(): string {
   return globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
 }
 
-function loadMessages(): PublicMessage[] {
+function isPublicMessage(item: unknown): item is PublicMessage {
+  return (
+    Boolean(item) &&
+    typeof item === "object" &&
+    typeof (item as PublicMessage).id === "string" &&
+    ((item as PublicMessage).role === "user" ||
+      (item as PublicMessage).role === "assistant" ||
+      (item as PublicMessage).role === "system") &&
+    typeof (item as PublicMessage).ts === "string" &&
+    typeof (item as PublicMessage).content === "string"
+  );
+}
+
+function compactTitle(input: string): string {
+  const title = input.replace(/\s+/g, " ").trim();
+  return title ? title.slice(0, 58) : "New query";
+}
+
+function sortConversations(
+  conversations: PublicConversation[],
+): PublicConversation[] {
+  return [...conversations].sort(
+    (a, b) => Date.parse(b.updated) - Date.parse(a.updated),
+  );
+}
+
+function loadConversations(): PublicConversation[] {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw) as PublicMessage[];
-    if (!Array.isArray(parsed)) return [];
-    return parsed.filter(
-      (item) =>
-        item &&
-        typeof item.id === "string" &&
-        (item.role === "user" ||
-          item.role === "assistant" ||
-          item.role === "system") &&
-        typeof item.ts === "string" &&
-        typeof item.content === "string",
-    );
+    const raw = localStorage.getItem(CONVERSATIONS_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw) as PublicConversation[];
+      if (Array.isArray(parsed)) {
+        return sortConversations(
+          parsed.filter(
+            (item) =>
+              item &&
+              typeof item.id === "string" &&
+              typeof item.title === "string" &&
+              typeof item.created === "string" &&
+              typeof item.updated === "string" &&
+              Array.isArray(item.messages) &&
+              item.messages.every(isPublicMessage),
+          ),
+        );
+      }
+    }
+
+    const legacyRaw = localStorage.getItem(LEGACY_MESSAGES_KEY);
+    if (!legacyRaw) return [];
+    const legacy = JSON.parse(legacyRaw) as PublicMessage[];
+    if (!Array.isArray(legacy)) return [];
+    const messages = legacy.filter(isPublicMessage);
+    if (messages.length === 0) return [];
+    const firstUser = messages.find((message) => message.role === "user");
+    const now = new Date().toISOString();
+    return [
+      {
+        id: newId(),
+        title: compactTitle(firstUser?.content ?? "Previous CLIO chat"),
+        created: now,
+        updated: now,
+        messages,
+      },
+    ];
   } catch {
     return [];
   }
@@ -67,20 +127,41 @@ async function asError(res: Response): Promise<Error> {
 }
 
 export default function PublicClioChat() {
-  const [messages, setMessages] = useState<PublicMessage[]>([]);
+  const [conversations, setConversations] = useState<PublicConversation[]>([]);
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
+  const [hydrated, setHydrated] = useState(false);
   const [value, setValue] = useState("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const taRef = useRef<HTMLTextAreaElement | null>(null);
   const endRef = useRef<HTMLDivElement | null>(null);
+  const activeConversation =
+    conversations.find((conversation) => conversation.id === activeId) ?? null;
+  const messages = activeConversation?.messages ?? [];
+  const selectedCount = selectedIds.size;
+  const allSelected =
+    conversations.length > 0 && selectedCount === conversations.length;
 
   useEffect(() => {
-    setMessages(loadMessages());
+    const loaded = loadConversations();
+    setConversations(loaded);
+    setActiveId(loaded[0]?.id ?? null);
+    setHydrated(true);
   }, []);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(messages));
-  }, [messages]);
+    if (!hydrated) return;
+    localStorage.setItem(CONVERSATIONS_KEY, JSON.stringify(conversations));
+  }, [conversations, hydrated]);
+
+  useEffect(() => {
+    setSelectedIds((current) => {
+      const visible = new Set(conversations.map((conversation) => conversation.id));
+      const next = new Set([...current].filter((id) => visible.has(id)));
+      return next.size === current.size ? current : next;
+    });
+  }, [conversations]);
 
   useEffect(() => {
     if (!taRef.current) return;
@@ -96,13 +177,47 @@ export default function PublicClioChat() {
     const message = value.trim();
     if (!message || pending) return;
 
+    const conversationId = activeId ?? newId();
+    const nowIso = new Date().toISOString();
     const userMessage: PublicMessage = {
       id: newId(),
       role: "user",
       ts: nowStamp(),
       content: message,
     };
-    setMessages((current) => [...current, userMessage]);
+    setConversations((current) => {
+      const existing = current.find(
+        (conversation) => conversation.id === conversationId,
+      );
+      if (!existing) {
+        return sortConversations([
+          {
+            id: conversationId,
+            title: compactTitle(message),
+            created: nowIso,
+            updated: nowIso,
+            messages: [userMessage],
+          },
+          ...current,
+        ]);
+      }
+      return sortConversations(
+        current.map((conversation) =>
+          conversation.id === conversationId
+            ? {
+                ...conversation,
+                title:
+                  conversation.messages.length === 0
+                    ? compactTitle(message)
+                    : conversation.title,
+                updated: nowIso,
+                messages: [...conversation.messages, userMessage],
+              }
+            : conversation,
+        ),
+      );
+    });
+    setActiveId(conversationId);
     setValue("");
     setPending(true);
     setError(null);
@@ -122,40 +237,124 @@ export default function PublicClioChat() {
               .map((source) => `- ${source.title}: \`${source.path}\``)
               .join("\n")
           : "";
-      setMessages((current) => [
-        ...current,
-        {
-          id: newId(),
-          role: "assistant",
-          ts: nowStamp(),
-          content: `${data.answer}${sources}`,
-        },
-      ]);
+      appendMessage(conversationId, {
+        id: newId(),
+        role: "assistant",
+        ts: nowStamp(),
+        content: `${data.answer}${sources}`,
+      });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       setError(msg);
-      setMessages((current) => [
-        ...current,
-        {
-          id: newId(),
-          role: "system",
-          ts: nowStamp(),
-          content: msg,
-        },
-      ]);
+      appendMessage(conversationId, {
+        id: newId(),
+        role: "system",
+        ts: nowStamp(),
+        content: msg,
+      });
     } finally {
       setPending(false);
     }
   }
 
-  function clear() {
-    setMessages([]);
+  function appendMessage(conversationId: string, message: PublicMessage) {
+    setConversations((current) =>
+      sortConversations(
+        current.map((conversation) =>
+          conversation.id === conversationId
+            ? {
+                ...conversation,
+                updated: new Date().toISOString(),
+                messages: [...conversation.messages, message],
+              }
+            : conversation,
+        ),
+      ),
+    );
+  }
+
+  function newConversation() {
+    if (pending) return;
+    setActiveId(null);
+    setValue("");
     setError(null);
-    localStorage.removeItem(STORAGE_KEY);
+  }
+
+  function clearActive() {
+    if (!activeConversation || pending) return;
+    const ok = window.confirm("현재 대화 내용을 비울까요?");
+    if (!ok) return;
+    setConversations((current) =>
+      sortConversations(
+        current.map((conversation) =>
+          conversation.id === activeConversation.id
+            ? {
+                ...conversation,
+                updated: new Date().toISOString(),
+                messages: [],
+              }
+            : conversation,
+        ),
+      ),
+    );
+    setError(null);
+  }
+
+  function toggleConversation(id: string) {
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleAll() {
+    setSelectedIds(
+      allSelected ? new Set() : new Set(conversations.map((item) => item.id)),
+    );
+  }
+
+  function deleteSelected() {
+    if (selectedCount === 0 || pending) return;
+    const ok = window.confirm(
+      `선택한 대화 ${selectedCount}개를 삭제할까요? 이 작업은 되돌릴 수 없습니다.`,
+    );
+    if (!ok) return;
+    const ids = new Set(selectedIds);
+    const nextConversations = conversations.filter(
+      (conversation) => !ids.has(conversation.id),
+    );
+    setConversations(nextConversations);
+    if (activeId && ids.has(activeId)) {
+      setActiveId(nextConversations[0]?.id ?? null);
+    }
+    setSelectedIds(new Set());
+    setError(null);
   }
 
   return (
     <main className="flex h-screen w-screen overflow-hidden bg-bg/80 text-ink">
+      <aside className="hidden w-72 shrink-0 border-r border-line bg-bg-subtle/82 lg:flex lg:flex-col">
+        <PublicConversationList
+          conversations={conversations}
+          activeId={activeId}
+          selectedIds={selectedIds}
+          pending={pending}
+          allSelected={allSelected}
+          selectedCount={selectedCount}
+          onNew={newConversation}
+          onSelect={(id) => {
+            if (pending) return;
+            setActiveId(id);
+            setError(null);
+          }}
+          onToggle={toggleConversation}
+          onToggleAll={toggleAll}
+          onDelete={deleteSelected}
+        />
+      </aside>
+
       <section className="flex min-w-0 flex-1 flex-col">
         <header className="flex min-h-16 shrink-0 items-center justify-between gap-4 border-b border-line bg-bg-panel/76 px-5 py-3 shadow-sm backdrop-blur-xl">
           <div className="min-w-0">
@@ -163,7 +362,7 @@ export default function PublicClioChat() {
               public clio
             </div>
             <h1 className="truncate text-base font-semibold text-ink">
-              CLIO Query
+              {activeConversation?.title ?? "CLIO Query"}
             </h1>
           </div>
           <div className="flex shrink-0 items-center gap-2">
@@ -172,14 +371,39 @@ export default function PublicClioChat() {
               query only
             </StatusBadge>
             <IconButton
+              icon={MessageSquarePlus}
+              label="New local chat"
+              onClick={newConversation}
+              disabled={pending}
+              variant="ghost"
+              className="lg:hidden"
+            />
+            <IconButton
               icon={Eraser}
-              label="Clear local chat"
-              onClick={clear}
-              disabled={pending || messages.length === 0}
+              label="Clear current chat"
+              onClick={clearActive}
+              disabled={pending || !activeConversation || messages.length === 0}
               variant="ghost"
             />
           </div>
         </header>
+
+        <div className="border-b border-line bg-bg-subtle/70 px-3 py-2 lg:hidden">
+          <PublicConversationStrip
+            conversations={conversations}
+            activeId={activeId}
+            selectedIds={selectedIds}
+            pending={pending}
+            selectedCount={selectedCount}
+            onSelect={(id) => {
+              if (pending) return;
+              setActiveId(id);
+              setError(null);
+            }}
+            onToggle={toggleConversation}
+            onDelete={deleteSelected}
+          />
+        </div>
 
         {error ? (
           <div className="border-b border-red-900/60 bg-red-950/40 px-4 py-1 text-[11px] text-red-300">
@@ -233,7 +457,7 @@ export default function PublicClioChat() {
                 Local browser history
               </div>
               <div className="mt-1 text-xs leading-relaxed text-ink-faint">
-                {messages.length} messages
+                {conversations.length} chats · {messages.length} messages
               </div>
             </div>
             <div className="flex justify-center">
@@ -273,6 +497,210 @@ export default function PublicClioChat() {
         </div>
       </section>
     </main>
+  );
+}
+
+function PublicConversationList({
+  conversations,
+  activeId,
+  selectedIds,
+  pending,
+  allSelected,
+  selectedCount,
+  onNew,
+  onSelect,
+  onToggle,
+  onToggleAll,
+  onDelete,
+}: {
+  conversations: PublicConversation[];
+  activeId: string | null;
+  selectedIds: Set<string>;
+  pending: boolean;
+  allSelected: boolean;
+  selectedCount: number;
+  onNew: () => void;
+  onSelect: (id: string) => void;
+  onToggle: (id: string) => void;
+  onToggleAll: () => void;
+  onDelete: () => void;
+}) {
+  return (
+    <div className="flex h-full flex-col overflow-hidden">
+      <div className="border-b border-line p-2">
+        <Button
+          onClick={onNew}
+          variant="primary"
+          icon={MessageSquarePlus}
+          className="w-full"
+          disabled={pending}
+        >
+          New Chat
+        </Button>
+        <div className="mt-2 grid grid-cols-[1fr_auto] gap-2">
+          <Button
+            onClick={onToggleAll}
+            disabled={conversations.length === 0 || pending}
+            variant="secondary"
+            icon={CheckSquare}
+            className="h-7 text-[11px]"
+          >
+            {allSelected ? "Clear" : "Select all"}
+          </Button>
+          <Button
+            onClick={onDelete}
+            disabled={selectedCount === 0 || pending}
+            variant="danger"
+            icon={Trash2}
+            className="h-7 px-2 text-[11px]"
+          >
+            Delete {selectedCount || ""}
+          </Button>
+        </div>
+      </div>
+
+      <div className="min-h-0 flex-1 overflow-auto py-1">
+        {conversations.length === 0 ? (
+          <div className="m-2 rounded-md border border-dashed border-line bg-bg-panel/68 px-3 py-5 text-center text-xs text-ink-faint">
+            No local chats yet.
+          </div>
+        ) : (
+          conversations.map((conversation) => (
+            <ConversationRow
+              key={conversation.id}
+              conversation={conversation}
+              active={activeId === conversation.id}
+              selected={selectedIds.has(conversation.id)}
+              disabled={pending}
+              onSelect={() => onSelect(conversation.id)}
+              onToggle={() => onToggle(conversation.id)}
+            />
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
+function PublicConversationStrip({
+  conversations,
+  activeId,
+  selectedIds,
+  pending,
+  selectedCount,
+  onSelect,
+  onToggle,
+  onDelete,
+}: {
+  conversations: PublicConversation[];
+  activeId: string | null;
+  selectedIds: Set<string>;
+  pending: boolean;
+  selectedCount: number;
+  onSelect: (id: string) => void;
+  onToggle: (id: string) => void;
+  onDelete: () => void;
+}) {
+  if (conversations.length === 0) {
+    return (
+      <div className="text-xs text-ink-faint">
+        Local browser history will appear here.
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-2 overflow-x-auto">
+      {conversations.map((conversation) => (
+        <div
+          key={conversation.id}
+          className={cx(
+            "flex min-w-48 shrink-0 items-center gap-2 rounded-md border px-2 py-1.5 text-xs",
+            activeId === conversation.id
+              ? "border-accent bg-bg-panel text-ink"
+              : "border-line bg-bg-panel/62 text-ink-dim",
+          )}
+        >
+          <input
+            type="checkbox"
+            checked={selectedIds.has(conversation.id)}
+            onChange={() => onToggle(conversation.id)}
+            disabled={pending}
+            aria-label={`Select ${conversation.title}`}
+            className="h-3.5 w-3.5 accent-accent"
+          />
+          <button
+            type="button"
+            onClick={() => onSelect(conversation.id)}
+            disabled={pending}
+            className="min-w-0 flex-1 text-left disabled:opacity-60"
+          >
+            <span className="block truncate font-medium">{conversation.title}</span>
+            <span className="block truncate font-mono text-[10px] text-ink-faint">
+              {conversation.messages.length} messages
+            </span>
+          </button>
+        </div>
+      ))}
+      <IconButton
+        icon={Trash2}
+        label="Delete selected chats"
+        onClick={onDelete}
+        disabled={selectedCount === 0 || pending}
+        variant="danger"
+        className="shrink-0"
+      />
+    </div>
+  );
+}
+
+function ConversationRow({
+  conversation,
+  active,
+  selected,
+  disabled,
+  onSelect,
+  onToggle,
+}: {
+  conversation: PublicConversation;
+  active: boolean;
+  selected: boolean;
+  disabled: boolean;
+  onSelect: () => void;
+  onToggle: () => void;
+}) {
+  return (
+    <div
+      className={cx(
+        "grid w-full grid-cols-[auto_minmax(0,1fr)] gap-2 px-3 py-2 text-left text-xs transition-colors",
+        active
+          ? "bg-bg-panel text-ink shadow-[inset_3px_0_0_rgb(var(--color-accent))]"
+          : "text-ink-dim hover:bg-bg-panel/60 hover:text-ink",
+      )}
+    >
+      <span className="pt-0.5">
+        <input
+          type="checkbox"
+          checked={selected}
+          onChange={onToggle}
+          disabled={disabled}
+          aria-label={`Select ${conversation.title}`}
+          className="h-3.5 w-3.5 accent-accent disabled:opacity-50"
+        />
+      </span>
+      <button
+        type="button"
+        onClick={onSelect}
+        disabled={disabled}
+        className="min-w-0 text-left disabled:opacity-60"
+      >
+        <span className="block truncate font-medium">{conversation.title}</span>
+        <span className="block truncate font-mono text-[10px] text-ink-faint">
+          {conversation.messages.length} messages ·{" "}
+          {new Date(conversation.updated).toLocaleString()}
+        </span>
+      </button>
+    </div>
   );
 }
 
