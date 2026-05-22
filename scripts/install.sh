@@ -19,6 +19,7 @@ COMMAND="install"
 RUN_SETUP=1
 SETUP_ARGS=()
 CLEANUP_DIR=""
+CLIO_SKILL_TARGETS="${CLIO_SKILL_TARGETS:-global}"
 
 log() {
   printf '[clio-install] %s\n' "$*"
@@ -60,6 +61,12 @@ Installer options:
   --repo <repo>      GitHub repo as owner/name or https://github.com/owner/name
                     (default: hjhun/llm-wiki)
   --no-setup         Download and unpack only; do not run setup.sh
+  --clio-skill <target>
+                    Install the bundled CLIO agent skill to one of:
+                    global, project, both, none (default: global).
+                    global -> ~/.agents/skills/clio
+                    project -> <install-dir>/.agents/skills/clio
+  --no-clio-skill    Alias for --clio-skill none
   -h, --help         Show this help
 
 Any other arguments are passed through to setup.sh.
@@ -71,6 +78,7 @@ Examples:
   curl -fsSL https://raw.githubusercontent.com/hjhun/llm-wiki/main/scripts/install.sh | bash -s -- --version v0.1.0
   bash scripts/install.sh --dir ./my-clio --skip-graphify --skip-build
   bash scripts/install.sh --ref main --no-setup
+  bash scripts/install.sh --clio-skill both --skip-build
 EOF
 }
 
@@ -203,6 +211,19 @@ parse_args() {
         ;;
       --no-setup)
         RUN_SETUP=0
+        shift
+        ;;
+      --clio-skill)
+        [[ $# -ge 2 ]] || fail "--clio-skill requires a value"
+        CLIO_SKILL_TARGETS="$2"
+        shift 2
+        ;;
+      --clio-skill=*)
+        CLIO_SKILL_TARGETS="${1#*=}"
+        shift
+        ;;
+      --no-clio-skill)
+        CLIO_SKILL_TARGETS="none"
         shift
         ;;
       -h|--help)
@@ -346,7 +367,10 @@ run_project_setup() {
   log "running setup.sh ${SETUP_ARGS[*]:-}"
   (
     cd "${target_dir}"
-    CLIO_RELEASE_REPO="${repo_slug}" CLIO_RELEASE_REF="${ref}" bash ./setup.sh "${SETUP_ARGS[@]}"
+    CLIO_RELEASE_REPO="${repo_slug}" \
+      CLIO_RELEASE_REF="${ref}" \
+      CLIO_SKILL_TARGETS="${CLIO_SKILL_TARGETS}" \
+      bash ./setup.sh "${SETUP_ARGS[@]}"
   )
 }
 
@@ -390,6 +414,7 @@ run_update() {
   local extracted_root=""
   local update_paths=(
     ".agents/skills"
+    "clio-skill"
     "cli-rs"
     "config/default.json"
     "docs"

@@ -1,0 +1,23 @@
+{
+  "skill_name": "clio",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "I'm changing an API in this repo. Use CLIO context to find prior architecture notes before proposing edits.",
+      "expected_output": "Reads wiki/index.md first, selects relevant wiki/code or architecture pages, and cites the pages consulted.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "Debug this failing test using any Code Wiki notes if available.",
+      "expected_output": "Looks for wiki/code testing or debug notes, uses them as context, and does not modify raw/.",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "What do we know about graphify integration in this project?",
+      "expected_output": "Answers from CLIO wiki pages first and cites wiki paths instead of guessing external URLs.",
+      "files": []
+    }
+  ]
+}

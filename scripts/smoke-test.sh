@@ -29,6 +29,8 @@ require_file "CLAUDE.md"
 require_file "README.md"
 require_file "setup.sh"
 require_file "scripts/install.sh"
+require_file "clio-skill/skills.sh"
+require_file "clio-skill/clio/SKILL.md"
 require_file ".github/workflows/release.yml"
 require_file "systemd/clio-web.service"
 require_file "systemd/install-clio-web-service.sh"
@@ -56,6 +58,9 @@ bash -n "${ROOT_DIR}/setup.sh"
 log "checking scripts/install.sh syntax"
 bash -n "${ROOT_DIR}/scripts/install.sh"
 
+log "checking clio-skill installer syntax"
+bash -n "${ROOT_DIR}/clio-skill/skills.sh"
+
 log "checking systemd installer syntax"
 bash -n "${ROOT_DIR}/systemd/install-clio-web-service.sh"
 
@@ -70,6 +75,7 @@ cleanup_tmp_root() {
 trap cleanup_tmp_root EXIT
 mkdir -p "${tmp_root}/webapp/node_modules/next" "${tmp_root}/bin"
 cp "${ROOT_DIR}/setup.sh" "${tmp_root}/setup.sh"
+cp -R "${ROOT_DIR}/clio-skill" "${tmp_root}/clio-skill"
 cat > "${tmp_root}/webapp/package.json" <<'JSON'
 {
   "scripts": {
@@ -93,17 +99,32 @@ exit 0
 SH
 chmod +x "${tmp_root}/bin/npm"
 CLIO_FAKE_NPM_LOG="${tmp_root}/npm.log" \
+  HOME="${tmp_root}/home" \
   PATH="${tmp_root}/bin:${PATH}" \
   "${tmp_root}/setup.sh" --skip-graphify --skip-build >/dev/null
 grep -qx 'install' "${tmp_root}/npm.log" || fail "setup.sh did not install missing webapp dependencies"
+[[ -f "${tmp_root}/home/.agents/skills/clio/SKILL.md" ]] || fail "setup.sh did not install global clio skill"
 
 log "checking scripts/install.sh help"
 "${ROOT_DIR}/scripts/install.sh" --help >/dev/null
 
+log "checking clio-skill installer help"
+"${ROOT_DIR}/clio-skill/skills.sh" --help >/dev/null
+
 log "checking install refreshes an existing CLIO directory"
 install_tmp="$(mktemp -d)"
 mkdir -p "${install_tmp}/archive/llm-wiki-fake/"{.agents/skills,cli-rs,config,docs,scripts,systemd,webapp}
-printf '%s\n' "#!/usr/bin/env bash" "exit 0" > "${install_tmp}/archive/llm-wiki-fake/setup.sh"
+mkdir -p "${install_tmp}/archive/llm-wiki-fake/clio-skill"
+cp -R "${ROOT_DIR}/clio-skill/clio" "${install_tmp}/archive/llm-wiki-fake/clio-skill/clio"
+cp "${ROOT_DIR}/clio-skill/skills.sh" "${install_tmp}/archive/llm-wiki-fake/clio-skill/skills.sh"
+chmod +x "${install_tmp}/archive/llm-wiki-fake/clio-skill/skills.sh"
+cat > "${install_tmp}/archive/llm-wiki-fake/setup.sh" <<'SH'
+#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\n' "${CLIO_SKILL_TARGETS:-}" > "${CLIO_FAKE_SETUP_TARGET_LOG:?}"
+./clio-skill/skills.sh install "${CLIO_SKILL_TARGETS:-global}" --project-dir "$(pwd)"
+SH
+chmod +x "${install_tmp}/archive/llm-wiki-fake/setup.sh"
 printf '%s\n' '{"name":"fake-webapp"}' > "${install_tmp}/archive/llm-wiki-fake/webapp/package.json"
 printf '%s\n' "# fake llm wiki" > "${install_tmp}/archive/llm-wiki-fake/llm-wiki.md"
 printf '%s\n' "new readme" > "${install_tmp}/archive/llm-wiki-fake/README.md"
@@ -148,16 +169,20 @@ SH
 chmod +x "${install_tmp}/curl"
 
 CLIO_FAKE_ARCHIVE="${install_tmp}/source.tar.gz" \
+  CLIO_FAKE_SETUP_TARGET_LOG="${install_tmp}/setup-target.log" \
+  HOME="${install_tmp}/home" \
   PATH="${install_tmp}:${PATH}" \
-  "${ROOT_DIR}/scripts/install.sh" --repo owner/repo --ref fake --dir "${install_tmp}/target" --no-setup >/dev/null
+  "${ROOT_DIR}/scripts/install.sh" --repo owner/repo --ref fake --dir "${install_tmp}/target" >/dev/null
 grep -qx 'new readme' "${install_tmp}/target/README.md" || fail "install did not refresh project files"
 grep -qx 'wiki data' "${install_tmp}/target/wiki/index.md" || fail "install did not preserve wiki data"
 grep -qx 'raw data' "${install_tmp}/target/raw/source.md" || fail "install did not preserve raw data"
 grep -qx '{"auth":{"cliToken":"keep"}}' "${install_tmp}/target/config/local.json" || fail "install did not preserve local config"
+grep -qx 'global' "${install_tmp}/setup-target.log" || fail "install did not pass clio skill target to setup"
+[[ -f "${install_tmp}/home/.agents/skills/clio/SKILL.md" ]] || fail "install did not install global clio skill"
 rm -rf "${install_tmp}"
 
 log "checking setup.sh idempotent no-network path"
-"${ROOT_DIR}/setup.sh" --skip-graphify --skip-npm-install --skip-build >/dev/null
+"${ROOT_DIR}/setup.sh" --skip-graphify --skip-npm-install --skip-build --no-clio-skill >/dev/null
 
 log "checking webapp typecheck"
 (cd "${WEBAPP_DIR}" && npm run typecheck)

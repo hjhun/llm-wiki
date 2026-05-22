@@ -71,6 +71,29 @@ refreshes project files while preserving `raw/`, `wiki/`, `sessions/`,
 `config/local.json`, `.run/`, `webapp/node_modules/`, `webapp/.next/`, and
 `webapp/.env*`.
 
+`setup.sh` installs the `clio` agent skill globally by default. The release
+installer runs `setup.sh`, so the quick-start command installs it too:
+
+```text
+~/.agents/skills/clio
+```
+
+This lets compatible coding agents use CLIO as local project memory from other
+repositories. Change the skill target with `--clio-skill` on either
+`scripts/install.sh` or `setup.sh`:
+
+```bash
+bash scripts/install.sh --clio-skill global   # default
+bash scripts/install.sh --clio-skill project  # <install-dir>/.agents/skills/clio
+bash scripts/install.sh --clio-skill both
+bash scripts/install.sh --clio-skill none
+
+./setup.sh --clio-skill both
+```
+
+The global skill requires the agent runtime to include `~/.agents/skills` in its
+skill search path. CLIO-compatible launchers are expected to do this.
+
 Open:
 
 ```text

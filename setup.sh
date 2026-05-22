@@ -28,6 +28,7 @@ WITH_QMD=0
 WITH_MARP=0
 WITH_AGENT_BROWSER=0
 INSTALL_CLI=""
+CLIO_SKILL_TARGETS="${CLIO_SKILL_TARGETS:-global}"
 
 log() {
   printf '[llm-wiki] %s\n' "$*"
@@ -63,12 +64,17 @@ Options:
   --with-marp                   Best-effort optional Marp CLI install
   --with-agent-browser          Best-effort optional agent-browser install
   --install-cli=<names>         Best-effort install for codex,claude,gemini,cline
+  --clio-skill <target>         Install bundled clio skill to global, project,
+                                both, or none (default: global)
+  --clio-skill=<target>         Same as --clio-skill <target>
+  --no-clio-skill               Alias for --clio-skill none
   -h, --help                    Show this help
 
 Examples:
   ./setup.sh
   ./setup.sh --port 7788 --skip-graphify
   ./setup.sh --install-cli=claude,gemini --with-marp
+  ./setup.sh --clio-skill both
 EOF
 }
 
@@ -130,6 +136,19 @@ while [[ $# -gt 0 ]]; do
       ;;
     --install-cli=*)
       INSTALL_CLI="${1#*=}"
+      shift
+      ;;
+    --clio-skill)
+      [[ $# -ge 2 ]] || fail "--clio-skill requires a value"
+      CLIO_SKILL_TARGETS="$2"
+      shift 2
+      ;;
+    --clio-skill=*)
+      CLIO_SKILL_TARGETS="${1#*=}"
+      shift
+      ;;
+    --no-clio-skill)
+      CLIO_SKILL_TARGETS="none"
       shift
       ;;
     -h|--help)
@@ -1000,6 +1019,31 @@ start_server() {
   log "log file: ${SERVER_LOG_FILE}"
 }
 
+install_clio_skill() {
+  local installer="${ROOT_DIR}/clio-skill/skills.sh"
+
+  case "${CLIO_SKILL_TARGETS}" in
+    global|project|both|none)
+      ;;
+    *)
+      fail "--clio-skill must be one of: global, project, both, none"
+      ;;
+  esac
+
+  if [[ "${CLIO_SKILL_TARGETS}" == "none" ]]; then
+    log "clio skill installation skipped"
+    return
+  fi
+
+  if [[ ! -x "${installer}" ]]; then
+    warn "clio skill installer not found; skipping ${CLIO_SKILL_TARGETS} skill install"
+    return
+  fi
+
+  log "installing clio skill (${CLIO_SKILL_TARGETS})"
+  "${installer}" install "${CLIO_SKILL_TARGETS}" --project-dir "${ROOT_DIR}"
+}
+
 main() {
   log "project root: ${ROOT_DIR}"
   require_command bash
@@ -1044,6 +1088,7 @@ main() {
   install_webapp
   ensure_cli_token
   build_clio_cli
+  install_clio_skill
 
   log "setup complete"
   log "open http://${HOST}:${PORT}"
