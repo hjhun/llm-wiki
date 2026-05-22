@@ -33,6 +33,11 @@ pub struct IngestArgs {
 
 #[derive(Debug, Args)]
 pub struct IngestLoopArgs {
+    /// Optional path or hint passed to the wiki-ingest loop.
+    /// `clio ingest-loop raw/foo` runs as `/ingest-loop raw/foo`.
+    #[arg(value_name = "PATH")]
+    pub target: Option<String>,
+
     /// Override the coding-agent CLI (codex/claude/gemini/cline).
     #[arg(long)]
     pub agent: Option<String>,
@@ -60,8 +65,12 @@ pub async fn run(ctx: &Context, args: IngestArgs) -> Result<u8> {
 
 pub async fn run_loop(ctx: &Context, args: IngestLoopArgs) -> Result<u8> {
     let client = Client::new(ctx)?;
+    let message = match args.target.as_deref() {
+        Some(target) if !target.is_empty() => format!("/ingest-loop {target}"),
+        _ => "/ingest-loop".to_string(),
+    };
     let body = ChatSendBody {
-        message: "/ingest-loop",
+        message: &message,
         kind: ChatKind::IngestLoop,
         agent: args.agent.as_deref(),
         context: None,

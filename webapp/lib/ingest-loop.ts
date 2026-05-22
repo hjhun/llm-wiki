@@ -33,6 +33,11 @@ export type StateSummary = {
 export type ProgressSnapshot = {
   leavesTotal: number;
   leavesDone: number;
+  codeLeavesTotal: number;
+  codeLeavesWithOutputs: number;
+  codeLeavesMissingOutputs: number;
+  missingCodeLeaves: string[];
+  codeOutputsWritten: number;
   subChunksTotal: number;
   subChunksDone: number;
   filesTotal: number;
@@ -48,6 +53,11 @@ export type ProgressSnapshot = {
 export const EMPTY_SNAPSHOT: ProgressSnapshot = {
   leavesTotal: 0,
   leavesDone: 0,
+  codeLeavesTotal: 0,
+  codeLeavesWithOutputs: 0,
+  codeLeavesMissingOutputs: 0,
+  missingCodeLeaves: [],
+  codeOutputsWritten: 0,
   subChunksTotal: 0,
   subChunksDone: 0,
   filesTotal: 0,
@@ -72,6 +82,162 @@ export async function buildProgressReference(): Promise<string | null> {
 }
 
 const ENTITY_REGISTRY_MAX = 400;
+const CODE_STATUS_MAX = 20;
+
+const CODE_EXTS = new Set([
+  ".ts",
+  ".tsx",
+  ".js",
+  ".jsx",
+  ".mjs",
+  ".cjs",
+  ".py",
+  ".rs",
+  ".go",
+  ".java",
+  ".kt",
+  ".swift",
+  ".c",
+  ".cc",
+  ".cpp",
+  ".h",
+  ".hpp",
+  ".cs",
+  ".php",
+  ".rb",
+  ".sh",
+  ".sql",
+]);
+
+const CODE_MANIFESTS = new Set([
+  "package.json",
+  "Cargo.toml",
+  "pyproject.toml",
+  "go.mod",
+  "pom.xml",
+  "build.gradle",
+  "Dockerfile",
+  "compose.yaml",
+  "tsconfig.json",
+]);
+
+const IGNORE_CODE_DIRS = new Set([
+  ".git",
+  "node_modules",
+  "dist",
+  "build",
+  "target",
+  ".next",
+  ".venv",
+  "vendor",
+  "coverage",
+]);
+
+type LeafKind = "prose" | "code" | "mixed" | "ignore";
+
+function pathSegments(relPath: string): string[] {
+  return relPath.replace(/\\/g, "/").split("/").filter(Boolean);
+}
+
+function isIgnoredCodePath(relPath: string): boolean {
+  return pathSegments(relPath).some((part) => IGNORE_CODE_DIRS.has(part));
+}
+
+function fileLooksLikeCode(relPath: string): boolean {
+  if (isIgnoredCodePath(relPath)) return false;
+  const basename = path.posix.basename(relPath);
+  if (CODE_MANIFESTS.has(basename)) return true;
+  if (CODE_EXTS.has(path.posix.extname(relPath).toLowerCase())) return true;
+  const lower = relPath.toLowerCase();
+  return (
+    lower.includes("test") ||
+    lower.includes("spec") ||
+    lower.includes("__tests__/") ||
+    lower.includes("tests/")
+  );
+}
+
+function fileLooksLikeRuntimeEvidence(relPath: string): boolean {
+  if (isIgnoredCodePath(relPath)) return false;
+  const lower = relPath.toLowerCase();
+  return (
+    lower.endsWith(".log") ||
+    lower.includes("stacktrace") ||
+    lower.includes("stack-trace") ||
+    lower.includes("ci") ||
+    lower.includes("crash") ||
+    lower.includes("failure") ||
+    lower.includes("failing-test")
+  );
+}
+
+function classifyLeafFromFiles(files: string[]): LeafKind {
+  const actionable = files.filter((file) => !isIgnoredCodePath(file));
+  if (actionable.length === 0 && files.length > 0) return "ignore";
+  const codeCount = actionable.filter(
+    (file) => fileLooksLikeCode(file) || fileLooksLikeRuntimeEvidence(file),
+  ).length;
+  if (codeCount === 0) return "prose";
+  return codeCount === actionable.length ? "code" : "mixed";
+}
+
+function collectLeafFiles(leafPath: string, leaf: Record<string, unknown>): string[] {
+  const files = new Set<string>();
+  const add = (value: unknown) => {
+    if (typeof value === "string" && value.trim()) {
+      files.add(value.replace(/\\/g, "/"));
+    }
+  };
+  if (Array.isArray(leaf.files)) {
+    for (const file of leaf.files) add(file);
+  }
+  if (Array.isArray(leaf.sub_chunks)) {
+    for (const rawSc of leaf.sub_chunks) {
+      const sc =
+        rawSc && typeof rawSc === "object"
+          ? (rawSc as Record<string, unknown>)
+          : null;
+      if (!sc || !Array.isArray(sc.files)) continue;
+      for (const file of sc.files) add(file);
+    }
+  }
+  if (files.size === 0) files.add(leafPath);
+  return [...files];
+}
+
+function inferLeafKind(leafPath: string, leaf: Record<string, unknown>): LeafKind {
+  const explicit = leaf.kind;
+  if (
+    explicit === "prose" ||
+    explicit === "code" ||
+    explicit === "mixed" ||
+    explicit === "ignore"
+  ) {
+    return explicit;
+  }
+  return classifyLeafFromFiles(collectLeafFiles(leafPath, leaf));
+}
+
+function collectCodeOutputs(leaf: Record<string, unknown>): string[] {
+  const outputs = new Set<string>();
+  const add = (value: unknown) => {
+    if (typeof value === "string" && value.trim()) outputs.add(value.trim());
+  };
+  if (Array.isArray(leaf.code_outputs)) {
+    for (const output of leaf.code_outputs) add(output);
+  }
+  if (Array.isArray(leaf.sub_chunks)) {
+    for (const rawSc of leaf.sub_chunks) {
+      const sc =
+        rawSc && typeof rawSc === "object"
+          ? (rawSc as Record<string, unknown>)
+          : null;
+      if (!sc || !Array.isArray(sc.code_outputs)) continue;
+      for (const output of sc.code_outputs) add(output);
+    }
+  }
+  return [...outputs];
+}
 
 /**
  * Compact reference of existing entity/concept page names from wiki/index.md.
@@ -122,6 +288,31 @@ export async function buildEntityRegistryReference(): Promise<string | null> {
   );
 }
 
+export async function buildCodeWikiStatusReference(): Promise<string | null> {
+  const snap = await readProgressSnapshot();
+  if (snap.codeLeavesTotal === 0) {
+    return (
+      "Code Wiki status: no code/mixed leaves are currently detected in " +
+      `${PROGRESS_STATE_PATH}. During enumeration, classify code leaves by ` +
+      "filename/manifest and record `kind`, `project`, and `code_outputs`."
+    );
+  }
+  const missing = snap.missingCodeLeaves.slice(0, CODE_STATUS_MAX);
+  const suffix =
+    snap.missingCodeLeaves.length > CODE_STATUS_MAX
+      ? ` … (+${snap.missingCodeLeaves.length - CODE_STATUS_MAX} more)`
+      : "";
+  const missingLine =
+    missing.length > 0
+      ? `Missing Code Wiki outputs for: ${missing.join(", ")}${suffix}`
+      : "All detected code/mixed leaves have recorded Code Wiki outputs.";
+  return [
+    `Code Wiki status: ${snap.codeLeavesWithOutputs}/${snap.codeLeavesTotal} code/mixed leaves have recorded outputs.`,
+    missingLine,
+    "For a done code/mixed leaf with no outputs, treat the next unit of work as a Code Wiki repair: run `node scripts/code-index.mjs raw/<project-or-leaf> --format=json` and `--format=markdown` when applicable, write/update `wiki/code/<project>/...`, then record those paths in `code_outputs` before reporting completion.",
+  ].join("\n");
+}
+
 export async function readProgressSnapshot(): Promise<ProgressSnapshot> {
   try {
     const raw = await fs.readFile(
@@ -138,6 +329,11 @@ export async function readProgressSnapshot(): Promise<ProgressSnapshot> {
     const snap: ProgressSnapshot = {
       leavesTotal: 0,
       leavesDone: 0,
+      codeLeavesTotal: 0,
+      codeLeavesWithOutputs: 0,
+      codeLeavesMissingOutputs: 0,
+      missingCodeLeaves: [],
+      codeOutputsWritten: 0,
       subChunksTotal: 0,
       subChunksDone: 0,
       filesTotal: 0,
@@ -152,9 +348,21 @@ export async function readProgressSnapshot(): Promise<ProgressSnapshot> {
     if (parsed.leaves && typeof parsed.leaves === "object") {
       for (const [leafPath, value] of Object.entries(parsed.leaves)) {
         const leaf = (value ?? {}) as Record<string, unknown>;
-        if (leaf.status !== "stale") {
-          snap.leavesTotal += 1;
+        if (leaf.status === "stale") continue;
+        const leafKind = inferLeafKind(leafPath, leaf);
+        const codeOutputs = collectCodeOutputs(leaf);
+        const isCodeLeaf = leafKind === "code" || leafKind === "mixed";
+        if (isCodeLeaf) {
+          snap.codeLeavesTotal += 1;
+          snap.codeOutputsWritten += codeOutputs.length;
+          if (codeOutputs.length > 0) {
+            snap.codeLeavesWithOutputs += 1;
+          } else if (leaf.status === "done") {
+            snap.codeLeavesMissingOutputs += 1;
+            snap.missingCodeLeaves.push(leafPath);
+          }
         }
+        snap.leavesTotal += 1;
         if (leaf.status === "done") {
           snap.leavesDone += 1;
           doneLeaves.push(leafPath);
@@ -185,6 +393,7 @@ export async function readProgressSnapshot(): Promise<ProgressSnapshot> {
       }
     }
     doneLeaves.sort();
+    snap.missingCodeLeaves.sort();
     snap.filesTotal = filePaths.size;
     snap.bytesTotal = await totalRelativeFileBytes(filePaths);
     return snap;
@@ -219,6 +428,8 @@ export function ingestMadeProgress(
     after.subChunksDone > before.subChunksDone ||
     after.leavesDone > before.leavesDone ||
     after.sourcePagesWritten > before.sourcePagesWritten ||
+    after.codeOutputsWritten > before.codeOutputsWritten ||
+    after.codeLeavesMissingOutputs < before.codeLeavesMissingOutputs ||
     (after.mergeDone && !before.mergeDone) ||
     // A merge pass drained a parent from merge_pass.pending_parents — real
     // progress even though no sub-chunk or leaf counter moved.
@@ -321,6 +532,7 @@ export function decideLoopHalt(input: {
   stopRequested: boolean;
   iteration: number;
   maxIter: number;
+  codeLeavesMissingOutputs?: number;
 }): LoopDecision {
   if (input.exitCode !== 0) {
     return {
@@ -357,6 +569,7 @@ export function decideLoopHalt(input: {
     input.summary.pending === 0 &&
     input.summary.in_progress === 0 &&
     input.summary.partial === 0 &&
+    (input.codeLeavesMissingOutputs ?? 0) === 0 &&
     (input.mergeDone || !input.mergePending)
   ) {
     return {
@@ -365,6 +578,18 @@ export function decideLoopHalt(input: {
       reason: input.mergeDone
         ? `모든 leaf 완료 + merge pass done (${input.summary.done}/${input.summary.total})`
         : `모든 leaf 완료 · 남은 merge 작업 없음 (${input.summary.done}/${input.summary.total})`,
+    };
+  }
+  if (
+    input.idleRounds >= LOOP_STAGNATION_LIMIT &&
+    (input.codeLeavesMissingOutputs ?? 0) > 0
+  ) {
+    return {
+      halt: true,
+      kind: "stalled",
+      reason:
+        `Code Wiki output 누락 ${input.codeLeavesMissingOutputs}건이 ` +
+        `연속 ${input.idleRounds}개 라운드에서 해결되지 않아 중단`,
     };
   }
   // Stagnation guard: aside from error/stop/cap and the completion branch
@@ -387,6 +612,7 @@ export function buildLoopContinuationPrompt(input: {
   iteration: number;
   progressRef: string | null;
   entityRegistryRef?: string | null;
+  codeWikiStatusRef?: string | null;
 }): string {
   const lines: string[] = [
     "You are operating an LLM Wiki repository.",
@@ -395,8 +621,9 @@ export function buildLoopContinuationPrompt(input: {
   ];
   if (input.progressRef) lines.push(input.progressRef);
   if (input.entityRegistryRef) lines.push(input.entityRegistryRef);
+  if (input.codeWikiStatusRef) lines.push(input.codeWikiStatusRef);
   lines.push(
-    `This is /ingest-loop iteration ${input.iteration}. Pick the next pending sub-chunk from wiki/.progress/ingest/.state.json and process exactly one sub-chunk per the wiki-ingest skill, then exit. Do not loop yourself — the backend will spawn the next iteration.`,
+    `This is /ingest-loop iteration ${input.iteration}. Pick the next pending sub-chunk, merge-pass parent, or missing Code Wiki output repair from wiki/.progress/ingest/.state.json and process exactly one unit per the wiki-ingest skill, then exit. Do not loop yourself — the backend will spawn the next iteration.`,
     "",
     "===== CONVERSATION =====",
     "User: /ingest",
@@ -978,6 +1205,7 @@ export async function runIngestLoop(
             iteration,
             progressRef: progressRef ?? (await buildProgressReference()),
             entityRegistryRef: await buildEntityRegistryReference(),
+            codeWikiStatusRef: await buildCodeWikiStatusReference(),
           });
 
     const banner = `\n\n---\n[loop iter ${iteration}/${maxIter}]\n`;
@@ -1046,6 +1274,7 @@ export async function runIngestLoop(
       stopRequested: await stopFlagExists(sessionPath),
       iteration,
       maxIter,
+      codeLeavesMissingOutputs: snap.codeLeavesMissingOutputs,
     });
     if (decision.halt) {
       haltKind = decision.kind;

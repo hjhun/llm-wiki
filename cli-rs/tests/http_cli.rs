@@ -83,6 +83,39 @@ fn ingest_streams_done_event() {
 }
 
 #[test]
+fn ingest_loop_passes_optional_target() {
+    let project = make_project();
+    let server = MockServer::start();
+    let mock = server.mock(|when, then| {
+        when.method(POST)
+            .path("/api/chat/send")
+            .header("authorization", "Bearer clio_test_token")
+            .json_body_partial(r#"{"message":"/ingest-loop raw/repos/foo","kind":"ingest-loop"}"#);
+        then.status(200)
+            .header("content-type", "application/x-ndjson")
+            .body(ndjson_body(&[
+                serde_json::json!({"type":"start","sessionPath":"sessions/2026/2026-05/loop.md"}),
+                serde_json::json!({
+                    "type":"done",
+                    "sessionPath":"sessions/2026/2026-05/loop.md",
+                    "exitCode":0,
+                    "assistant":{"content":"loop complete"}
+                }),
+            ]));
+    });
+
+    clio()
+        .env("CLIO_HOME", project.path())
+        .env("CLIO_BASE_URL", server.base_url())
+        .args(["ingest-loop", "raw/repos/foo"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("loop complete"));
+
+    mock.assert();
+}
+
+#[test]
 fn query_joins_words_and_streams() {
     let project = make_project();
     let server = MockServer::start();

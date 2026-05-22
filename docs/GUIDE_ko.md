@@ -301,7 +301,7 @@ clio raw remove research/old.md               # raw/.trash/ 로 소프트 삭제
 
 ```bash
 clio ingest raw/research                      # /ingest 1회 패스
-clio ingest-loop                              # raw/ 가 비워질 때까지 /ingest-loop
+clio ingest-loop raw/research                 # 해당 경로가 끝날 때까지 /ingest-loop
 clio query "위키가 검색에 대해 뭐라고 하나요?"
 clio lint --fix                               # wiki-lint 건강 점검
 clio status                                   # 프로젝트, 웹앱 URL, 토큰 표시

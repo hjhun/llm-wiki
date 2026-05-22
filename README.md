@@ -233,7 +233,7 @@ export PATH="$HOME/.clio/bin:$PATH"
 | `clio raw remove <raw-path>...` | Soft-delete a file from `raw/` (moves it to `raw/.trash/`). |
 | `clio raw list [raw-path]` | List files currently under `raw/`. |
 | `clio ingest [path]` | Run one `/ingest` pass through the configured coding agent. |
-| `clio ingest-loop` | Run `/ingest-loop` until the progress state is drained. |
+| `clio ingest-loop [path]` | Run `/ingest-loop [path]` until the progress state is drained. |
 | `clio query <question>` | Ask the wiki a question. |
 | `clio lint [--fix]` | Run the wiki-lint health check. |
 | `clio status` | Show the resolved project, webapp URL, and token status. |

@@ -305,7 +305,7 @@ with `./setup.sh --start`:
 
 ```bash
 clio ingest raw/research                      # one /ingest pass
-clio ingest-loop                              # /ingest-loop until raw/ is drained
+clio ingest-loop raw/research                 # /ingest-loop until that path is drained
 clio query "What does the wiki say about retrieval?"
 clio lint --fix                               # wiki-lint health check
 clio status                                   # show project, webapp URL, token
