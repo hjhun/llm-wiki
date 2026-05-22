@@ -266,8 +266,26 @@ export const ConfigSchema = z.object({
        * anyone who can reach the web server.
        */
       enabled: z.boolean().default(false),
+      /**
+       * When true, public chat may ask the selected coding-agent CLI to use
+       * read-only external lookup tools for questions that need fresh facts
+       * outside the wiki. Disabled by default so /clio remains wiki-only
+       * unless the admin opts in.
+       */
+      allowExternalLookup: z.boolean().default(false),
+      /**
+       * Public chat runs in a bubblewrap process sandbox by default. Admins
+       * may disable it on trusted local/LAN deployments when they need fewer
+       * process boundaries. The sandbox still exposes allowlisted read-only
+       * helper runtimes such as agent-browser when they are installed.
+       */
+      sandboxEnabled: z.boolean().default(true),
     })
-    .default({ enabled: false }),
+    .default({
+      enabled: false,
+      allowExternalLookup: false,
+      sandboxEnabled: true,
+    }),
   /**
    * Auto-ingest trigger. When enabled, a background watcher or scheduler
    * runs the same /ingest-loop driver used by manual ingest. Defaults to

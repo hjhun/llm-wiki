@@ -8,7 +8,7 @@ import { configPaths, loadConfig } from "./config";
 import { PROJECT_ROOT } from "./paths";
 
 export type ToolStatus = {
-  name: "graphify" | "qmd" | "marp";
+  name: "graphify" | "qmd" | "marp" | "bwrap";
   status: "ready" | "missing";
   path: string | null;
   version: string | null;
@@ -117,7 +117,7 @@ async function detectGraphify(): Promise<ToolStatus> {
 }
 
 async function detectOptionalTool(
-  name: "qmd" | "marp",
+  name: "qmd" | "marp" | "bwrap",
   bin: string,
 ): Promise<ToolStatus> {
   const found = await whichBin(bin);
@@ -141,11 +141,12 @@ async function detectOptionalTool(
 
 export async function readSettingsState() {
   const cfg = await loadConfig();
-  const [cli, graphify, qmd, marp] = await Promise.all([
+  const [cli, graphify, qmd, marp, bwrap] = await Promise.all([
     detectAllCli(),
     detectGraphify(),
     detectOptionalTool("qmd", "qmd"),
     detectOptionalTool("marp", "marp"),
+    detectOptionalTool("bwrap", "bwrap"),
   ]);
 
   return {
@@ -166,6 +167,6 @@ export async function readSettingsState() {
       autoLint: cfg.autoLint,
     },
     cli,
-    tools: [graphify, qmd, marp],
+    tools: [graphify, qmd, marp, bwrap],
   };
 }

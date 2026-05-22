@@ -262,6 +262,12 @@ export const TEXT = {
       publicQueryEnabled: "비밀번호 없는 /clio 공유 사용",
       publicQueryDesc:
         "켜면 로그인 없이 /clio query-only 채팅에 접근할 수 있습니다. 대화는 접속한 브라우저에만 저장되고, 공개 API는 파일 변경 명령을 실행하지 않습니다.",
+      publicQueryExternalLookup: "외부 조회 허용",
+      publicQueryExternalLookupDesc:
+        "켜면 공개 채팅이 날씨나 최신 정보처럼 wiki 밖의 근거가 필요한 질문에 읽기 전용 검색/브라우저 도구를 사용할 수 있습니다.",
+      publicQuerySandbox: "bwrap sandbox 사용",
+      publicQuerySandboxDesc:
+        "켜면 public CLI를 격리된 HOME에서 실행합니다. agent-browser가 설치되어 있으면 실행 파일과 브라우저 설치물만 읽기 전용으로 공유합니다.",
       password: "Password",
       admin: "admin",
       currentPassword: "Current password",
@@ -620,6 +626,12 @@ export const TEXT = {
       publicQueryEnabled: "Enable passwordless /clio sharing",
       publicQueryDesc:
         "When enabled, anyone who can reach the server can use the /clio query-only chat. Conversation history stays in the visitor's browser and the public API does not execute file-changing commands.",
+      publicQueryExternalLookup: "Allow external lookup",
+      publicQueryExternalLookupDesc:
+        "When on, public chat may use read-only search/browser tools for questions that need evidence outside the wiki, such as weather or current facts.",
+      publicQuerySandbox: "Use bwrap sandbox",
+      publicQuerySandboxDesc:
+        "When on, public CLI runs with an isolated HOME. If agent-browser is installed, its executable and browser binaries are shared read-only.",
       password: "Password",
       admin: "admin",
       currentPassword: "Current password",

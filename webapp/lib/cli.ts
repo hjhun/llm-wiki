@@ -288,6 +288,17 @@ async function addResolvedFileBindIfNeeded(
   args.push("--ro-bind", realPath, realPath);
 }
 
+async function addRoBindAtIfExists(
+  args: string[],
+  source: string,
+  target: string,
+): Promise<void> {
+  if (await exists(source)) {
+    addDirChain(args, path.dirname(target));
+    args.push("--ro-bind", source, target);
+  }
+}
+
 function addDirChain(args: string[], pathname: string): void {
   const normalized = path.resolve(pathname);
   const parts = normalized.split(path.sep).filter(Boolean);
@@ -299,6 +310,7 @@ function addDirChain(args: string[], pathname: string): void {
 }
 
 function publicSandboxEnv(homeDir: string): NodeJS.ProcessEnv {
+  const uid = typeof process.getuid === "function" ? process.getuid() : 1000;
   const env: NodeJS.ProcessEnv = {
     HOME: homeDir,
     USER: process.env.USER ?? "clio-public",
@@ -308,6 +320,7 @@ function publicSandboxEnv(homeDir: string): NodeJS.ProcessEnv {
     LANG: process.env.LANG ?? "C.UTF-8",
     TERM: process.env.TERM ?? "dumb",
     TMPDIR: "/tmp",
+    XDG_RUNTIME_DIR: `/run/user/${uid}`,
   };
   if (process.env.LC_ALL) env.LC_ALL = process.env.LC_ALL;
 
@@ -352,6 +365,69 @@ async function addCliRuntimeBinds(
   return realCliPath;
 }
 
+async function addCommandRuntimeBinds(
+  args: string[],
+  command: string,
+): Promise<void> {
+  const commandPath = await whichBin(command);
+  if (!commandPath) return;
+
+  addDirChain(args, path.dirname(commandPath));
+  args.push("--ro-bind", commandPath, commandPath);
+
+  const realCommandPath = await fs.realpath(commandPath).catch(() => commandPath);
+  const packageRoot = nodePackageRoot(realCommandPath);
+  if (packageRoot) {
+    addDirChain(args, packageRoot);
+    args.push("--ro-bind", packageRoot, packageRoot);
+    return;
+  }
+
+  if (realCommandPath !== commandPath && (await exists(realCommandPath))) {
+    addDirChain(args, path.dirname(realCommandPath));
+    args.push("--ro-bind", realCommandPath, realCommandPath);
+  }
+}
+
+async function addAgentBrowserRuntimeBinds(
+  args: string[],
+  sandboxHomeSource: string,
+  sandboxHomeTarget: string,
+): Promise<void> {
+  const commandPath = await whichBin("agent-browser");
+  if (!commandPath) return;
+
+  await addCommandRuntimeBinds(args, "agent-browser");
+
+  const stateDirSource = path.join(sandboxHomeSource, ".agent-browser");
+  await fs.mkdir(stateDirSource, { recursive: true, mode: 0o700 });
+  await fs.chmod(stateDirSource, 0o700).catch(() => undefined);
+
+  const hostHome = process.env.HOME;
+  if (!hostHome) return;
+
+  const hostAgentBrowserDir = path.join(hostHome, ".agent-browser");
+  const sandboxAgentBrowserDir = path.join(
+    sandboxHomeTarget,
+    ".agent-browser",
+  );
+
+  for (const name of ["browsers", "skills", "skill-data"]) {
+    await addRoBindAtIfExists(
+      args,
+      path.join(hostAgentBrowserDir, name),
+      path.join(sandboxAgentBrowserDir, name),
+    );
+  }
+
+  const puppeteerCache = path.join(hostHome, ".cache", "puppeteer");
+  await addRoBindAtIfExists(
+    args,
+    puppeteerCache,
+    path.join(sandboxHomeTarget, ".cache", "puppeteer"),
+  );
+}
+
 async function buildBubblewrapSpawnPlan(input: {
   cli: CliName;
   cliPath: string;
@@ -388,12 +464,19 @@ async function buildBubblewrapSpawnPlan(input: {
     "/tmp",
     "--tmpfs",
     "/run",
+  ];
+  const uid = typeof process.getuid === "function" ? process.getuid() : 1000;
+  args.push(
+    "--dir",
+    "/run/user",
+    "--dir",
+    `/run/user/${uid}`,
     "--dir",
     "/home",
     "--bind",
     sandboxHomeSource,
     sandboxHomeTarget,
-  ];
+  );
 
   for (const systemPath of [
     "/usr",
@@ -408,6 +491,7 @@ async function buildBubblewrapSpawnPlan(input: {
   await addResolvedFileBindIfNeeded(args, "/etc/resolv.conf");
 
   const sandboxCliPath = await addCliRuntimeBinds(args, input.cli, input.cliPath);
+  await addAgentBrowserRuntimeBinds(args, sandboxHomeSource, sandboxHomeTarget);
 
   args.push(
     "--bind",

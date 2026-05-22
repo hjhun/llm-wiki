@@ -8,7 +8,7 @@ export type CliInfo = {
 };
 
 export type ToolStatus = {
-  name: "graphify" | "qmd" | "marp";
+  name: "graphify" | "qmd" | "marp" | "bwrap";
   status: "ready" | "missing";
   path: string | null;
   version: string | null;
@@ -58,6 +58,8 @@ export type SettingsConfig = {
   };
   publicQuery: {
     enabled: boolean;
+    allowExternalLookup: boolean;
+    sandboxEnabled: boolean;
   };
   autoIngest: {
     enabled: boolean;

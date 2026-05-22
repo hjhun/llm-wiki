@@ -682,26 +682,69 @@ export default function Settings() {
                   </Panel>
 
                   <Panel title={t.settings.publicQuery} eyebrow="share">
-                    <label className="flex items-center justify-between gap-4 rounded border border-line bg-bg px-3 py-2">
-                      <span>
-                        <span className="block text-sm font-medium text-ink">
-                          {t.settings.publicQueryEnabled}
+                    <div className="space-y-3">
+                      <label className="flex items-center justify-between gap-4 rounded border border-line bg-bg px-3 py-2">
+                        <span>
+                          <span className="block text-sm font-medium text-ink">
+                            {t.settings.publicQueryEnabled}
+                          </span>
+                          <span className="block text-xs text-ink-faint">
+                            {t.settings.publicQueryDesc}
+                          </span>
                         </span>
-                        <span className="block text-xs text-ink-faint">
-                          {t.settings.publicQueryDesc}
+                        <input
+                          type="checkbox"
+                          checked={draft.publicQuery.enabled}
+                          onChange={(e) =>
+                            updateDraft((next) => {
+                              next.publicQuery.enabled = e.target.checked;
+                            })
+                          }
+                          className="h-4 w-4 accent-accent"
+                        />
+                      </label>
+                      <label className="flex items-center justify-between gap-4 rounded border border-line bg-bg px-3 py-2">
+                        <span>
+                          <span className="block text-sm font-medium text-ink">
+                            {t.settings.publicQueryExternalLookup}
+                          </span>
+                          <span className="block text-xs text-ink-faint">
+                            {t.settings.publicQueryExternalLookupDesc}
+                          </span>
                         </span>
-                      </span>
-                      <input
-                        type="checkbox"
-                        checked={draft.publicQuery.enabled}
-                        onChange={(e) =>
-                          updateDraft((next) => {
-                            next.publicQuery.enabled = e.target.checked;
-                          })
-                        }
-                        className="h-4 w-4 accent-accent"
-                      />
-                    </label>
+                        <input
+                          type="checkbox"
+                          checked={draft.publicQuery.allowExternalLookup}
+                          onChange={(e) =>
+                            updateDraft((next) => {
+                              next.publicQuery.allowExternalLookup =
+                                e.target.checked;
+                            })
+                          }
+                          className="h-4 w-4 accent-accent"
+                        />
+                      </label>
+                      <label className="flex items-center justify-between gap-4 rounded border border-line bg-bg px-3 py-2">
+                        <span>
+                          <span className="block text-sm font-medium text-ink">
+                            {t.settings.publicQuerySandbox}
+                          </span>
+                          <span className="block text-xs text-ink-faint">
+                            {t.settings.publicQuerySandboxDesc}
+                          </span>
+                        </span>
+                        <input
+                          type="checkbox"
+                          checked={draft.publicQuery.sandboxEnabled}
+                          onChange={(e) =>
+                            updateDraft((next) => {
+                              next.publicQuery.sandboxEnabled = e.target.checked;
+                            })
+                          }
+                          className="h-4 w-4 accent-accent"
+                        />
+                      </label>
+                    </div>
                     <p className="mt-2 break-all font-mono text-[11px] text-ink-faint">
                       /clio
                     </p>

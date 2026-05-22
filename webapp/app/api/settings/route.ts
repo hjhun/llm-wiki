@@ -79,6 +79,8 @@ const Body = z.object({
   publicQuery: z
     .object({
       enabled: z.boolean(),
+      allowExternalLookup: z.boolean(),
+      sandboxEnabled: z.boolean(),
     })
     .optional(),
   autoIngest: z
