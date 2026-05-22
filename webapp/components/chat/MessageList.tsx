@@ -8,6 +8,7 @@ import {
   Terminal,
   UserRound,
 } from "lucide-react";
+import AgentMascot from "../agent-panel/AgentMascot";
 import MarkdownContent from "./MarkdownContent";
 import { useLanguage } from "../i18n";
 import { EmptyState } from "../ui";
@@ -53,7 +54,7 @@ export default function MessageList({
     (progress.summary != null || progress.log.length > 0);
 
   return (
-    <div className="flex flex-col gap-3 px-6 py-5">
+    <div className="flex min-h-full flex-col gap-3 px-6 py-5">
       {messages.length === 0 && !pending ? (
         <EmptyState
           title={t.chat.guideTitle}
@@ -154,6 +155,9 @@ export default function MessageList({
           </div>
         </article>
       ) : null}
+      <div className="mt-auto flex justify-start pt-2">
+        <AgentMascot running={pending} />
+      </div>
       <div ref={endRef} />
     </div>
   );

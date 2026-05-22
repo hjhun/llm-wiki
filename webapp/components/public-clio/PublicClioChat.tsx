@@ -8,8 +8,6 @@ import {
   LoaderCircle,
   LockKeyhole,
   MessageSquarePlus,
-  PanelRightClose,
-  PanelRightOpen,
   Send,
   Trash2,
   UserRound,
@@ -135,7 +133,6 @@ export default function PublicClioChat() {
   const [value, setValue] = useState("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [sessionInfoOpen, setSessionInfoOpen] = useState(false);
   const taRef = useRef<HTMLTextAreaElement | null>(null);
   const endRef = useRef<HTMLDivElement | null>(null);
   const activeConversation =
@@ -413,101 +410,43 @@ export default function PublicClioChat() {
           </div>
         ) : null}
 
-        <div
-          className={cx(
-            "grid min-h-0 flex-1 grid-cols-1 transition-[grid-template-columns]",
-            sessionInfoOpen
-              ? "lg:grid-cols-[minmax(0,1fr)_280px]"
-              : "lg:grid-cols-[minmax(0,1fr)_40px]",
-          )}
-        >
-          <div className="min-h-0 overflow-auto">
-            <div className="mx-auto flex min-h-full max-w-4xl flex-col gap-3 px-4 py-5 sm:px-6">
-              {messages.length === 0 ? (
-                <div className="flex min-h-40 flex-col justify-end border-b border-line/70 pb-6">
-                  <div className="max-w-2xl text-2xl font-semibold leading-tight text-ink sm:text-3xl">
-                    wiki에 대해 물어보세요.
-                  </div>
+        <div className="min-h-0 flex-1 overflow-auto">
+          <div className="mx-auto flex min-h-full max-w-4xl flex-col gap-3 px-4 py-5 sm:px-6">
+            {messages.length === 0 ? (
+              <div className="flex min-h-40 flex-col justify-end border-b border-line/70 pb-6">
+                <div className="max-w-2xl text-2xl font-semibold leading-tight text-ink sm:text-3xl">
+                  wiki에 대해 물어보세요.
                 </div>
-              ) : null}
+              </div>
+            ) : null}
 
-              {messages.map((message) => (
-                <MessageBubble key={message.id} message={message} />
-              ))}
+            {messages.map((message) => (
+              <MessageBubble key={message.id} message={message} />
+            ))}
 
-              {pending ? (
-                <article className="rounded-md border border-line bg-bg-subtle px-4 py-3 text-sm">
-                  <header className="mb-2 flex items-center gap-2 text-[11px] text-ink-faint">
-                    <LoaderCircle
-                      aria-hidden
-                      className="h-3.5 w-3.5 animate-spin"
-                    />
-                    <span className="font-mono uppercase tracking-widest">
-                      query
-                    </span>
-                  </header>
-                  <div className="flex items-center gap-1.5">
-                    <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-accent" />
-                    <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-accent [animation-delay:120ms]" />
-                    <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-accent [animation-delay:240ms]" />
-                  </div>
-                </article>
-              ) : null}
-              <div ref={endRef} />
+            {pending ? (
+              <article className="rounded-md border border-line bg-bg-subtle px-4 py-3 text-sm">
+                <header className="mb-2 flex items-center gap-2 text-[11px] text-ink-faint">
+                  <LoaderCircle
+                    aria-hidden
+                    className="h-3.5 w-3.5 animate-spin"
+                  />
+                  <span className="font-mono uppercase tracking-widest">
+                    query
+                  </span>
+                </header>
+                <div className="flex items-center gap-1.5">
+                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-accent" />
+                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-accent [animation-delay:120ms]" />
+                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-accent [animation-delay:240ms]" />
+                </div>
+              </article>
+            ) : null}
+            <div className="mt-auto flex justify-start pt-2">
+              <AgentMascot running={pending} />
             </div>
+            <div ref={endRef} />
           </div>
-
-          <aside
-            className={cx(
-              "hidden overflow-hidden border-l border-line bg-bg-subtle/72 lg:flex",
-              sessionInfoOpen
-                ? "flex-col justify-between p-5"
-                : "items-stretch p-0",
-            )}
-          >
-            {sessionInfoOpen ? (
-              <>
-                <div>
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="font-mono text-[10px] uppercase tracking-widest text-ink-faint">
-                        session
-                      </div>
-                      <div className="mt-2 text-sm font-medium text-ink">
-                        Local browser history
-                      </div>
-                    </div>
-                    <IconButton
-                      icon={PanelRightClose}
-                      label="Hide session info"
-                      onClick={() => setSessionInfoOpen(false)}
-                      variant="ghost"
-                      className="shrink-0"
-                    />
-                  </div>
-                  <div className="mt-1 text-xs leading-relaxed text-ink-faint">
-                    {conversations.length} chats · {messages.length} messages
-                  </div>
-                </div>
-                <div className="flex justify-center">
-                  <AgentMascot running={pending} />
-                </div>
-              </>
-            ) : (
-              <button
-                type="button"
-                onClick={() => setSessionInfoOpen(true)}
-                className="flex h-full w-full flex-col items-center justify-center gap-3 text-ink-faint transition hover:bg-bg-panel/64 hover:text-ink"
-                aria-label="Show session info"
-                title="Show session info"
-              >
-                <PanelRightOpen aria-hidden className="h-4 w-4" />
-                <span className="font-mono text-[10px] font-semibold uppercase tracking-widest [writing-mode:vertical-rl]">
-                  session
-                </span>
-              </button>
-            )}
-          </aside>
         </div>
 
         <div className="border-t border-line bg-bg-subtle px-4 py-3">

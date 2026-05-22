@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { usePathname } from "next/navigation";
 import AgentMascot from "./AgentMascot";
 import { useRunningJobs } from "./useRunningJobs";
 import { useLanguage } from "../i18n";
@@ -17,6 +18,11 @@ export default function AgentEdgePanel() {
   const ap = t.agentPanel;
   const [open, setOpen] = useState(false);
   const { running, jobs } = useRunningJobs();
+  const pathname = usePathname();
+
+  if (pathname === "/chat" || pathname?.startsWith("/chat/")) {
+    return null;
+  }
 
   const caption = running ? ap.running : ap.idle;
   let hint: string = ap.idleHint;
