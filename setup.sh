@@ -18,6 +18,7 @@ PORT="9091"
 HOST="0.0.0.0"
 DEV_MODE=0
 SKIP_GRAPHIFY=0
+SKIP_BUBBLEWRAP=0
 SKIP_NPM_INSTALL=0
 SKIP_BUILD=0
 SKIP_CLI=0
@@ -57,6 +58,7 @@ Options:
   --shutdown                    Stop the running web server and exit
   --no-restart                  With --start, fail if the target port is already in use
   --skip-graphify               Do not install graphify; use existing global graphify if available
+  --skip-bubblewrap             Do not install bubblewrap/bwrap for public CLI sandboxing
   --skip-npm-install            Do not run npm install in webapp/ (default skips when dependencies are present)
   --skip-build                  Do not run npm run build
   --skip-cli                    Do not build the Rust `clio` CLI (cli-rs/)
@@ -108,6 +110,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --skip-graphify)
       SKIP_GRAPHIFY=1
+      shift
+      ;;
+    --skip-bubblewrap)
+      SKIP_BUBBLEWRAP=1
       shift
       ;;
     --skip-npm-install)
@@ -317,6 +323,66 @@ install_agent_browser_best_effort() {
   fi
 }
 
+run_privileged_best_effort() {
+  if [[ "$(id -u)" -eq 0 ]]; then
+    "$@"
+    return
+  fi
+
+  if command -v sudo >/dev/null 2>&1 && sudo -n true >/dev/null 2>&1; then
+    sudo "$@"
+    return
+  fi
+
+  return 1
+}
+
+install_bubblewrap_best_effort() {
+  if [[ "${SKIP_BUBBLEWRAP}" -eq 1 ]]; then
+    log "skipping bubblewrap install (--skip-bubblewrap)"
+    return
+  fi
+
+  if command -v bwrap >/dev/null 2>&1; then
+    log "bubblewrap already available: $(command -v bwrap)"
+    return
+  fi
+
+  if [[ "$(uname -s 2>/dev/null || printf unknown)" != Linux* ]]; then
+    warn "bubblewrap is Linux-only; public CLI sandboxing will fall back to non-CLI read-only responses on this host"
+    return
+  fi
+
+  log "best-effort install: bubblewrap for public CLI sandboxing"
+  if command -v apt-get >/dev/null 2>&1; then
+    if run_privileged_best_effort apt-get update && run_privileged_best_effort apt-get install -y bubblewrap; then
+      return
+    fi
+  elif command -v dnf >/dev/null 2>&1; then
+    if run_privileged_best_effort dnf install -y bubblewrap; then
+      return
+    fi
+  elif command -v yum >/dev/null 2>&1; then
+    if run_privileged_best_effort yum install -y bubblewrap; then
+      return
+    fi
+  elif command -v pacman >/dev/null 2>&1; then
+    if run_privileged_best_effort pacman -Sy --noconfirm bubblewrap; then
+      return
+    fi
+  elif command -v zypper >/dev/null 2>&1; then
+    if run_privileged_best_effort zypper --non-interactive install bubblewrap; then
+      return
+    fi
+  elif command -v apk >/dev/null 2>&1; then
+    if run_privileged_best_effort apk add bubblewrap; then
+      return
+    fi
+  fi
+
+  warn "could not install bubblewrap automatically. Install package 'bubblewrap' manually so public /clio can run the selected CLI in a sandbox."
+}
+
 clone_if_missing() {
   local dest="$1"
   local repo="$2"
@@ -503,7 +569,9 @@ ensure_initial_files() {
     "${SESSIONS_DIR}" \
     "${RUN_DIR}" \
     "${TOOLS_DIR}" \
-    "${CONFIG_DIR}"
+    "${CONFIG_DIR}" \
+    "${CONFIG_DIR}/public-cli-home"
+  chmod 700 "${CONFIG_DIR}/public-cli-home" 2>/dev/null || true
 
   local today
   today="$(date +%F)"
@@ -1057,6 +1125,7 @@ main() {
   fi
 
   ensure_initial_files
+  install_bubblewrap_best_effort
   install_cli_best_effort "${INSTALL_CLI}"
   detect_cli_json
 

@@ -4,7 +4,7 @@ import { spawn } from "node:child_process";
 import { existsSync, promises as fs } from "node:fs";
 import path from "node:path";
 import { loadConfig } from "./config";
-import { PROJECT_ROOT } from "./paths";
+import { CONFIG_ROOT, PROJECT_ROOT } from "./paths";
 
 export type CliName = "codex" | "claude" | "gemini" | "cline";
 export const CLI_NAMES: readonly CliName[] = [
@@ -32,6 +32,7 @@ type DetectCacheEntry = {
 };
 
 const DETECT_CACHE_MS = 30_000;
+const DEFAULT_PUBLIC_CLI_HOME = path.join(CONFIG_ROOT, "public-cli-home");
 const detectCache = new Map<CliName, DetectCacheEntry>();
 
 /** PATH 검색. 빌트인 which 대용. */
@@ -150,12 +151,16 @@ function buildArgs(
   prompt: string,
   safeMode: boolean,
   projectRoot: string,
+  skipGitRepoCheck: boolean,
 ): string[] {
   switch (cli) {
     case "codex":
-      return safeMode
-        ? ["exec", prompt]
-        : ["exec", "--dangerously-bypass-approvals-and-sandbox", prompt];
+      return [
+        "exec",
+        ...(skipGitRepoCheck ? ["--skip-git-repo-check"] : []),
+        ...(safeMode ? [] : ["--dangerously-bypass-approvals-and-sandbox"]),
+        prompt,
+      ];
     case "claude":
       return safeMode
         ? ["-p", prompt]
@@ -195,6 +200,21 @@ export type RunResult = {
   durationMs: number;
   stdoutTruncated: StreamTruncation | null;
   stderrTruncated: StreamTruncation | null;
+};
+
+type BubblewrapSandbox = {
+  kind: "bubblewrap";
+  /** Dedicated HOME exposed to the public CLI process. */
+  homeDir?: string;
+};
+
+type CliSandbox = BubblewrapSandbox;
+
+type SpawnPlan = {
+  command: string;
+  args: string[];
+  cwd: string;
+  env: NodeJS.ProcessEnv;
 };
 
 /**
@@ -245,6 +265,162 @@ class TailBuffer {
   }
 }
 
+async function exists(pathname: string): Promise<boolean> {
+  try {
+    await fs.stat(pathname);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function addRoBindIfExists(args: string[], pathname: string): Promise<void> {
+  if (await exists(pathname)) args.push("--ro-bind", pathname, pathname);
+}
+
+function addDirChain(args: string[], pathname: string): void {
+  const normalized = path.resolve(pathname);
+  const parts = normalized.split(path.sep).filter(Boolean);
+  let current = path.isAbsolute(normalized) ? path.sep : "";
+  for (const part of parts) {
+    current = current === path.sep ? path.join(current, part) : path.join(current, part);
+    args.push("--dir", current);
+  }
+}
+
+function publicSandboxEnv(homeDir: string): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = {
+    HOME: homeDir,
+    USER: process.env.USER ?? "clio-public",
+    LOGNAME: process.env.LOGNAME ?? process.env.USER ?? "clio-public",
+    NODE_ENV: process.env.NODE_ENV ?? "production",
+    PATH: process.env.PATH ?? "/usr/local/bin:/usr/bin:/bin",
+    LANG: process.env.LANG ?? "C.UTF-8",
+    TERM: process.env.TERM ?? "dumb",
+    TMPDIR: "/tmp",
+  };
+  if (process.env.LC_ALL) env.LC_ALL = process.env.LC_ALL;
+
+  for (const key of [
+    "SSL_CERT_FILE",
+    "SSL_CERT_DIR",
+    "NODE_EXTRA_CA_CERTS",
+  ] as const) {
+    if (process.env[key]) env[key] = process.env[key];
+  }
+
+  return env;
+}
+
+function nodePackageRoot(realCliPath: string): string | null {
+  const parts = realCliPath.split(path.sep);
+  const index = parts.lastIndexOf("node_modules");
+  if (index < 0 || index + 1 >= parts.length) return null;
+
+  const packageEnd =
+    parts[index + 1]?.startsWith("@") && index + 2 < parts.length
+      ? index + 3
+      : index + 2;
+  return parts.slice(0, packageEnd).join(path.sep) || path.sep;
+}
+
+async function addCliRuntimeBinds(
+  args: string[],
+  _cli: CliName,
+  cliPath: string,
+): Promise<string> {
+  const realCliPath = await fs.realpath(cliPath).catch(() => cliPath);
+  const packageRoot = nodePackageRoot(realCliPath);
+  if (packageRoot) {
+    addDirChain(args, packageRoot);
+    args.push("--ro-bind", packageRoot, packageRoot);
+    return realCliPath;
+  }
+
+  addDirChain(args, path.dirname(realCliPath));
+  args.push("--ro-bind", realCliPath, realCliPath);
+  return realCliPath;
+}
+
+async function buildBubblewrapSpawnPlan(input: {
+  cli: CliName;
+  cliPath: string;
+  cliArgs: string[];
+  cwd: string;
+  sandbox: BubblewrapSandbox;
+}): Promise<SpawnPlan> {
+  const bwrap = await whichBin("bwrap");
+  if (!bwrap) {
+    throw new Error("bubblewrap (bwrap) is required for public CLI sandboxing");
+  }
+
+  const sandboxHomeSource = path.resolve(
+    input.sandbox.homeDir ?? DEFAULT_PUBLIC_CLI_HOME,
+  );
+  await fs.mkdir(sandboxHomeSource, { recursive: true, mode: 0o700 });
+  await fs.chmod(sandboxHomeSource, 0o700).catch(() => undefined);
+
+  const hostHome = process.env.HOME || "/home/clio-public";
+  const sandboxHomeTarget = hostHome.startsWith("/")
+    ? hostHome
+    : "/home/clio-public";
+  const cwd = path.resolve(input.cwd);
+  const args = [
+    "--die-with-parent",
+    "--unshare-pid",
+    "--unshare-ipc",
+    "--unshare-uts",
+    "--proc",
+    "/proc",
+    "--dev",
+    "/dev",
+    "--tmpfs",
+    "/tmp",
+    "--tmpfs",
+    "/run",
+    "--dir",
+    "/home",
+    "--bind",
+    sandboxHomeSource,
+    sandboxHomeTarget,
+  ];
+
+  for (const systemPath of [
+    "/usr",
+    "/bin",
+    "/sbin",
+    "/lib",
+    "/lib64",
+    "/etc",
+  ]) {
+    await addRoBindIfExists(args, systemPath);
+  }
+
+  const sandboxCliPath = await addCliRuntimeBinds(args, input.cli, input.cliPath);
+
+  args.push(
+    "--bind",
+    cwd,
+    cwd,
+    "--chdir",
+    cwd,
+    "--clearenv",
+  );
+
+  const env = publicSandboxEnv(sandboxHomeTarget);
+  for (const [key, value] of Object.entries(env)) {
+    if (value != null) args.push("--setenv", key, value);
+  }
+
+  args.push(sandboxCliPath, ...input.cliArgs);
+  return {
+    command: bwrap,
+    args,
+    cwd: "/",
+    env: publicSandboxEnv(sandboxHomeTarget),
+  };
+}
+
 export async function runCli(
   cli: CliName,
   prompt: string,
@@ -270,6 +446,10 @@ export async function runCli(
     cwd?: string;
     /** Directory exposed to CLIs that support explicit project scopes. */
     projectRoot?: string;
+    /** Allow Codex to run from a non-git, intentionally isolated cwd. */
+    skipGitRepoCheck?: boolean;
+    /** Optional process sandbox. Public endpoints should use bubblewrap. */
+    sandbox?: CliSandbox;
   } = {},
 ): Promise<RunResult> {
   const info = await detectCli(cli);
@@ -296,13 +476,33 @@ export async function runCli(
 
   const cwd = opts.cwd ?? PROJECT_ROOT;
   const projectRoot = opts.projectRoot ?? cwd;
-  const args = buildArgs(cli, prompt, opts.safeMode ?? false, projectRoot);
+  const args = buildArgs(
+    cli,
+    prompt,
+    opts.safeMode ?? false,
+    projectRoot,
+    opts.skipGitRepoCheck ?? false,
+  );
+  const spawnPlan = opts.sandbox
+    ? await buildBubblewrapSpawnPlan({
+        cli,
+        cliPath: info.path,
+        cliArgs: args,
+        cwd,
+        sandbox: opts.sandbox,
+      })
+    : {
+        command: info.path,
+        args,
+        cwd,
+        env: { ...process.env },
+      };
   const started = Date.now();
 
   return new Promise<RunResult>((resolve, reject) => {
-    const child = spawn(info.path!, args, {
-      cwd,
-      env: { ...process.env },
+    const child = spawn(spawnPlan.command, spawnPlan.args, {
+      cwd: spawnPlan.cwd,
+      env: spawnPlan.env,
       stdio: ["ignore", "pipe", "pipe"],
     });
     const stdoutBuf = new TailBuffer(stdoutCap);

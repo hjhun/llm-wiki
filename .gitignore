@@ -16,6 +16,7 @@ build/
 !.env.example
 config/local.json
 config/cli-detected.json
+config/public-cli-home/
 
 # ── Rust clio CLI ──────────────────────────────────────────────
 # Build artifacts and the binary setup.sh installs into bin/. Cargo.lock is
