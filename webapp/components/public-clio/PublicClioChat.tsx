@@ -351,6 +351,7 @@ export default function PublicClioChat() {
           onToggle={toggleConversation}
           onToggleAll={toggleAll}
           onDelete={deleteSelected}
+          running={pending}
         />
       </aside>
 
@@ -442,9 +443,6 @@ export default function PublicClioChat() {
                 </div>
               </article>
             ) : null}
-            <div className="mt-auto flex justify-start pt-2">
-              <AgentMascot running={pending} />
-            </div>
             <div ref={endRef} />
           </div>
         </div>
@@ -495,6 +493,7 @@ function PublicConversationList({
   onToggle,
   onToggleAll,
   onDelete,
+  running,
 }: {
   conversations: PublicConversation[];
   activeId: string | null;
@@ -507,6 +506,7 @@ function PublicConversationList({
   onToggle: (id: string) => void;
   onToggleAll: () => void;
   onDelete: () => void;
+  running: boolean;
 }) {
   return (
     <div className="flex h-full flex-col overflow-hidden">
@@ -520,6 +520,9 @@ function PublicConversationList({
         >
           New Chat
         </Button>
+        <div className="mt-2">
+          <AgentMascot running={running} />
+        </div>
         <div className="mt-2 grid grid-cols-[1fr_auto] gap-2">
           <Button
             onClick={onToggleAll}

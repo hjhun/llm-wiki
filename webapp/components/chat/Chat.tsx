@@ -7,7 +7,6 @@ import AutoLintHint from "./AutoLintHint";
 import Composer from "./Composer";
 import MessageList from "./MessageList";
 import SessionList from "./SessionList";
-import AgentMascot from "../agent-panel/AgentMascot";
 import { useLanguage } from "../i18n";
 import { IconButton, PageHeader, StatusBadge } from "../ui";
 import type {
@@ -657,10 +656,8 @@ export default function Chat() {
             onNew={newSessionDraft}
             onDelete={deleteSessions}
             deleting={deleting}
+            running={pending}
           />
-        </div>
-        <div className="border-t border-line p-3">
-          <AgentMascot running={pending} />
         </div>
       </aside>
 

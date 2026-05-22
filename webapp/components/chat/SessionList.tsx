@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { CheckSquare, MessageSquarePlus, Trash2 } from "lucide-react";
+import AgentMascot from "../agent-panel/AgentMascot";
 import { useLanguage } from "../i18n";
 import { Button, EmptyState, cx } from "../ui";
 import type { SessionRef } from "./types";
@@ -13,6 +14,7 @@ export default function SessionList({
   onNew,
   onDelete,
   deleting,
+  running,
 }: {
   sessions: SessionRef[];
   activePath: string | null;
@@ -20,6 +22,7 @@ export default function SessionList({
   onNew: () => void;
   onDelete: (paths: string[]) => void;
   deleting: boolean;
+  running: boolean;
 }) {
   const { t } = useLanguage();
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
@@ -67,6 +70,9 @@ export default function SessionList({
         >
           {t.chat.newChat}
         </Button>
+        <div className="mt-2">
+          <AgentMascot running={running} />
+        </div>
         <div className="mt-2 grid grid-cols-[1fr_auto] gap-2">
           <Button
             onClick={toggleAll}
