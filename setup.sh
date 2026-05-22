@@ -1059,15 +1059,18 @@ launch_next_background() {
 
 find_port_pids() {
   if command -v lsof >/dev/null 2>&1; then
-    lsof -ti "TCP:${PORT}" -sTCP:LISTEN 2>/dev/null | tr -cs '0-9' '\n' | sed '/^$/d' || true
+    lsof -ti "TCP:${PORT}" -sTCP:LISTEN 2>/dev/null | sed '/^$/d' || true
+    printf '\n'
   fi
   if command -v fuser >/dev/null 2>&1; then
-    fuser "${PORT}/tcp" 2>/dev/null | tr -cs '0-9' '\n' | sed '/^$/d' || true
+    fuser -n tcp "${PORT}" 2>/dev/null | tr -cs '0-9' '\n' | sed '/^$/d' || true
+    printf '\n'
   fi
   if command -v ss >/dev/null 2>&1; then
     ss -ltnp "sport = :${PORT}" 2>/dev/null \
       | sed -n 's/.*pid=\([0-9][0-9]*\).*/\1/p' \
       || true
+    printf '\n'
   fi
   ps -eo pid=,args= 2>/dev/null \
     | awk -v port="${PORT}" -v webapp="${WEBAPP_DIR}" '
@@ -1076,6 +1079,7 @@ find_port_pids() {
       $0 ~ /npm (run )?(dev|start)/ && $0 ~ webapp { print $1 }
     ' \
     || true
+  printf '\n'
 }
 
 find_pid_file_pids() {
@@ -1131,7 +1135,7 @@ running_server_pids() {
   {
     find_pid_file_pids
     find_port_pids
-  } | sort -n | uniq
+  } | tr -cs '0-9' '\n' | sed '/^$/d' | sort -n | uniq
 }
 
 shutdown_server() {
