@@ -185,11 +185,13 @@ function formatCancelledReply(input: {
 function querySingleAgentPolicy(): string {
   return [
     "This request is a single-agent /query operation.",
-    "Use wiki-query: infer the user's intent, plan the investigation, select candidate pages from wiki/index.md, use available read-only retrieval/context tools such as wiki-search-qmd or wiki-graphify when useful, read the evidence, and answer with citations.",
+    "Follow the LLM Wiki query pattern: answer from the persistent compiled wiki, not by treating raw documents or search snippets as one-off RAG chunks.",
+    "Use wiki-query: infer the user's intent, plan the investigation, read wiki/index.md first, select candidate pages, use available read-only retrieval/context tools such as wiki-search-qmd or wiki-graphify when useful, and read the evidence before answering.",
+    "Do not merely return search hits, excerpts, candidate pages, or tool output. Synthesize the evidence into an answer tailored to the user's actual question, with a clear conclusion first when possible.",
     "If the question is a code/API/troubleshooting question, prioritize wiki/code pages and targeted read-only raw/ searches only when the Code Wiki is insufficient.",
     "If the question requires current external facts or a tool outside wiki-query, first check what tools are available in this CLI context and use only read-only tools. Clearly separate external facts from wiki-grounded facts and cite the actual sources used.",
-    "Do not modify raw/. Only create or edit wiki/answers, wiki/index.md, or wiki/log.md when the user explicitly requested --save; otherwise answer in chat only.",
-    "Prefer Korean Markdown unless the user explicitly requested another language or format. Keep any plan summary concise and user-facing; do not expose private chain-of-thought.",
+    "Do not modify raw/. Only create or edit wiki/answers, wiki/index.md, or wiki/log.md when the user explicitly requested --save or clearly consents to saving the answer. If the answer contains a reusable synthesis, end with a concise save suggestion instead of writing files without consent.",
+    "Because the user explicitly invoked /query, Korean Markdown is a good default for structured answers. For simple questions, answer briefly without unnecessary sections. Keep any plan summary concise and user-facing; do not expose private chain-of-thought.",
   ].join("\n");
 }
 
