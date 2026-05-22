@@ -9,7 +9,7 @@ import {
   type ReactElement,
   type ReactNode,
 } from "react";
-import { Check, Copy, ExternalLink } from "lucide-react";
+import { Check, Code2, Copy, ExternalLink, Workflow } from "lucide-react";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { writeClipboard } from "./clipboard";
@@ -140,6 +140,8 @@ function CopyableCodeBlock({ block }: { block: CodeBlock }) {
 function MermaidDiagram({ source }: { source: string }) {
   const [svg, setSvg] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [mode, setMode] = useState<"diagram" | "source">("diagram");
+  const [copied, setCopied] = useState(false);
   const idRef = useRef<string | null>(null);
   const renderCountRef = useRef(0);
 
@@ -188,31 +190,117 @@ function MermaidDiagram({ source }: { source: string }) {
     };
   }, [source]);
 
+  useEffect(() => {
+    if (!copied) return;
+    const timer = window.setTimeout(() => setCopied(false), 1400);
+    return () => window.clearTimeout(timer);
+  }, [copied]);
+
+  async function copySource() {
+    await writeClipboard(source);
+    setCopied(true);
+  }
+
+  const toolbar = (
+    <div className="flex min-h-9 flex-wrap items-center justify-between gap-2 border-b border-line bg-bg-panel/74 px-3 py-1.5">
+      <div className="flex min-w-0 items-center gap-2">
+        <Workflow aria-hidden className="h-3.5 w-3.5 shrink-0 text-accent" />
+        <span className="min-w-0 truncate font-mono text-[10px] uppercase tracking-widest text-ink-faint">
+          mermaid
+        </span>
+      </div>
+      <div className="flex shrink-0 items-center gap-1.5">
+        <div className="flex overflow-hidden rounded border border-line bg-bg-subtle">
+          <button
+            type="button"
+            onClick={() => setMode("diagram")}
+            aria-pressed={mode === "diagram"}
+            className={[
+              "inline-flex h-7 items-center gap-1.5 border-r border-line px-2 font-mono text-[10px] font-medium uppercase tracking-wide transition",
+              mode === "diagram"
+                ? "bg-accent/12 text-ink"
+                : "text-ink-dim hover:bg-bg-panel hover:text-ink",
+            ].join(" ")}
+          >
+            <Workflow aria-hidden className="h-3.5 w-3.5" />
+            Diagram
+          </button>
+          <button
+            type="button"
+            onClick={() => setMode("source")}
+            aria-pressed={mode === "source"}
+            className={[
+              "inline-flex h-7 items-center gap-1.5 px-2 font-mono text-[10px] font-medium uppercase tracking-wide transition",
+              mode === "source"
+                ? "bg-accent/12 text-ink"
+                : "text-ink-dim hover:bg-bg-panel hover:text-ink",
+            ].join(" ")}
+          >
+            <Code2 aria-hidden className="h-3.5 w-3.5" />
+            Source
+          </button>
+        </div>
+        <button
+          type="button"
+          onClick={() => void copySource()}
+          className="inline-flex h-7 shrink-0 items-center gap-1.5 rounded border border-line bg-bg-subtle px-2 font-mono text-[10px] font-medium uppercase tracking-wide text-ink-dim transition hover:border-accent/60 hover:text-ink"
+        >
+          {copied ? (
+            <Check aria-hidden className="h-3.5 w-3.5" />
+          ) : (
+            <Copy aria-hidden className="h-3.5 w-3.5" />
+          )}
+          {copied ? "Copied" : "Copy"}
+        </button>
+      </div>
+    </div>
+  );
+
+  const sourceView = (
+    <pre className="m-0 max-h-[32rem] overflow-auto bg-transparent p-3 text-[12px] leading-relaxed">
+      <code className="language-mermaid">{source}</code>
+    </pre>
+  );
+
   if (error) {
     return (
-      <div className="not-prose my-4 overflow-hidden rounded border border-red-900/60 bg-red-950/20">
+      <div className="not-prose my-4 overflow-hidden rounded-md border border-red-900/60 bg-red-950/20 shadow-sm">
+        {toolbar}
         <div className="border-b border-red-900/60 px-3 py-2 text-xs text-red-300">
           Mermaid render failed: {error}
         </div>
-        <pre className="overflow-auto p-3 text-[11px] leading-relaxed text-ink-dim">
-          {source}
-        </pre>
+        {sourceView}
+      </div>
+    );
+  }
+
+  if (mode === "source") {
+    return (
+      <div className="not-prose my-4 overflow-hidden rounded-md border border-line bg-bg-subtle shadow-sm">
+        {toolbar}
+        {sourceView}
       </div>
     );
   }
 
   if (!svg) {
     return (
-      <div className="not-prose my-4 rounded border border-line bg-bg-subtle px-3 py-2 text-xs text-ink-faint">
-        Rendering Mermaid diagram...
+      <div className="not-prose my-4 overflow-hidden rounded-md border border-line bg-bg-subtle shadow-sm">
+        {toolbar}
+        <div className="px-3 py-2 text-xs text-ink-faint">
+          Rendering Mermaid diagram...
+        </div>
       </div>
     );
   }
 
   return (
-    <div
-      className="not-prose my-4 overflow-auto rounded border border-line bg-bg-subtle p-3 [&_svg]:h-auto [&_svg]:max-w-full"
-      dangerouslySetInnerHTML={{ __html: svg }}
-    />
+    <div className="not-prose my-4 overflow-hidden rounded-md border border-line bg-bg-subtle shadow-sm">
+      {toolbar}
+      <div
+        className="overflow-auto p-3 [&_svg]:h-auto [&_svg]:max-w-full"
+        dangerouslySetInnerHTML={{ __html: svg }}
+      />
+    </div>
   );
 }
