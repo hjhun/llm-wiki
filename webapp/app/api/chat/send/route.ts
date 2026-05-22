@@ -189,7 +189,9 @@ function querySingleAgentPolicy(): string {
     "Use wiki-query: infer the user's intent, plan the investigation, read wiki/index.md first, select candidate pages, use available read-only retrieval/context tools such as wiki-search-qmd or wiki-graphify when useful, and read the evidence before answering.",
     "Do not merely return search hits, excerpts, candidate pages, or tool output. Synthesize the evidence into an answer tailored to the user's actual question, with a clear conclusion first when possible.",
     "If the question is a code/API/troubleshooting question, prioritize wiki/code pages and targeted read-only raw/ searches only when the Code Wiki is insufficient.",
-    "If the question requires current external facts or a tool outside wiki-query, first check what tools are available in this CLI context and use only read-only tools. Clearly separate external facts from wiki-grounded facts and cite the actual sources used.",
+    "If the question requires current external facts or a tool outside wiki-query, first check what tools are available in this CLI context and use only read-only tools. Clearly separate external facts from wiki-grounded facts and link or cite only sources that are actually necessary for the answer.",
+    "Do not append a sources/references/candidate-pages section just because you inspected wiki/index.md or retrieval helpers. Mention or link wiki pages only when the answer materially relies on them and the link helps the user.",
+    "Treat wiki/index.md, wiki/log.md, sessions, progress files, and candidate-page lists as internal navigation unless the user specifically asks about those files.",
     "Do not modify raw/. Only create or edit wiki/answers, wiki/index.md, or wiki/log.md when the user explicitly requested --save or clearly consents to saving the answer. If the answer contains a reusable synthesis, end with a concise save suggestion instead of writing files without consent.",
     "Because the user explicitly invoked /query, Korean Markdown is a good default for structured answers. For simple questions, answer briefly without unnecessary sections. Keep any plan summary concise and user-facing; do not expose private chain-of-thought.",
   ].join("\n");
@@ -276,6 +278,7 @@ export async function POST(req: Request) {
     "You are operating an LLM Wiki repository.",
     "Read CLAUDE.md/AGENTS.md in this repository and follow matching skills. Skill lookup priority: project .agents/skills first, then ~/.agents/skills, then host-specific global skill directories such as ~/.codex/skills or ~/.claude/skills.",
     `Active session log: sessions/${sessionPath}`,
+    "Response hygiene: do not expose internal navigation files, candidate document lists, or source/reference sections unless they are genuinely needed. Link wiki or external sources only when the answer actually relies on them and the link helps the user.",
   ];
   if (progressRef) promptLines.push(progressRef);
   if (kind === "query") promptLines.push(querySingleAgentPolicy());

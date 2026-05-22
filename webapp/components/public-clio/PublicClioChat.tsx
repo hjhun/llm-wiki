@@ -229,18 +229,11 @@ export default function PublicClioChat() {
       });
       if (!res.ok) throw await asError(res);
       const data = (await res.json()) as PublicQueryResponse;
-      const sources =
-        data.sources.length > 0
-          ? "\n\n---\n\n" +
-            data.sources
-              .map((source) => `- ${source.title}: \`${source.path}\``)
-              .join("\n")
-          : "";
       appendMessage(conversationId, {
         id: newId(),
         role: "assistant",
         ts: nowStamp(),
-        content: `${data.answer}${sources}`,
+        content: data.answer,
       });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);

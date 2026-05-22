@@ -14,11 +14,13 @@ export type PublicQuerySource = {
   score: number;
 };
 
+export type PublicQueryVisibleSource = Omit<PublicQuerySource, "excerpt">;
+
 export type PublicQueryResult = {
   mode: "query";
   question: string;
   answer: string;
-  sources: PublicQuerySource[];
+  sources: PublicQueryVisibleSource[];
   agent: CliName | null;
   durationMs: number;
 };
@@ -172,17 +174,7 @@ function selectSources(question: string, docs: WikiDoc[]): PublicQuerySource[] {
     .sort((a, b) => b.score - a.score || a.doc.rel.localeCompare(b.doc.rel))
     .slice(0, MAX_CONTEXT_DOCS);
 
-  const withIndex =
-    ranked.some((item) => item.doc.rel === "wiki/index.md") || docs.length === 0
-      ? ranked
-      : [
-          { doc: docs.find((doc) => doc.rel === "wiki/index.md")!, score: 0.5 },
-          ...ranked,
-        ]
-          .filter((item) => item.doc)
-          .slice(0, MAX_CONTEXT_DOCS);
-
-  return withIndex.map(({ doc, score }) => ({
+  return ranked.map(({ doc, score }) => ({
     path: doc.rel,
     title: doc.title,
     excerpt: makeExcerpt(doc, tokens),
@@ -246,20 +238,37 @@ function formatFallbackAnswer(
     ].join("\n");
   }
 
-  const related = sources
-    .slice(0, 5)
-    .map((source) => `- ${source.title} (${source.path})`)
-    .join("\n");
   const lines = [
     "이 공개 채팅은 읽기 전용 모드입니다.",
     "",
     `질문: ${question}`,
     "",
-    "답변을 종합할 에이전트가 실행되지 않아 완성된 답변을 만들지 못했습니다. 대신 이 질문과 관련 있어 보이는 wiki 페이지만 알려드립니다.",
-    "",
-    related,
+    "답변을 종합할 에이전트가 실행되지 않아 완성된 답변을 만들지 못했습니다. 관리자 화면에서 기본 CLI 설정과 Public Query 설정을 확인해주세요.",
   ];
   return lines.join("\n\n");
+}
+
+function sourceIsMentioned(answer: string, source: PublicQuerySource): boolean {
+  const haystack = answer.normalize("NFKC").toLowerCase();
+  const title = source.title.normalize("NFKC").toLowerCase().trim();
+  const sourcePath = source.path.normalize("NFKC").toLowerCase().trim();
+  return (
+    (sourcePath.length > 0 && haystack.includes(sourcePath)) ||
+    (title.length > 0 && haystack.includes(title))
+  );
+}
+
+function visibleSourcesForAnswer(
+  answer: string,
+  sources: PublicQuerySource[],
+): PublicQueryVisibleSource[] {
+  return sources
+    .filter((source) => sourceIsMentioned(answer, source))
+    .map(({ path: sourcePath, title, score }) => ({
+      path: sourcePath,
+      title,
+      score,
+    }));
 }
 
 function summarizeAgentStderr(stderr: string): string {
@@ -307,10 +316,11 @@ function buildPrompt(
     "- If browser/search tools need temporary local cache files, keep them outside the CLIO project and do not save captures into raw/.",
     "- For simple greetings or thanks, answer naturally and briefly without citations.",
     allowExternalLookup
-      ? "- For wiki/content questions, prefer the provided wiki excerpts. For current external facts, cite the external source names/URLs you actually used."
+      ? "- For wiki/content questions, prefer the provided wiki excerpts. For current external facts, link or cite only the external source names/URLs you actually used when the link is needed for the answer."
       : "- For wiki/content questions, answer only from the provided wiki excerpts. If the excerpts are insufficient, say so plainly.",
     "- Prefer Korean unless the user clearly asks for another language.",
-    "- Cite sources inline with their wiki path when you use wiki excerpts.",
+    "- Link or cite wiki pages only when the answer materially relies on that page and the link helps the user. Do not append a source/reference list just because excerpts were retrieved.",
+    "- Treat wiki/index.md, wiki/log.md, sessions, progress files, and candidate-page lists as internal navigation unless the user specifically asks about them.",
     "- This is query-only chat, not an explicit /query command. Do not force Markdown: answer simple questions simply, and use Markdown structure only when it makes the answer easier to read or the user asks for it.",
     "",
     "Answer protocol:",
@@ -319,7 +329,7 @@ function buildPrompt(
     "3. Decide whether the supplied wiki excerpts are enough. If they are enough, synthesize an answer from them instead of listing or echoing excerpts. If they are not enough and external lookup is allowed, inspect what read-only search/browser tools are available in this CLI context and use the minimum needed. If external lookup is not allowed, say what is missing instead of guessing.",
     "4. Do not merely return search hits, source lists, excerpts, or raw tool output. Explain the answer in the shape the user's question calls for: a direct sentence for simple facts, a short comparison for compare/contrast, a stepwise diagnosis for troubleshooting, or a compact table only when it genuinely helps.",
     "5. If the answer seems like a reusable synthesis that would normally be worth filing back into wiki/answers, mention that public query-only mode cannot save it and that an authenticated /query --save flow can preserve it.",
-    "6. Separate wiki-grounded facts from external facts, cite every source you rely on, and call out uncertainty or missing evidence.",
+    "6. Separate wiki-grounded facts from external facts, cite only sources that are actually necessary for the answer, and call out uncertainty or missing evidence.",
     "",
     "User question:",
     question,
@@ -363,7 +373,7 @@ export async function runPublicQuery(
       mode: "query",
       question,
       answer: formatFallbackAnswer(question, sources, allowExternalLookup),
-      sources,
+      sources: [],
       agent: null,
       durationMs: Date.now() - started,
     };
@@ -404,7 +414,7 @@ export async function runPublicQuery(
       mode: "query",
       question,
       answer,
-      sources,
+      sources: visibleSourcesForAnswer(answer, sources),
       agent,
       durationMs: Date.now() - started,
     };
@@ -414,7 +424,7 @@ export async function runPublicQuery(
       mode: "query",
       question,
       answer: formatFallbackAnswer(question, sources, allowExternalLookup),
-      sources,
+      sources: [],
       agent,
       durationMs: Date.now() - started,
     };
