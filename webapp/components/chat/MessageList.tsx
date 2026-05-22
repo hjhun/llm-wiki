@@ -8,7 +8,6 @@ import {
   Terminal,
   UserRound,
 } from "lucide-react";
-import AgentMascot from "../agent-panel/AgentMascot";
 import MarkdownContent from "./MarkdownContent";
 import { useLanguage } from "../i18n";
 import { EmptyState } from "../ui";
@@ -155,9 +154,6 @@ export default function MessageList({
           </div>
         </article>
       ) : null}
-      <div className="mt-auto flex justify-start pt-2">
-        <AgentMascot running={pending} />
-      </div>
       <div ref={endRef} />
     </div>
   );

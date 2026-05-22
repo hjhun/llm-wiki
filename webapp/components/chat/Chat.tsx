@@ -7,6 +7,7 @@ import AutoLintHint from "./AutoLintHint";
 import Composer from "./Composer";
 import MessageList from "./MessageList";
 import SessionList from "./SessionList";
+import AgentMascot from "../agent-panel/AgentMascot";
 import { useLanguage } from "../i18n";
 import { IconButton, PageHeader, StatusBadge } from "../ui";
 import type {
@@ -647,15 +648,20 @@ export default function Chat() {
 
   return (
     <div className="flex h-full w-full overflow-hidden">
-      <aside className="w-64 shrink-0 border-r border-line bg-bg-subtle">
-        <SessionList
-          sessions={sessions}
-          activePath={active?.path ?? null}
-          onSelect={openSession}
-          onNew={newSessionDraft}
-          onDelete={deleteSessions}
-          deleting={deleting}
-        />
+      <aside className="flex w-64 shrink-0 flex-col border-r border-line bg-bg-subtle">
+        <div className="min-h-0 flex-1">
+          <SessionList
+            sessions={sessions}
+            activePath={active?.path ?? null}
+            onSelect={openSession}
+            onNew={newSessionDraft}
+            onDelete={deleteSessions}
+            deleting={deleting}
+          />
+        </div>
+        <div className="border-t border-line p-3">
+          <AgentMascot running={pending} />
+        </div>
       </aside>
 
       <section className="flex min-w-0 flex-1 flex-col">
