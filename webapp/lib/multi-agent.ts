@@ -21,7 +21,7 @@ import {
 
 export type OrchestratedKind = Extract<
   ChatKind,
-  "ingest" | "ingest-loop" | "query" | "lint"
+  "ingest" | "ingest-loop" | "lint"
 >;
 
 export type MultiAgentResult = {
@@ -47,7 +47,6 @@ type WorkerRun = {
 const ORCHESTRATED_KINDS = new Set<ChatKind>([
   "ingest",
   "ingest-loop",
-  "query",
   "lint",
 ]);
 
@@ -97,12 +96,6 @@ function buildWorkers(
 }
 
 function operationPolicy(kind: OrchestratedKind): string {
-  if (kind === "query") {
-    return [
-      "You are a read-only query worker. Use wiki-query to find candidate pages, read evidence, and draft a Markdown answer with citations unless the user explicitly requested another format.",
-      "Do not create or edit wiki/answers, wiki/index.md, wiki/log.md, or any other file. If the user requested --save, describe the proposed save target for the manager.",
-    ].join("\n");
-  }
   if (kind === "lint") {
     return [
       "You are a read-only lint worker. Inspect the wiki for the wiki-lint categories and return findings with file paths and evidence.",
@@ -229,11 +222,9 @@ function buildManagerPrompt(input: {
     ].join("\n"),
   );
   const writePolicy =
-    input.kind === "query"
-      ? "For /query, write the final answer in Korean Markdown with citations unless the original task explicitly requested another format. Only save to wiki/answers if the user explicitly requested it."
-      : input.kind === "lint"
-        ? "For /lint, use worker findings as inspection input, then perform exactly one manager write pass following wiki-lint, including report/log/index updates and --fix only if requested."
-        : "For ingest operations, do not re-run ingest work in this manager pass. Review progress and worker outputs, then report complete/stopped/error status clearly.";
+    input.kind === "lint"
+      ? "For /lint, use worker findings as inspection input, then perform exactly one manager write pass following wiki-lint, including report/log/index updates and --fix only if requested."
+      : "For ingest operations, do not re-run ingest work in this manager pass. Review progress and worker outputs, then report complete/stopped/error status clearly.";
 
   return [
     "You are the central manager agent for an LLM Wiki multi-agent run.",

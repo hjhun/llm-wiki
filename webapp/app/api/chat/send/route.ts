@@ -182,6 +182,17 @@ function formatCancelledReply(input: {
   ].join("\n");
 }
 
+function querySingleAgentPolicy(): string {
+  return [
+    "This request is a single-agent /query operation.",
+    "Use wiki-query: infer the user's intent, plan the investigation, select candidate pages from wiki/index.md, use available read-only retrieval/context tools such as wiki-search-qmd or wiki-graphify when useful, read the evidence, and answer with citations.",
+    "If the question is a code/API/troubleshooting question, prioritize wiki/code pages and targeted read-only raw/ searches only when the Code Wiki is insufficient.",
+    "If the question requires current external facts or a tool outside wiki-query, first check what tools are available in this CLI context and use only read-only tools. Clearly separate external facts from wiki-grounded facts and cite the actual sources used.",
+    "Do not modify raw/. Only create or edit wiki/answers, wiki/index.md, or wiki/log.md when the user explicitly requested --save; otherwise answer in chat only.",
+    "Prefer Korean Markdown unless the user explicitly requested another language or format. Keep any plan summary concise and user-facing; do not expose private chain-of-thought.",
+  ].join("\n");
+}
+
 export async function POST(req: Request) {
   const unauth = await requireSession();
   if (unauth) return unauth;
@@ -203,6 +214,7 @@ export async function POST(req: Request) {
   if (!CLI_NAMES.includes(agent)) {
     return jsonError(`unknown agent: ${agent}`, 400);
   }
+  const kind = parsed.data.kind ?? "chat";
 
   // 세션이 없으면 첫 메시지를 기준으로 새 세션 생성.
   let sessionPath = parsed.data.sessionPath;
@@ -264,6 +276,7 @@ export async function POST(req: Request) {
     `Active session log: sessions/${sessionPath}`,
   ];
   if (progressRef) promptLines.push(progressRef);
+  if (kind === "query") promptLines.push(querySingleAgentPolicy());
   if (elidedNote) promptLines.push(elidedNote);
   promptLines.push(
     "Below is the running conversation. Continue it by writing the assistant's next reply only — no preamble, no markdown frontmatter.",
@@ -275,7 +288,6 @@ export async function POST(req: Request) {
   );
   const prompt = promptLines.join("\n");
 
-  const kind = parsed.data.kind ?? "chat";
   const job = createChatJob({ sessionPath, kind, agent });
   const send = (event: ChatSendEvent) => job.append(event);
 
@@ -298,11 +310,13 @@ export async function POST(req: Request) {
     try {
       if (isOrchestratedKind(kind)) {
         // -------- Multi-agent wiki operations --------
-        // /ingest, /ingest-loop, /query, and /lint are dispatched through a
-        // small coordinator that starts named workers up to the configured
+        // /ingest, /ingest-loop, and /lint are dispatched through a small
+        // coordinator that starts named workers up to the configured
         // concurrency limit and then asks a manager agent to consolidate the
-        // result. The job AbortSignal is shared by all live worker CLIs so a
-        // Stop request interrupts them immediately.
+        // result. /query intentionally stays on the single-CLI path below for
+        // lower latency and more consistent evidence handling. The job
+        // AbortSignal is shared by all live worker CLIs so a Stop request
+        // interrupts them immediately.
         const result = await runMultiAgentOperation({
           cfg,
           kind,
@@ -334,7 +348,7 @@ export async function POST(req: Request) {
           durationMs: result.totalDurationMs,
         });
       } else {
-        // -------- Single CLI call (chat, preprocess, graph) --------
+        // -------- Single CLI call (chat, query, preprocess, graph) --------
         const result = await runCli(agent, prompt, {
           safeMode: cfg.agent.safeMode,
           // null in config means "no timeout for this operation kind".

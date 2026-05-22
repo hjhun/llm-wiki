@@ -43,7 +43,8 @@ export const ConfigSchema = z.object({
           .default(null),
         /**
          * Upper bound for worker CLI processes the chat orchestrator may run
-         * for /ingest, /ingest-loop, /query, and /lint. The coordinator uses
+         * for /ingest, /ingest-loop, and /lint. /query uses a single CLI
+         * agent. The coordinator uses
          * the selected orchestration CLI and names workers with `namePrefix-N`.
          */
         maxConcurrentAgents: z.number().int().min(1).max(16).default(2),

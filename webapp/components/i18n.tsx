@@ -230,7 +230,7 @@ export const TEXT = {
       agentNamePrefix: "워커 이름 prefix",
       managerName: "관리자 이름",
       agentOrchestrationDesc:
-        "/ingest, /ingest-loop, /query, /lint는 선택한 CLI 하나로 이름이 붙은 워커들을 실행하고, 같은 CLI의 관리자 에이전트가 결과를 정리해 보고합니다.",
+        "/ingest, /ingest-loop, /lint는 이름이 붙은 워커들을 실행하고 관리자 에이전트가 결과를 정리합니다. /query는 단일 에이전트로 실행됩니다.",
       runtimeDefaults: "Runtime Defaults",
       wikiOperation: "wiki operation",
       chunkMaxFiles: "Chunk max files",
@@ -594,7 +594,7 @@ export const TEXT = {
       agentNamePrefix: "Worker name prefix",
       managerName: "Manager name",
       agentOrchestrationDesc:
-        "/ingest, /ingest-loop, /query, and /lint run named workers with one selected CLI, then a manager agent from the same CLI consolidates the report.",
+        "/ingest, /ingest-loop, and /lint run named workers, then a manager agent consolidates the report. /query runs as a single agent.",
       runtimeDefaults: "Runtime Defaults",
       wikiOperation: "wiki operation",
       chunkMaxFiles: "Chunk max files",
