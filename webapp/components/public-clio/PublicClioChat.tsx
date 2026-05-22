@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import AgentMascot from "../agent-panel/AgentMascot";
 import MarkdownContent from "../chat/MarkdownContent";
+import MessageCopyButton from "../chat/MessageCopyButton";
 import { Button, IconButton, StatusBadge, cx } from "../ui";
 
 type PublicMessage = {
@@ -699,14 +700,24 @@ function MessageBubble({ message }: { message: PublicMessage }) {
       )}
     >
       <header className="mb-2 flex items-center gap-2 text-[11px] text-ink-faint">
-        <Icon aria-hidden className="h-3.5 w-3.5 shrink-0" />
-        <span className="truncate font-mono uppercase tracking-widest">
-          {label}
-        </span>
-        <span className="shrink-0 font-mono">{message.ts}</span>
+        <div className="flex min-w-0 flex-1 items-center gap-2">
+          <Icon aria-hidden className="h-3.5 w-3.5 shrink-0" />
+          <span className="truncate font-mono uppercase tracking-widest">
+            {label}
+          </span>
+          <span className="shrink-0 font-mono">{message.ts}</span>
+        </div>
       </header>
       <div className="prose prose-theme max-w-none text-[13.5px]">
         <MarkdownContent content={message.content} />
+      </div>
+      <div className="mt-2 flex justify-end">
+        <MessageCopyButton
+          content={message.content}
+          copyLabel="Copy message"
+          copyText="Copy"
+          copiedLabel="Copied"
+        />
       </div>
     </article>
   );

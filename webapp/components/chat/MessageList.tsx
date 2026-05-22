@@ -2,13 +2,13 @@
 
 import { useEffect, useRef } from "react";
 import {
-  Archive,
   Bot,
   CircleDotDashed,
   Terminal,
   UserRound,
 } from "lucide-react";
 import MarkdownContent from "./MarkdownContent";
+import MessageCopyButton from "./MessageCopyButton";
 import { useLanguage } from "../i18n";
 import { EmptyState } from "../ui";
 import type { ChatMessage, ChatProgress } from "./types";
@@ -29,16 +29,10 @@ export default function MessageList({
   messages,
   pending,
   progress,
-  sessionPath,
-  capturingIndex,
-  onCaptureMessage,
 }: {
   messages: ChatMessage[];
   pending: boolean;
   progress: ChatProgress | null;
-  sessionPath: string | null;
-  capturingIndex: number | null;
-  onCaptureMessage: (messageIndex: number) => void;
 }) {
   const { t } = useLanguage();
   const endRef = useRef<HTMLDivElement | null>(null);
@@ -90,21 +84,17 @@ export default function MessageList({
                 </span>
                 <span className="shrink-0 font-mono">{m.ts}</span>
               </div>
-              {m.role === "assistant" && sessionPath && !pending ? (
-                <button
-                  type="button"
-                  className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded border border-line bg-bg-subtle text-ink-muted transition hover:border-accent/60 hover:text-ink disabled:cursor-not-allowed disabled:opacity-50"
-                  title={t.chat.saveCapture}
-                  aria-label={t.chat.saveCapture}
-                  disabled={capturingIndex === i}
-                  onClick={() => onCaptureMessage(i)}
-                >
-                  <Archive aria-hidden className="h-3.5 w-3.5" />
-                </button>
-              ) : null}
             </header>
             <div className="prose prose-theme max-w-none text-[13.5px]">
               <MarkdownContent content={m.content} emptyText={t.chat.empty} />
+            </div>
+            <div className="mt-2 flex justify-end">
+              <MessageCopyButton
+                content={m.content}
+                copyLabel={t.chat.copyMessage}
+                copyText={t.chat.copy}
+                copiedLabel={t.chat.copiedMessage}
+              />
             </div>
           </article>
         );

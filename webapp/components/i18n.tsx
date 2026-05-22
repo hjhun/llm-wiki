@@ -89,8 +89,9 @@ export const TEXT = {
       cancelling: "Stopping...",
       cancelHint:
         "실행 중인 CLI 프로세스에 SIGTERM을 보내 즉시 중단하고 중단 결과만 리포트합니다.",
-      saveCapture: "외부 캡처를 raw/chat에 저장",
-      captureSaved: (path: string) => `외부 캡처 저장됨: ${path}`,
+      copy: "복사",
+      copyMessage: "메시지 복사",
+      copiedMessage: "복사됨",
       newChat: "+ New Chat",
       renameChat: "채팅 이름 변경",
       renameInput: "채팅 이름",
@@ -459,8 +460,9 @@ export const TEXT = {
       cancelling: "Stopping...",
       cancelHint:
         "SIGTERM running CLI processes immediately and report only the stopped result.",
-      saveCapture: "Save external capture to raw/chat",
-      captureSaved: (path: string) => `Saved external capture to ${path}`,
+      copy: "Copy",
+      copyMessage: "Copy message",
+      copiedMessage: "Copied",
       newChat: "+ New Chat",
       renameChat: "Rename chat",
       renameInput: "Chat name",
