@@ -8,6 +8,11 @@ const CODE_EXTS = new Set([
   ".php", ".rb", ".sh", ".sql",
 ]);
 
+const CODE_MANIFESTS = new Set([
+  "package.json", "Cargo.toml", "pyproject.toml", "go.mod", "pom.xml",
+  "build.gradle", "Dockerfile", "compose.yaml", "tsconfig.json",
+]);
+
 const IGNORE_DIRS = new Set([
   ".git", "node_modules", "dist", "build", "target", ".next", ".venv",
   "vendor", "coverage", ".cache",
@@ -62,7 +67,12 @@ async function collectFiles(abs, out = []) {
   const st = await statSafe(abs);
   if (!st) return out;
   if (st.isFile()) {
-    if (CODE_EXTS.has(path.extname(abs).toLowerCase())) out.push(abs);
+    if (
+      CODE_EXTS.has(path.extname(abs).toLowerCase()) ||
+      CODE_MANIFESTS.has(path.basename(abs))
+    ) {
+      out.push(abs);
+    }
     return out;
   }
   if (!st.isDirectory()) return out;

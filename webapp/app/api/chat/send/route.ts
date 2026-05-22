@@ -325,6 +325,7 @@ export async function POST(req: Request) {
           agent,
           sessionPath,
           prompt,
+          message: parsed.data.message,
           progressRef,
           signal: job.abort.signal,
           onChunk: emitChunk,

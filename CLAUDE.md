@@ -52,7 +52,7 @@ Each operation maps to one or more project skills. If these rules conflict with 
 ### 3.1 Ingest (`/ingest`, [`.agents/skills/wiki-ingest/SKILL.md`](.agents/skills/wiki-ingest/SKILL.md))
 - Input: new material under `raw/`, either a single file, URL, folder, or user-approved symlink entry under `raw/`.
 - Always follow the **leaf-directory chunks + merge pass** principle (Section 7).
-- Trigger: manual (`/ingest`, `/ingest-loop`) or **automatic** via the Settings → Auto Ingest panel (`raw/` file events or interval schedule). The auto trigger is driven by the manager in `webapp/lib/auto-ingest/`, which calls the same `runIngestLoop()` helper; by default (`skipIfBusy: true`) it is skipped while `.lock` exists.
+- Trigger: manual (`/ingest`, `/ingest-loop`) or **automatic** via the Settings → Auto Ingest panel (`raw/` file events or interval schedule). Manual Chat/API runs may wrap the same per-unit `wiki-ingest` contract in the multi-agent coordinator; targeted `/ingest-loop <raw-path>` must keep that raw scope across all rounds. The auto trigger is driven by the manager in `webapp/lib/auto-ingest/`, which calls `runIngestLoop()` directly; by default (`skipIfBusy: true`) it is skipped while `.lock` exists.
 - Outputs:
   - `wiki/sources/<YYYY>/<YYYY-MM>/<slug>.md` summary page with YAML frontmatter
   - New or updated related entity/concept pages

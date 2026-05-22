@@ -50,6 +50,10 @@ export type ProgressSnapshot = {
   doneLeaves: string[];
 };
 
+export type ProgressScope = {
+  rawScope?: string | null;
+};
+
 export const EMPTY_SNAPSHOT: ProgressSnapshot = {
   leavesTotal: 0,
   leavesDone: 0,
@@ -134,6 +138,30 @@ const IGNORE_CODE_DIRS = new Set([
 ]);
 
 type LeafKind = "prose" | "code" | "mixed" | "ignore";
+
+function normalizePosixPath(value: string): string {
+  return value.replace(/\\/g, "/").replace(/^\/+/, "").replace(/\/+$/, "");
+}
+
+export function normalizeRawScope(value?: string | null): string | null {
+  if (!value) return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const normalized = normalizePosixPath(trimmed);
+  if (normalized === "raw" || normalized.startsWith("raw/")) return normalized;
+  return null;
+}
+
+function pathMatchesScope(value: string, rawScope?: string | null): boolean {
+  const scope = normalizeRawScope(rawScope);
+  if (!scope) return true;
+  const normalized = normalizePosixPath(value);
+  return (
+    normalized === scope ||
+    normalized.startsWith(`${scope}/`) ||
+    scope.startsWith(`${normalized}/`)
+  );
+}
 
 function pathSegments(relPath: string): string[] {
   return relPath.replace(/\\/g, "/").split("/").filter(Boolean);
@@ -239,6 +267,43 @@ function collectCodeOutputs(leaf: Record<string, unknown>): string[] {
   return [...outputs];
 }
 
+async function collectValidCodeOutputs(
+  leaf: Record<string, unknown>,
+): Promise<string[]> {
+  const valid: string[] = [];
+  for (const output of collectCodeOutputs(leaf)) {
+    const rel = normalizePosixPath(output);
+    if (!rel.startsWith("wiki/code/") || !rel.endsWith(".md")) continue;
+    const abs = path.resolve(PROJECT_ROOT, rel);
+    const root = `${PROJECT_ROOT}${path.sep}`;
+    if (abs !== PROJECT_ROOT && !abs.startsWith(root)) continue;
+    try {
+      const st = await fs.stat(abs);
+      if (!st.isFile()) continue;
+      const head = (await fs.readFile(abs, "utf8")).slice(0, 2048);
+      if (!head.startsWith("---")) continue;
+      if (!/\ntype:\s*["']?(code|architecture)["']?\b/.test(head)) continue;
+      valid.push(rel);
+    } catch {
+      // Missing or unreadable outputs are not valid Code Wiki evidence.
+    }
+  }
+  return valid;
+}
+
+function leafMatchesScope(
+  leafPath: string,
+  leaf: Record<string, unknown>,
+  rawScope?: string | null,
+): boolean {
+  const scope = normalizeRawScope(rawScope);
+  if (!scope) return true;
+  if (pathMatchesScope(leafPath, scope)) return true;
+  return collectLeafFiles(leafPath, leaf).some((filePath) =>
+    pathMatchesScope(filePath, scope),
+  );
+}
+
 /**
  * Compact reference of existing entity/concept page names from wiki/index.md.
  * Injected into ingest worker prompts so parallel, stateless workers reuse
@@ -288,11 +353,14 @@ export async function buildEntityRegistryReference(): Promise<string | null> {
   );
 }
 
-export async function buildCodeWikiStatusReference(): Promise<string | null> {
-  const snap = await readProgressSnapshot();
+export async function buildCodeWikiStatusReference(
+  options: ProgressScope = {},
+): Promise<string | null> {
+  const snap = await readProgressSnapshot(options);
+  const scopeLabel = options.rawScope ? ` for ${options.rawScope}` : "";
   if (snap.codeLeavesTotal === 0) {
     return (
-      "Code Wiki status: no code/mixed leaves are currently detected in " +
+      `Code Wiki status${scopeLabel}: no code/mixed leaves are currently detected in ` +
       `${PROGRESS_STATE_PATH}. During enumeration, classify code leaves by ` +
       "filename/manifest and record `kind`, `project`, and `code_outputs`."
     );
@@ -307,13 +375,15 @@ export async function buildCodeWikiStatusReference(): Promise<string | null> {
       ? `Missing Code Wiki outputs for: ${missing.join(", ")}${suffix}`
       : "All detected code/mixed leaves have recorded Code Wiki outputs.";
   return [
-    `Code Wiki status: ${snap.codeLeavesWithOutputs}/${snap.codeLeavesTotal} code/mixed leaves have recorded outputs.`,
+    `Code Wiki status${scopeLabel}: ${snap.codeLeavesWithOutputs}/${snap.codeLeavesTotal} code/mixed leaves have valid wiki/code outputs.`,
     missingLine,
-    "For a done code/mixed leaf with no outputs, treat the next unit of work as a Code Wiki repair: run `node scripts/code-index.mjs raw/<project-or-leaf> --format=json` and `--format=markdown` when applicable, write/update `wiki/code/<project>/...`, then record those paths in `code_outputs` before reporting completion.",
+    "For a done code/mixed leaf with no valid outputs, treat the next unit of work as a Code Wiki repair: run `node scripts/code-index.mjs raw/<project-or-leaf> --format=json` and `--format=markdown` when applicable, write/update Markdown files under `wiki/code/<project>/` with required frontmatter, then record those paths in `code_outputs` before reporting completion.",
   ].join("\n");
 }
 
-export async function readProgressSnapshot(): Promise<ProgressSnapshot> {
+export async function readProgressSnapshot(
+  options: ProgressScope = {},
+): Promise<ProgressSnapshot> {
   try {
     const raw = await fs.readFile(
       path.join(PROJECT_ROOT, PROGRESS_STATE_PATH),
@@ -341,7 +411,10 @@ export async function readProgressSnapshot(): Promise<ProgressSnapshot> {
       sourcePagesWritten: 0,
       mergeDone: parsed.merge_pass?.status === "done",
       mergePendingParents: Array.isArray(pendingParents)
-        ? pendingParents.length
+        ? pendingParents.filter((parent) =>
+            typeof parent === "string" &&
+            pathMatchesScope(parent, options.rawScope),
+          ).length
         : 0,
       doneLeaves,
     };
@@ -349,8 +422,9 @@ export async function readProgressSnapshot(): Promise<ProgressSnapshot> {
       for (const [leafPath, value] of Object.entries(parsed.leaves)) {
         const leaf = (value ?? {}) as Record<string, unknown>;
         if (leaf.status === "stale") continue;
+        if (!leafMatchesScope(leafPath, leaf, options.rawScope)) continue;
         const leafKind = inferLeafKind(leafPath, leaf);
-        const codeOutputs = collectCodeOutputs(leaf);
+        const codeOutputs = await collectValidCodeOutputs(leaf);
         const isCodeLeaf = leafKind === "code" || leafKind === "mixed";
         if (isCodeLeaf) {
           snap.codeLeavesTotal += 1;
@@ -445,13 +519,15 @@ export function newlyDoneLeaves(
   return after.doneLeaves.filter((p) => !prev.has(p));
 }
 
-export async function readIngestStateSummary(): Promise<StateSummary | null> {
+export async function readIngestStateSummary(
+  options: { sessionPath?: string; rawScope?: string | null } = {},
+): Promise<StateSummary | null> {
   try {
     const raw = await fs.readFile(
       path.join(PROJECT_ROOT, PROGRESS_STATE_PATH),
       "utf8",
     );
-    return summarizeIngestState(raw);
+    return summarizeIngestState(raw, options);
   } catch {
     return null;
   }
@@ -613,20 +689,27 @@ export function buildLoopContinuationPrompt(input: {
   progressRef: string | null;
   entityRegistryRef?: string | null;
   codeWikiStatusRef?: string | null;
+  rawScope?: string | null;
 }): string {
+  const rawScope = normalizeRawScope(input.rawScope);
   const lines: string[] = [
     "You are operating an LLM Wiki repository.",
     "Read CLAUDE.md/AGENTS.md in this repository and follow .agents/skills/wiki-ingest/SKILL.md. If additional skills are needed, project .agents/skills takes priority, then ~/.agents/skills, then host-specific global skill directories such as ~/.codex/skills or ~/.claude/skills.",
     `Active session log: sessions/${input.sessionPath}`,
   ];
+  if (rawScope) {
+    lines.push(
+      `Original /ingest-loop target scope: ${rawScope}. Continue processing exactly this scope; do not pick pending leaves outside it unless the merge parent is needed for this scope.`,
+    );
+  }
   if (input.progressRef) lines.push(input.progressRef);
   if (input.entityRegistryRef) lines.push(input.entityRegistryRef);
   if (input.codeWikiStatusRef) lines.push(input.codeWikiStatusRef);
   lines.push(
-    `This is /ingest-loop iteration ${input.iteration}. Pick the next pending sub-chunk, merge-pass parent, or missing Code Wiki output repair from wiki/.progress/ingest/.state.json and process exactly one unit per the wiki-ingest skill, then exit. Do not loop yourself — the backend will spawn the next iteration.`,
+    `This is /ingest-loop iteration ${input.iteration}. Pick the next pending sub-chunk, merge-pass parent, or missing Code Wiki output repair from wiki/.progress/ingest/.state.json${rawScope ? ` within ${rawScope}` : ""} and process exactly one unit per the wiki-ingest skill, then exit. Do not loop yourself — the backend will spawn the next iteration.`,
     "",
     "===== CONVERSATION =====",
-    "User: /ingest",
+    rawScope ? `User: /ingest-loop ${rawScope}` : "User: /ingest",
     "",
     "Respond now as the assistant.",
   );
@@ -643,7 +726,7 @@ function stateLeafBelongsToSession(
 
 export function summarizeIngestState(
   raw: string,
-  options: { sessionPath?: string } = {},
+  options: { sessionPath?: string; rawScope?: string | null } = {},
 ): StateSummary | null {
   let parsed: unknown;
   try {
@@ -679,6 +762,7 @@ export function summarizeIngestState(
     ) {
       continue;
     }
+    if (!leafMatchesScope(leafPath, leaf, options.rawScope)) continue;
     const status = typeof leaf.status === "string" ? leaf.status : "pending";
     // A "stale" leaf is one whose source files vanished from disk
     // (wiki-ingest §Step 1). It is not actionable work, so exclude it entirely
@@ -1138,6 +1222,8 @@ export type RunIngestLoopInput = {
   signal?: AbortSignal;
   /** Streams stdout chunks from the CLI back to the caller. */
   onChunk?: (text: string) => void;
+  /** Optional raw/... scope for a targeted /ingest-loop run. */
+  rawScope?: string | null;
 };
 
 export type RunIngestLoopResult = {
@@ -1157,6 +1243,7 @@ export async function runIngestLoop(
   input: RunIngestLoopInput,
 ): Promise<RunIngestLoopResult> {
   const { cfg, agent, sessionPath, initialPrompt, signal, onChunk } = input;
+  const rawScope = normalizeRawScope(input.rawScope);
   if (!input.preserveStopFlag) {
     await clearStopFlag(sessionPath);
   }
@@ -1167,7 +1254,7 @@ export async function runIngestLoop(
     `🔁 /ingest-loop 시작 (최대 ${maxIter} 반복).`,
   ).catch(() => undefined);
 
-  const loopBefore = await readProgressSnapshot();
+  const loopBefore = await readProgressSnapshot({ rawScope });
   let prevSnap: ProgressSnapshot = loopBefore;
   let lastMergedSnap: ProgressSnapshot | null = null;
   let iteration = 0;
@@ -1205,7 +1292,8 @@ export async function runIngestLoop(
             iteration,
             progressRef: progressRef ?? (await buildProgressReference()),
             entityRegistryRef: await buildEntityRegistryReference(),
-            codeWikiStatusRef: await buildCodeWikiStatusReference(),
+            codeWikiStatusRef: await buildCodeWikiStatusReference({ rawScope }),
+            rawScope,
           });
 
     const banner = `\n\n---\n[loop iter ${iteration}/${maxIter}]\n`;
@@ -1242,8 +1330,8 @@ export async function runIngestLoop(
     );
     aggregateReply += (aggregateReply ? banner : "") + iterReply;
 
-    const summary = await readIngestStateSummary();
-    const snap = await readProgressSnapshot();
+    const summary = await readIngestStateSummary({ rawScope });
+    const snap = await readProgressSnapshot({ rawScope });
     idleRounds = ingestMadeProgress(prevSnap, snap) ? 0 : idleRounds + 1;
 
     if (result.exitCode === 0) {
@@ -1291,7 +1379,7 @@ export async function runIngestLoop(
     aggregateReply || `(/ingest-loop 가 한 번도 실행되지 못했습니다.)`;
   finalReply += `\n\n---\n\n[/ingest-loop ${haltKind}] ${haltReason} · iterations=${iteration}`;
 
-  const loopAfter = await readProgressSnapshot();
+  const loopAfter = await readProgressSnapshot({ rawScope });
   if (haltKind !== "error") {
     const alreadyCoversLatest =
       lastMergedSnap !== null &&

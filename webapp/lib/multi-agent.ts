@@ -14,6 +14,7 @@ import {
   decideLoopHalt,
   ingestMadeProgress,
   maybeAutoRunGraphify,
+  normalizeRawScope,
   readIngestStateSummary,
   readProgressSnapshot,
   stopFlagExists,
@@ -83,9 +84,10 @@ function clampAgentCount(cfg: Config): number {
 function buildWorkers(
   cfg: Config,
   managerCli: CliName,
+  options: { count?: number } = {},
 ): Worker[] {
   const cli = cfg.agent.orchestration.cli ?? managerCli;
-  const count = clampAgentCount(cfg);
+  const count = options.count ?? clampAgentCount(cfg);
   const prefix = cfg.agent.orchestration.namePrefix.trim() || "agent";
   return Array.from({ length: count }, (_, index) => {
     return {
@@ -107,7 +109,7 @@ function operationPolicy(kind: OrchestratedKind): string {
     return [
       "You are an ingest worker in a backend-managed loop. Follow wiki-ingest and process at most one sub-chunk or one merge-pass parent, then exit.",
       "Code Wiki is part of ingest, not a separate command. During enumeration, classify leaves as prose/code/mixed/ignore. For code or mixed leaves, run scripts/code-index.mjs when applicable, write/update wiki/code/<project>/ pages, and record those paths in code_outputs.",
-      "If the progress state shows a done code/mixed leaf with missing code_outputs, treat that as the next unit of work and repair the Code Wiki outputs before reporting that ingest is complete.",
+      "If the progress state shows a done code/mixed leaf with missing valid wiki/code outputs, treat that as the next unit of work and repair the Code Wiki outputs before reporting that ingest is complete.",
       "A symlink located under raw/ is a valid source entry: follow it read-only even if its real target is outside the repository, preserve logical raw/... paths in state/citations, and reject only broken links or loops.",
       "If wiki/.progress/ingest/.lock is held by another live process, report that you are standing by and exit successfully. The manager will launch the next round.",
       "Do NOT run wiki-graphify and do NOT write anything under wiki/graph/. The backend triggers graph updates as separate invocations only after all ingest work and merge passes are complete.",
@@ -116,7 +118,7 @@ function operationPolicy(kind: OrchestratedKind): string {
   return [
     "You are an ingest worker. Follow wiki-ingest and process exactly one sub-chunk or one merge-pass parent, then exit.",
     "Code Wiki is part of ingest, not a separate command. During enumeration, classify leaves as prose/code/mixed/ignore. For code or mixed leaves, run scripts/code-index.mjs when applicable, write/update wiki/code/<project>/ pages, and record those paths in code_outputs.",
-    "If the progress state shows a done code/mixed leaf with missing code_outputs, treat that as the next unit of work and repair the Code Wiki outputs before reporting that ingest is complete.",
+    "If the progress state shows a done code/mixed leaf with missing valid wiki/code outputs, treat that as the next unit of work and repair the Code Wiki outputs before reporting that ingest is complete.",
     "A symlink located under raw/ is a valid source entry: follow it read-only even if its real target is outside the repository, preserve logical raw/... paths in state/citations, and reject only broken links or loops.",
     "If wiki/.progress/ingest/.lock is held by another live process, report that you are standing by and exit successfully.",
     "Do NOT run wiki-graphify and do NOT write anything under wiki/graph/. The backend triggers graph updates as separate invocations only after all ingest work and merge passes are complete.",
@@ -172,6 +174,7 @@ async function runWorkerBatch(input: {
   timeoutMs?: number;
   signal?: AbortSignal;
   onChunk?: (text: string) => void;
+  rawScope?: string | null;
 }): Promise<WorkerRun[]> {
   input.onChunk?.(
     `\n\n---\n[multi-agent round ${input.round}] ${input.workers
@@ -184,7 +187,7 @@ async function runWorkerBatch(input: {
       : null;
   const codeWikiStatusRef =
     input.kind === "ingest" || input.kind === "ingest-loop"
-      ? await buildCodeWikiStatusReference()
+      ? await buildCodeWikiStatusReference({ rawScope: input.rawScope })
       : null;
   return Promise.all(
     input.workers.map(async (worker): Promise<WorkerRun> => {
@@ -238,7 +241,7 @@ function buildManagerPrompt(input: {
   const writePolicy =
     input.kind === "lint"
       ? "For /lint, use worker findings as inspection input, then perform exactly one manager write pass following wiki-lint, including report/log/index updates and --fix only if requested."
-      : "For ingest operations, do not re-run ingest work in this manager pass. Review progress and worker outputs, and do not call the run complete when detected code/mixed leaves still lack code_outputs or wiki/code pages.";
+      : "For ingest operations, do not re-run ingest work in this manager pass. Review progress and worker outputs, and do not call the run complete when detected code/mixed leaves still lack valid wiki/code pages recorded in code_outputs.";
 
   return [
     "You are the central manager agent for an LLM Wiki multi-agent run.",
@@ -299,8 +302,17 @@ function ingestWorkComplete(snapshot: ProgressSnapshot): boolean {
   return (
     snapshot.leavesTotal > 0 &&
     snapshot.leavesDone === snapshot.leavesTotal &&
-    snapshot.mergePendingParents === 0
+    snapshot.mergePendingParents === 0 &&
+    snapshot.codeLeavesMissingOutputs === 0
   );
+}
+
+function rawScopeFromMessage(message?: string | null): string | null {
+  if (!message) return null;
+  const trimmed = message.trim();
+  const match = /^\/(?:ingest-loop|ingest)(?:\s+([\s\S]+?))?\s*$/.exec(trimmed);
+  const target = match?.[1]?.trim();
+  return normalizeRawScope(target);
 }
 
 async function runSingleRoundOperation(input: {
@@ -309,14 +321,18 @@ async function runSingleRoundOperation(input: {
   agent: CliName;
   sessionPath: string;
   prompt: string;
+  message?: string;
   timeoutMs?: number;
   signal?: AbortSignal;
   onChunk?: (text: string) => void;
 }): Promise<MultiAgentResult> {
   const orchestrationCli = input.cfg.agent.orchestration.cli ?? input.agent;
-  const workers = buildWorkers(input.cfg, orchestrationCli);
+  const rawScope = rawScopeFromMessage(input.message);
+  const workers = buildWorkers(input.cfg, orchestrationCli, {
+    count: input.kind === "ingest" ? 1 : undefined,
+  });
   const ingestBefore =
-    input.kind === "ingest" ? await readProgressSnapshot() : null;
+    input.kind === "ingest" ? await readProgressSnapshot({ rawScope }) : null;
   const runs = await runWorkerBatch({
     cfg: input.cfg,
     kind: input.kind,
@@ -326,6 +342,7 @@ async function runSingleRoundOperation(input: {
     timeoutMs: input.timeoutMs,
     signal: input.signal,
     onChunk: input.onChunk,
+    rawScope,
   });
   const workerDuration = runs.reduce(
     (sum, run) => sum + (run.result?.durationMs ?? 0),
@@ -342,7 +359,7 @@ async function runSingleRoundOperation(input: {
   let progressNote: string | null = null;
 
   if (input.kind === "ingest" && ingestBefore) {
-    const ingestAfter = await readProgressSnapshot();
+    const ingestAfter = await readProgressSnapshot({ rawScope });
     const progressAdvanced = ingestMadeProgress(
       ingestBefore,
       ingestAfter,
@@ -406,16 +423,18 @@ async function runLoopOperation(input: {
   agent: CliName;
   sessionPath: string;
   prompt: string;
+  message?: string;
   progressRef?: string | null;
   signal?: AbortSignal;
   onChunk?: (text: string) => void;
 }): Promise<MultiAgentResult> {
   await clearStopFlag(input.sessionPath);
   const orchestrationCli = input.cfg.agent.orchestration.cli ?? input.agent;
+  const rawScope = rawScopeFromMessage(input.message);
   const workers = buildWorkers(input.cfg, orchestrationCli);
   const maxRounds = input.cfg.cli.ingestLoop.maxIterations;
   const timeoutMs = input.cfg.cli.timeouts["ingest-loop"] ?? undefined;
-  const loopBefore = await readProgressSnapshot();
+  const loopBefore = await readProgressSnapshot({ rawScope });
   let prevSnap = loopBefore;
   let round = 0;
   let idleRounds = 0;
@@ -456,7 +475,8 @@ async function runLoopOperation(input: {
             progressRef:
               initialProgressRef ?? (await buildProgressReference()),
             entityRegistryRef: await buildEntityRegistryReference(),
-            codeWikiStatusRef: await buildCodeWikiStatusReference(),
+            codeWikiStatusRef: await buildCodeWikiStatusReference({ rawScope }),
+            rawScope,
           });
     const runs = await runWorkerBatch({
       cfg: input.cfg,
@@ -467,6 +487,7 @@ async function runLoopOperation(input: {
       timeoutMs,
       signal: input.signal,
       onChunk: input.onChunk,
+      rawScope,
     });
     allRuns = allRuns.concat(runs);
     totalDurationMs += runs.reduce(
@@ -480,8 +501,8 @@ async function runLoopOperation(input: {
       break;
     }
 
-    const summary = await readIngestStateSummary();
-    const snap = await readProgressSnapshot();
+    const summary = await readIngestStateSummary({ rawScope });
+    const snap = await readProgressSnapshot({ rawScope });
     idleRounds = ingestMadeProgress(prevSnap, snap) ? 0 : idleRounds + 1;
     prevSnap = snap;
 
@@ -511,7 +532,7 @@ async function runLoopOperation(input: {
   }
   await clearStopFlag(input.sessionPath);
 
-  const loopAfter = await readProgressSnapshot();
+  const loopAfter = await readProgressSnapshot({ rawScope });
   if (
     !signalAborted(input.signal) &&
     haltKind !== "error" &&
@@ -601,6 +622,7 @@ export async function runMultiAgentOperation(input: {
   agent: CliName;
   sessionPath: string;
   prompt: string;
+  message?: string;
   progressRef?: string | null;
   signal?: AbortSignal;
   onChunk?: (text: string) => void;
