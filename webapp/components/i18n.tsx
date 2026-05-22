@@ -89,7 +89,6 @@ export const TEXT = {
       cancelling: "Stopping...",
       cancelHint:
         "실행 중인 CLI 프로세스에 SIGTERM을 보내 즉시 중단하고 중단 결과만 리포트합니다.",
-      copy: "복사",
       copyMessage: "메시지 복사",
       copiedMessage: "복사됨",
       newChat: "+ New Chat",
@@ -460,7 +459,6 @@ export const TEXT = {
       cancelling: "Stopping...",
       cancelHint:
         "SIGTERM running CLI processes immediately and report only the stopped result.",
-      copy: "Copy",
       copyMessage: "Copy message",
       copiedMessage: "Copied",
       newChat: "+ New Chat",

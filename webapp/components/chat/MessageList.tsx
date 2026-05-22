@@ -92,7 +92,6 @@ export default function MessageList({
               <MessageCopyButton
                 content={m.content}
                 copyLabel={t.chat.copyMessage}
-                copyText={t.chat.copy}
                 copiedLabel={t.chat.copiedMessage}
               />
             </div>

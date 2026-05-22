@@ -715,7 +715,6 @@ function MessageBubble({ message }: { message: PublicMessage }) {
         <MessageCopyButton
           content={message.content}
           copyLabel="Copy message"
-          copyText="Copy"
           copiedLabel="Copied"
         />
       </div>
