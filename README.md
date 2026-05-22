@@ -4,7 +4,7 @@
 
 # CLIO
 
-**CLIO is a local-first LLM Wiki workbench.** Put source material in `raw/`, ask a coding agent to ingest it, and grow a durable Markdown wiki in `wiki/` that you can read, search, lint, graph, and improve over time.
+**CLIO is a local-first LLM Wiki and Code Wiki workbench.** Put source material or source code in `raw/`, ask a coding agent to ingest it, and grow a durable Markdown wiki in `wiki/` that you can read, search, lint, graph, and improve over time.
 
 CLIO packages Andrej Karpathy's LLM Wiki pattern into a runnable local project. The user stays in the curator role: you collect source material, decide what matters, and ask questions. The agent does the maintenance work: summarizing sources, creating concept/entity pages, updating indexes, recording logs, checking wiki health, and building graph artifacts.
 
@@ -16,6 +16,7 @@ Most "chat with your documents" tools hide knowledge in a transcript or an opaqu
 |---|---|
 | Local-first source library | Your original material lives in `raw/`; agents treat it as read-only. |
 | Maintained Markdown wiki | Summaries, concepts, entities, answers, lint reports, and graph reports live in `wiki/`. |
+| Code Wiki | Code under `raw/` can become module, API, architecture, testing, and debug pages under `wiki/code/`. |
 | Agent-operated workflows | `codex`, `claude`, `gemini`, or `cline` can run `/ingest`, `/query`, `/lint`, preprocess, and graph workflows. |
 | Browser workbench | A Next.js UI provides Chat, Explorer, Graph, Automations, and Settings tabs. |
 | Incremental processing | Large folders are processed leaf-first in small chunks, then merged into a coherent wiki. |
@@ -156,6 +157,31 @@ Run these from the **Chat** tab:
 | `/lint --fix` | Apply safe automatic fixes and write a lint report. |
 | `/preprocess raw/<path> <rules>` | Dry-run cleanup planning for noise under `raw/`; only `/preprocess --apply` mutates files after backups. |
 
+## Code Wiki
+
+CLIO can document software projects as part of the same local-first knowledge
+base. Put a repository snapshot or an approved symlink under `raw/`, then run
+the normal ingest flow:
+
+```text
+/ingest-loop raw/repos/<project>
+```
+
+The selected coding agent auto-detects code-heavy leaves, reads the
+project-local Code Wiki helper skills, and writes graph-ready Markdown under
+`wiki/code/<project>/`: project overviews, module pages, API/CLI notes,
+architecture synthesis, testing notes, debug notes when logs or failures are
+present, Mermaid diagrams for structure/dependencies, and an OpenGrok-like
+`locations.md` index with symbol, file, and line references. The deterministic
+helper `scripts/code-index.mjs` extracts symbols, import edges, line numbers,
+and Mermaid drafts for agents to use during ingest. Code sources remain
+read-only evidence under `raw/`; actual code edits are separate coding tasks,
+not ingest work.
+
+Code Wiki pages are linked from `wiki/index.md` under `Code` and can be included
+in `wiki-graphify update`, so questions can bridge prose knowledge and
+implementation details.
+
 Run graph workflows from the **Graph** tab:
 
 | Button | What happens |
@@ -217,6 +243,10 @@ raw/
 │       └── paper.pdf
 ├── meetings/
 │   └── 2026-05-17-project-kickoff.md
+├── repos/
+│   └── my-service/              # copied repo or approved symlink
+│       ├── package.json
+│       └── src/
 └── web-clips/
     └── graphify-readme.md
 ```

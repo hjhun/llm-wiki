@@ -28,6 +28,7 @@ export default function Explorer() {
   const searchParams = useSearchParams();
   const linkedWs = parseWs(searchParams.get("ws"));
   const linkedPath = searchParams.get("path")?.replace(/^\/+/, "") ?? null;
+  const linkedLine = parseLine(searchParams.get("line"));
   const [ws, setWs] = useState<WsKey>("wiki");
   const [selected, setSelected] = useState<Entry | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -271,12 +272,13 @@ export default function Explorer() {
           />
         </aside>
         <div className="min-w-0 flex-1">
-          <Editor
-            ws={ws}
-            entry={selected}
-            readOnly={isReadOnly}
-            onSaved={refresh}
-          />
+        <Editor
+          ws={ws}
+          entry={selected}
+          readOnly={isReadOnly}
+          targetLine={linkedWs === ws && selected?.path === linkedPath ? linkedLine : null}
+          onSaved={refresh}
+        />
         </div>
       </section>
       {dialog ? (
@@ -290,6 +292,13 @@ export default function Explorer() {
       ) : null}
     </div>
   );
+}
+
+function parseLine(value: string | null): number | null {
+  if (!value) return null;
+  const first = value.split("-")[0];
+  const line = Number.parseInt(first, 10);
+  return Number.isFinite(line) && line > 0 ? line : null;
 }
 
 type DialogState = {

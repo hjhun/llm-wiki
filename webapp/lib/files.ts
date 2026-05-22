@@ -109,7 +109,8 @@ const TEXT_EXTS = new Set([
   ".md", ".mdx", ".txt", ".json", ".jsonc", ".yaml", ".yml",
   ".ts", ".tsx", ".js", ".jsx", ".css", ".html", ".csv", ".tsv",
   ".log", ".toml", ".ini", ".env", ".sh", ".py", ".go", ".rs",
-  ".sql", ".xml", ".svg",
+  ".java", ".kt", ".swift", ".c", ".cc", ".cpp", ".h", ".hpp",
+  ".cs", ".php", ".rb", ".sql", ".xml", ".svg",
 ]);
 
 export function isLikelyText(rel: string): boolean {

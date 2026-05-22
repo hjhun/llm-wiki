@@ -1,6 +1,6 @@
 ---
 name: wiki-ingest
-description: Read new material in raw/ as leaf-directory chunks and incrementally build wiki/. Responds to the /ingest slash command, "summarize this material", and chat + -> ingest triggers.
+description: Read new material in raw/ as leaf-directory chunks and incrementally build wiki/. Automatically detects prose, code repositories, logs, and test output; code-heavy leaves produce Code Wiki pages under wiki/code/ with module/API docs, source locations, and Mermaid diagrams. Responds to /ingest, /ingest-loop, "summarize this material", and chat + -> ingest triggers.
 allowed-cli: [codex, claude, gemini, cline]
 ---
 
@@ -12,8 +12,9 @@ Read material newly dropped by the user into `raw/` and perform the following.
 
 1. Write one `wiki/sources/<YYYY>/<YYYY-MM>/<slug>.md` summary page per original source.
 2. Create or update related entity/concept pages, reusing existing pages instead of creating near-duplicates (see Step 2.3).
-3. Keep `wiki/index.md` and `wiki/log.md` consistent.
-4. Graph synchronization is **not** performed by this skill. The webapp triggers `wiki-graphify` as separate invocations after ingest progress is detected. Ingest workers must not run graphify or write anything under `wiki/graph/`.
+3. If a leaf is code-heavy, create or update Code Wiki pages under `wiki/code/<project>/` with module/API documentation, architecture/testing/debug notes, code locations, and Mermaid diagrams.
+4. Keep `wiki/index.md` and `wiki/log.md` consistent.
+5. Graph synchronization is **not** performed by this skill. The webapp triggers `wiki-graphify` as separate invocations after ingest progress is detected. Ingest workers must not run graphify or write anything under `wiki/graph/`.
 
 This skill **always follows the leaf-first + merge pass** principle, and is built
 to survive interruption (OOM, SIGTERM, manual cancel) because progress is
@@ -40,6 +41,7 @@ externalized to `wiki/.progress/ingest/`.
 ## Input
 
 - Single file path, such as `raw/foo.pdf` or `raw/notes/bar.md`.
+- Code repositories or source trees under `raw/`, including approved symlinks.
 - Single URL, downloaded to `raw/<slug>.<ext>` before processing.
 - Folder path, such as `raw/dir/`, including its subtree. If the folder or a
   descendant entry is a user-approved symlink located under `raw/`, follow it
@@ -50,6 +52,7 @@ externalized to `wiki/.progress/ingest/`.
 ## Output
 
 - List of new/updated `wiki/**` Markdown files.
+- For code-heavy inputs, graph-ready Code Wiki pages under `wiki/code/<project>/`.
 - Session Markdown with chat log: `sessions/<date>/<time>_ingest.md` (conversation only).
 - Externalized progress: `wiki/.progress/ingest/.state.json` + `wiki/.progress/ingest/leaves/<hash>.json` + human-readable `wiki/.progress/ingest/DASHBOARD.md`.
 - Ingest entries appended to `wiki/log.md`.
@@ -89,6 +92,56 @@ conversation. The host webapp also slims the prompt to the last N turns
 4. If the host coding-agent CLI is stateless (`claude -p`, `codex exec`, …), the
    host already slim-injects: a short dashboard reference + last N turns. Do
    **not** ask for the whole session markdown back.
+5. If the target may contain code, scan only filenames/manifests first to
+   classify leaves. Do not open many source files just to decide whether the
+   input is code.
+6. If code leaves are present, run the deterministic code indexer for the
+   project or leaf before writing Code Wiki pages:
+   ```bash
+   node scripts/code-index.mjs raw/<project-or-leaf> --format=json
+   node scripts/code-index.mjs raw/<project-or-leaf> --format=markdown
+   ```
+   Use the JSON for symbol/dependency evidence and the Markdown output as the
+   first draft for `wiki/code/<project>/locations.md` and `diagrams.md`.
+
+## Code Auto-Detection
+
+`/ingest` and `/ingest-loop` are the only user-facing commands. There is no
+separate Code Wiki command. During leaf enumeration, classify each leaf as
+`prose`, `code`, `mixed`, or `ignore`.
+
+Treat a leaf as `code` or `mixed` when it contains any of:
+
+- Source files: `.ts`, `.tsx`, `.js`, `.jsx`, `.mjs`, `.cjs`, `.py`, `.rs`,
+  `.go`, `.java`, `.kt`, `.swift`, `.c`, `.cc`, `.cpp`, `.h`, `.hpp`, `.cs`,
+  `.php`, `.rb`, `.sh`, `.sql`.
+- Project/config files: `package.json`, `Cargo.toml`, `pyproject.toml`,
+  `go.mod`, `pom.xml`, `build.gradle`, `Dockerfile`, `compose.yaml`,
+  `tsconfig.json`.
+- Tests: filenames containing `test`, `spec`, `__tests__`, `tests/`.
+- Runtime evidence: stack traces, CI logs, failing test output, or issue
+  reproduction notes.
+
+Treat these as `ignore` unless explicitly requested: `.git/`, `node_modules/`,
+`dist/`, `build/`, `target/`, `.next/`, `.venv/`, `vendor/`, coverage output,
+lockfile-only leaves, generated bundles, and binary assets.
+
+Record the classification in `wiki/.progress/ingest/.state.json` per leaf:
+
+```json
+{
+  "leaves": {
+    "raw/repos/foo/src/": {
+      "kind": "code",
+      "project": "foo",
+      "code_outputs": []
+    }
+  }
+}
+```
+
+Use the nearest project manifest or the first directory under `raw/` as the
+`project` name.
 
 ## Workflow
 
@@ -120,6 +173,9 @@ conversation. The host webapp also slims the prompt to the last N turns
    - Existing leaves whose `hash` changed have their status reset to `"pending"` and their `sub_chunks` cleared. (Re-ingest is intentional when content changed.)
    - Leaves that no longer exist on disk get `status: "stale"`; do not delete them — the user may have moved files temporarily.
 4. Plan sub-chunks for each `pending` leaf. A sub-chunk groups up to `chunking.maxFilesPerInvocation` files and stays under `chunking.maxBytes` total. Persist the sub-chunk plan into `.state.json` before any file is opened.
+5. For code leaves, preserve module grouping when possible: keep related source,
+   test, route, schema, and config files in the same sub-chunk if it does not
+   exceed limits. Do not group generated/vendor files.
 
 ### Step 2 — Process **One** Sub-Chunk Per Invocation (the hard rule)
 
@@ -134,23 +190,50 @@ For exactly **one** sub-chunk whose `status === "pending"`:
    - Write `wiki/sources/<YYYY>/<YYYY-MM>/<slug>.md` for that file with the required frontmatter (`title`, `type: source`, `tags`, `sources: [raw/...]`, `updated`) and optional source-page field `source_date: YYYY-MM-DD | YYYY-MM`.
    - Choose `<YYYY>/<YYYY-MM>` by this priority: explicit `source_date` or source text date -> raw path/metadata date -> raw file mtime -> ingest date. If only the year is known, use that year with the fallback month from the next available source.
    - Body: one-line gist → key points (max 12 bullets) → quotes → wiki connections (`[[Entity]]`, `[[Concept]]`) → source path/URL.
+   - For code files, include these additional sections in the source summary:
+     `## Code inventory`, `## Symbols`, `## Dependencies`, `## Locations`.
+     Locations use `raw/...:L<line>` or `raw/...:L<start>-L<end>` when line
+     numbers are known.
    - Update the per-leaf JSON entry: `processed: true`, `summary_page: "wiki/sources/<YYYY>/<YYYY-MM>/<slug>.md"`.
    - **Discard the file body from working memory** before opening the next file. Do not keep two file bodies in context simultaneously.
-3. Update entity/concept pages **from the takeaways only** (the per-leaf JSON), not by re-opening the raw files. If a raw file truly must be re-read, open it, read just the needed span, and close it before moving on.
+3. If the sub-chunk is code-heavy, update Code Wiki pages **from source summaries and symbol/dependency takeaways**:
+   - `wiki/code/<project>/overview.md` — project purpose, entry points,
+     directories, build/test commands, and links to modules/APIs.
+   - `wiki/code/<project>/modules/<module>.md` — module role, key files,
+     public symbols, dependencies, tests, risks, and code locations.
+   - `wiki/code/<project>/apis/<api>.md` — public routes, CLIs, functions,
+     schemas, inputs/outputs, error behavior, implementation locations.
+   - `wiki/code/<project>/architecture.md` — system boundary, components,
+     data/control flow, external dependencies, design decisions supported by
+     evidence.
+   - `wiki/code/<project>/testing.md` — test inventory, commands, covered
+     modules, gaps, and recommended tests.
+   - `wiki/code/<project>/debug-notes.md` — only when logs, stack traces, or
+     failing tests are present.
+   - `wiki/code/<project>/diagrams.md` — Mermaid diagrams for dependency and
+     structure views. Explorer already renders fenced `mermaid` blocks.
+   - Prefer locations and dependency edges from `scripts/code-index.mjs` over
+     hand-written guesses. If the script misses a language feature, supplement
+     it with targeted `rg` searches and mark uncertain line numbers as unknown
+     instead of inventing them.
+   Use the internal helper skills `code-documentation`, `code-architecture`,
+   `code-testing`, and `code-debug` as needed. They are implementation helpers,
+   not separate user-facing commands.
+4. Update entity/concept pages **from the takeaways only** (the per-leaf JSON), not by re-opening the raw files. If a raw file truly must be re-read, open it, read just the needed span, and close it before moving on.
    - **Reuse before creating.** Before adding a new `wiki/entities/` or `wiki/concepts/` page, check `wiki/index.md` for an existing page naming the same target — including case, spacing, punctuation, and English/Korean variants (`Transformer` ≈ `트랜스포머` ≈ `transformer-model`). If one exists, update it and link with the index's exact `[[Page Name]]`. Create a new page only when no existing page covers the target. Parallel workers each see only part of the input, so this is the main safeguard against near-duplicate pages — and therefore against duplicate, disconnected graph nodes.
-4. **Contradictions**: if a new claim disagrees with an existing wiki page, add a block quote on that page:
+5. **Contradictions**: if a new claim disagrees with an existing wiki page, add a block quote on that page:
    ```markdown
    > ⚠️ Conflicts with [[wiki/sources/<YYYY>/<YYYY-MM>/<slug>]]: this source claims X. Follow-up review needed.
    ```
-5. Append a single chunk entry to `wiki/log.md`:
+6. Append a single chunk entry to `wiki/log.md`:
    ```markdown
    ## [YYYY-MM-DD HH:MM] ingest | <leaf path> | sub-chunk <id>
    - Changed files: `wiki/sources/2026/2026-05/foo.md`, `wiki/entities/bar.md`
    - Notes: <files done>/<files total> in leaf
    ```
-6. Mark the sub-chunk `status: "done"`, set `ended_at`, record `source_pages_written`. If this was the leaf's last sub-chunk, set `leaves[<leafPath>].status = "done"` **and queue the merge pass**: add the leaf's immediate parent directory (a POSIX path ending in `/`; use `raw/` for a leaf sitting directly under `raw/`) to `merge_pass.pending_parents` unless it is already listed. This is the only place `pending_parents` is filled — Step 3 and the `/ingest-loop` backend driver both rely on it to know merge work is outstanding, so skipping it leaves the loop unable to detect completion. Persist `.state.json`.
-7. **Regenerate `wiki/.progress/ingest/DASHBOARD.md`** from `.state.json` (idempotent — overwrite, do not append).
-8. **Release `.lock` and return.** Do **not** start the next sub-chunk in the same call. The next `/ingest` invocation will read `.state.json` and pick up the next `pending` sub-chunk.
+7. Mark the sub-chunk `status: "done"`, set `ended_at`, record `source_pages_written` and any `code_outputs`. If this was the leaf's last sub-chunk, set `leaves[<leafPath>].status = "done"` **and queue the merge pass**: add the leaf's immediate parent directory (a POSIX path ending in `/`; use `raw/` for a leaf sitting directly under `raw/`) to `merge_pass.pending_parents` unless it is already listed. This is the only place `pending_parents` is filled — Step 3 and the `/ingest-loop` backend driver both rely on it to know merge work is outstanding, so skipping it leaves the loop unable to detect completion. Persist `.state.json`.
+8. **Regenerate `wiki/.progress/ingest/DASHBOARD.md`** from `.state.json` (idempotent — overwrite, do not append).
+9. **Release `.lock` and return.** Do **not** start the next sub-chunk in the same call. The next `/ingest` invocation will read `.state.json` and pick up the next `pending` sub-chunk.
 
 If an exception is raised during this step:
 - Set the sub-chunk `status: "error"`, store the error message in `leaves[<leafPath>].last_error`.
@@ -165,13 +248,15 @@ Only run when **every** leaf in the input scope has `status === "done"` and `mer
 2. If `merge_pass.pending_parents` is empty there is nothing to merge: set `merge_pass.status = "done"`, regenerate `DASHBOARD.md`, release the lock, and return. Otherwise pick **one** parent directory from `merge_pass.pending_parents`. For that parent:
    - Combine child-leaf summaries into or onto `wiki/concepts/<topic>.md` (or wherever appropriate).
    - If useful, write/append the root synthesis note at `wiki/synthesis/<batch>.md`.
+   - If the parent contains code leaves, consolidate `wiki/code/<project>/`
+     pages and refresh `diagrams.md` so dependencies across leaves are shown.
 3. Append a merge entry to `wiki/log.md`:
    ```markdown
    ## [YYYY-MM-DD HH:MM] ingest | merge pass | <parent>
    - Integrated pages: `wiki/concepts/foo.md`
    ```
 4. Remove that parent from `merge_pass.pending_parents`. If empty, set `merge_pass.status = "done"` and reorder `wiki/index.md` in bulk now:
-   - Category order: Entities → Concepts → Sources → Answers → Comparisons → Lint Reports → Graph.
+   - Category order: Entities → Concepts → Code → Sources → Answers → Comparisons → Lint Reports → Graph.
    - Sort alphabetically within each category.
    - Item format: `- [[Page Name]] — One-line summary`.
 5. Regenerate `DASHBOARD.md`. Release lock. Return.
@@ -200,12 +285,97 @@ stale graph artifacts.
 - **Force re-run a leaf**: user can ask "re-ingest raw/foo/". Set that leaf's `status` back to `"pending"` and clear its `sub_chunks`; the next call processes it.
 - **`wiki/.progress/ingest/.state.json` corrupted**: rename to `.state.json.bak.<ISO8601>`, re-enumerate from scratch. Warn the user in chat.
 
+## Code Wiki Page Conventions
+
+Code Wiki pages use the same frontmatter rules as normal wiki pages, with
+`type: code` or `type: architecture`.
+
+Every Code Wiki page should include code location links when known:
+
+```markdown
+- `startServer()` — `raw/repos/foo/src/server.ts:L42-L88`
+  ([open](/explorer?ws=raw&path=repos/foo/src/server.ts&line=42))
+```
+
+Use logical `raw/...` paths only. The Explorer link path omits the `raw/`
+workspace prefix and may include `&line=<n>` to scroll/highlight the line. Keep
+the full line span in nearby text. If a function/class line number is unknown,
+include the file path and symbol name rather than guessing.
+
+### `wiki/code/<project>/diagrams.md`
+
+Create Mermaid diagrams when code structure or dependencies are discoverable.
+Prefer small, readable diagrams over exhaustive hairballs.
+
+Recommended sections:
+
+````markdown
+---
+title: <Project> Diagrams
+type: code
+tags: [code, diagram, <project>]
+sources: [...]
+updated: YYYY-MM-DD
+---
+
+# <Project> Diagrams
+
+## Module Dependencies
+
+```mermaid
+flowchart LR
+  Web["webapp"] --> API["API routes"]
+  API --> Lib["lib/*"]
+```
+
+## Request / Control Flow
+
+```mermaid
+sequenceDiagram
+  participant UI
+  participant API
+  participant Agent
+  UI->>API: POST /api/chat/send
+  API->>Agent: run selected CLI
+```
+````
+
+Use Mermaid node labels that match Code Wiki page names when possible, so graph
+and wiki navigation stay aligned.
+
+## Code Location Index
+
+For projects with many code pages, write or update
+`wiki/code/<project>/locations.md`:
+
+```markdown
+---
+title: <Project> Code Locations
+type: code
+tags: [code, locations, <project>]
+sources: [...]
+updated: YYYY-MM-DD
+---
+
+# <Project> Code Locations
+
+| Symbol | Kind | Location | Open |
+|---|---|---|---|
+| `runIngestLoop` | function | `raw/repos/foo/webapp/lib/ingest-loop.ts:L940-L1094` | [open](/explorer?ws=raw&path=repos/foo/webapp/lib/ingest-loop.ts&line=940) |
+```
+
+This is the Code Wiki's OpenGrok-like index: it should be compact, searchable,
+and focused on important functions/classes/routes/config rather than every
+private local variable.
+
 ## Prohibited (hard rules)
 
 - Do **not** modify, delete, or move files under `raw/` or any real filesystem
   target reached through a `raw/` symlink.
 - Do **not** delete wiki pages. Retire them by moving to `wiki/archive/<original-path>` with a one-line reason.
 - Do **not** invent external URLs. If a source is ambiguous, mark it as "source unknown".
+- Do **not** format, patch, build, or test source repositories under `raw/`
+  during ingest. They are evidence. Actual code edits are separate coding tasks.
 - Do **not** group files beyond `chunking.maxFilesPerInvocation` in one call.
 - Do **not** process more than one sub-chunk per LLM invocation when `chunking.unitPerCall === "one_subchunk"`.
 - Do **not** keep two raw file bodies in working memory at the same time within a single call.

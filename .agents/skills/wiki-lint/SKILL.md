@@ -75,6 +75,15 @@ Classify each item as "auto-fixable" or "manual review needed".
 ### G. Index Consistency (Auto)
 - A page is missing from `wiki/index.md`.
 - Auto-fix: infer category from `type`, add one line, and sort alphabetically.
+  Category mapping:
+  - `entity` -> `Entities`
+  - `concept` -> `Concepts`
+  - `code` or `architecture` -> `Code`
+  - `source` -> `Sources`
+  - `answer` -> `Answers`
+  - `comparison` or `analysis` -> `Comparisons`
+  - `lint` -> `Lint Reports`
+  - graph reports -> `Graph`
 
 ### H. Graph Consistency (Manual, When Graph Is Active)
 - A node exists in `wiki/graph/graph.json` without a matching wiki page, or vice versa.

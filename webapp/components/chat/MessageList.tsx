@@ -1,14 +1,15 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { Children, useEffect, useRef, useState } from "react";
 import {
   Archive,
   Bot,
   CircleDotDashed,
+  ExternalLink,
   Terminal,
   UserRound,
 } from "lucide-react";
-import ReactMarkdown from "react-markdown";
+import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { useLanguage } from "../i18n";
 import { EmptyState } from "../ui";
@@ -24,6 +25,44 @@ const ROLE_STYLE: Record<string, string> = {
   user: "chat-message-user",
   assistant: "chat-message-assistant",
   system: "chat-message-system",
+};
+
+const markdownComponents: Components = {
+  a({ href, children, ...props }) {
+    const isExplorerLink = href?.startsWith("/explorer?");
+    if (isExplorerLink) {
+      return (
+        <a
+          href={href}
+          className="not-prose inline-flex max-w-full items-center gap-1 rounded border border-accent/40 bg-accent/10 px-1.5 py-0.5 align-baseline font-mono text-[11px] text-accent no-underline hover:border-accent hover:bg-accent/15"
+          {...props}
+        >
+          <ExternalLink aria-hidden className="h-3 w-3 shrink-0" />
+          <span className="truncate">{children}</span>
+        </a>
+      );
+    }
+    return (
+      <a href={href} {...props}>
+        {children}
+      </a>
+    );
+  },
+  code({ className, children, node: _node, ...props }) {
+    const match = /language-(\w+)/.exec(className ?? "");
+    const language = match?.[1]?.toLowerCase();
+    const source = Children.toArray(children).join("").replace(/\n$/, "");
+
+    if (language === "mermaid") {
+      return <MermaidDiagram source={source} />;
+    }
+
+    return (
+      <code className={className} {...props}>
+        {children}
+      </code>
+    );
+  },
 };
 
 export default function MessageList({
@@ -105,7 +144,10 @@ export default function MessageList({
               ) : null}
             </header>
             <div className="prose prose-theme max-w-none text-[13.5px]">
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                components={markdownComponents}
+              >
                 {m.content || t.chat.empty}
               </ReactMarkdown>
             </div>
@@ -159,5 +201,85 @@ export default function MessageList({
       ) : null}
       <div ref={endRef} />
     </div>
+  );
+}
+
+function MermaidDiagram({ source }: { source: string }) {
+  const [svg, setSvg] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const idRef = useRef<string | null>(null);
+  const renderCountRef = useRef(0);
+
+  if (!idRef.current) {
+    idRef.current = `chat-mermaid-${Math.random().toString(36).slice(2)}`;
+  }
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function renderDiagram() {
+      try {
+        setSvg(null);
+        setError(null);
+        const mermaid = (await import("mermaid")).default;
+        const theme =
+          document.documentElement.dataset.theme === "dark" ? "dark" : "default";
+
+        mermaid.initialize({
+          startOnLoad: false,
+          securityLevel: "strict",
+          theme,
+        });
+
+        renderCountRef.current += 1;
+        const result = await mermaid.render(
+          `${idRef.current}-${renderCountRef.current}`,
+          source,
+        );
+        if (!cancelled) {
+          setSvg(result.svg);
+          setError(null);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setSvg(null);
+          setError(err instanceof Error ? err.message : String(err));
+        }
+      }
+    }
+
+    renderDiagram();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [source]);
+
+  if (error) {
+    return (
+      <div className="not-prose my-4 overflow-hidden rounded border border-red-900/60 bg-red-950/20">
+        <div className="border-b border-red-900/60 px-3 py-2 text-xs text-red-300">
+          Mermaid render failed: {error}
+        </div>
+        <pre className="overflow-auto p-3 text-[11px] leading-relaxed text-ink-dim">
+          {source}
+        </pre>
+      </div>
+    );
+  }
+
+  if (!svg) {
+    return (
+      <div className="not-prose my-4 rounded border border-line bg-bg-subtle px-3 py-2 text-xs text-ink-faint">
+        Rendering Mermaid diagram...
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className="not-prose my-4 overflow-auto rounded border border-line bg-bg-subtle p-3 [&_svg]:h-auto [&_svg]:max-w-full"
+      dangerouslySetInnerHTML={{ __html: svg }}
+    />
   );
 }

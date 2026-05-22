@@ -152,9 +152,10 @@ export const ConfigSchema = z.object({
      * `null` disables the timeout entirely for that kind. `ingest` defaults to
      * null because a single ingest pass can legitimately run for tens of
      * minutes per leaf chunk and SIGTERM-ing the child mid-summary corrupts
-     * partial progress. `chat` defaults to 30 minutes — the chat UI surfaces a
-     * Cancel button for user-driven aborts, but the timeout still protects
-     * against a CLI that wedges silently.
+     * partial progress. Code-heavy inputs still use the ingest timeout because
+     * they are handled inside the normal wiki-ingest flow. `chat` defaults to
+     * 30 minutes — the chat UI surfaces a Cancel button for user-driven aborts,
+     * but the timeout still protects against a CLI that wedges silently.
      */
     timeouts: z
       .object({

@@ -8,14 +8,18 @@
 > This repository is an **LLM Wiki** implementation of Andrej Karpathy's [`llm-wiki.md`](./llm-wiki.md) pattern.
 > You, the coding agent, are the **maintainer** of this wiki. The user is the curator.
 > See [`IDEATION.md`](./IDEATION.md) for the design background.
+> CLIO also supports a **Code Wiki** mode: source code stored under `raw/` (or
+> approved `raw/` symlinks) can be documented into `wiki/code/` and connected to
+> the same Markdown/graph knowledge base.
 
 ---
 
 ## 1. Purpose and Roles
 
-- The user gathers source material in `raw/`. They decide what to read and what to ask.
+- The user gathers source material in `raw/`. They decide what to read and what to ask. Source material may be prose, PDFs, web captures, logs, or software codebases.
 - You incrementally **build and maintain** the Markdown wiki under `wiki/`.
   - Create summary pages, update entity/concept pages, fill indexes and logs, and flag contradictions.
+  - For code inputs, create Code Wiki pages for projects, modules, APIs, architecture, testing, and debug knowledge under `wiki/code/`.
   - You handle the maintenance work: summarizing, cross-referencing, organizing, and preserving consistency.
 - The wiki should be searchable and understandable as a coherent work that another person can read.
 
@@ -28,6 +32,7 @@
 | `raw/.trash/` | LLM via `/preprocess`, UI soft-delete | Append-only quarantine | Files moved out of `raw/` by `/preprocess` or by the Explorer's delete button. Filename is `<ISO8601>_<basename>`; recoverable. |
 | `wiki/` | LLM | LLM may freely write/update | Main wiki body. All generated artifacts go here. |
 | `wiki/sources/` | LLM | LLM | One summary page per original source. |
+| `wiki/code/` | LLM | LLM | Code Wiki pages: project overviews, modules, APIs, architecture, testing, and debug notes derived from code in `raw/`. |
 | `wiki/answers/` | LLM | LLM | Pages fed back from query answers. |
 | `wiki/lint/` | LLM | LLM | Lint reports (`<date>.md`). |
 | `wiki/graph/` | LLM (graphify) | LLM | Knowledge graph artifacts: `graph.json`, `GRAPH_REPORT.md`, `parts/`, `.state.json`. |
@@ -40,9 +45,9 @@
 | `webapp/`, `config/` | System | User/admin | Next.js full-stack web UI and settings. Do not touch during wiki operations (`/ingest`, `/query`, `/lint`). |
 | `cli-rs/`, `bin/` | System | User/admin | Rust `clio` CLI source and the binary `setup.sh` builds from it. Do not touch during wiki operations. |
 
-## 3. Operations - Preprocess / Ingest / Query / Lint
+## 3. Operations - Preprocess / Ingest / Query / Lint / Code Wiki
 
-Each of the four operations maps to one skill. If these rules conflict with a skill body, **the skill body takes precedence** within its scope.
+Each operation maps to one or more project skills. If these rules conflict with a skill body, **the skill body takes precedence** within its scope.
 
 ### 3.1 Ingest (`/ingest`, [`.agents/skills/wiki-ingest/SKILL.md`](.agents/skills/wiki-ingest/SKILL.md))
 - Input: new material under `raw/`, either a single file, URL, folder, or user-approved symlink entry under `raw/`.
@@ -76,6 +81,29 @@ Each of the four operations maps to one skill. If these rules conflict with a sk
 - Always runs in two phases: the dry-run must produce a `<ts>-plan.json` and a chat summary first; only `/preprocess --apply` mutates `raw/`.
 - Leaf-first chunking still applies for large `raw/` trees (Section 7) — the skill enumerates leaves under `target` and merges per-leaf plans into a single `<ts>-plan.json` before showing the user.
 
+### 3.5 Code Wiki (inside `/ingest`, [`.agents/skills/wiki-ingest/SKILL.md`](.agents/skills/wiki-ingest/SKILL.md))
+- Input: source code, repositories, logs, stack traces, test output, CI output, or code-related captures under `raw/`.
+- Treat `raw/` code as immutable source evidence. Do not format, build, patch, delete, or vendor-prune it during Code Wiki operations.
+- Always follow the **leaf-directory chunks + merge pass** principle (Section 7), using the normal `wiki/.progress/ingest/` state. There is no separate user-facing Code Wiki command.
+- Outputs:
+  - `wiki/sources/<YYYY>/<YYYY-MM>/<slug>.md` source summaries for code files or code groups
+  - `wiki/code/<project>/overview.md`
+  - `wiki/code/<project>/modules/*.md`
+  - `wiki/code/<project>/apis/*.md`
+  - optional `wiki/code/<project>/architecture.md`, `testing.md`, and `debug-notes.md`
+  - updated `wiki/index.md` and appended `wiki/log.md` entries
+- Use specialized Code Wiki skills as needed:
+  - [`code-documentation`](.agents/skills/code-documentation/SKILL.md) for module/API/runbook docs
+  - [`code-architecture`](.agents/skills/code-architecture/SKILL.md) for architecture synthesis
+  - [`code-testing`](.agents/skills/code-testing/SKILL.md) for test inventory and gaps
+  - [`code-debug`](.agents/skills/code-debug/SKILL.md) for logs, stack traces, and failure analysis
+- Code Wiki pages should bridge back to the ordinary LLM Wiki with wikilinks when code implements a documented concept.
+
+### 3.6 Browser Capture (`browser-capture`, [`.agents/skills/browser-capture/SKILL.md`](.agents/skills/browser-capture/SKILL.md))
+- Input: user-approved web pages, CLIO web UI QA observations, browser screenshots, or extracted text.
+- Output: source candidates under `raw/chat/<YYYY-MM-DD>/` or `raw/automation/<slug>/` for later `/ingest`.
+- Do not capture credentials, cookies, API keys, or private account data unless explicitly required and safely redacted.
+
 ## 4. Page Conventions
 
 ### 4.1 Page Types
@@ -84,13 +112,15 @@ Each of the four operations maps to one skill. If these rules conflict with a sk
 - **Source**: one page per original source (`wiki/sources/<YYYY>/<YYYY-MM>/`).
 - **Answer**: fed-back query answer (`wiki/answers/`).
 - **Comparison/Analysis**: synthesis page comparing or analyzing two or more targets.
+- **Code**: project, module, API, CLI, route, schema, test, or runbook pages under `wiki/code/`.
+- **Architecture**: system/component structure and decisions, especially Code Wiki architecture pages.
 
 ### 4.2 Required YAML Frontmatter
 
 ```yaml
 ---
 title: <page title>
-type: entity | concept | source | answer | comparison | analysis
+type: entity | concept | source | answer | comparison | analysis | code | architecture
 tags: [tag1, tag2]
 sources: [wiki/sources/<YYYY>/<YYYY-MM>/<slug>.md, ...]
 updated: YYYY-MM-DD
@@ -117,7 +147,7 @@ use that year with the fallback month from the next available source.
 
 ### 5.1 `wiki/index.md`
 - Category catalog. Each item is one line: `- [[Page Name]] — One-line summary`.
-- Categories: `Entities`, `Concepts`, `Sources`, `Answers`, `Comparisons`, `Lint Reports`, `Graph`.
+- Categories: `Entities`, `Concepts`, `Code`, `Sources`, `Answers`, `Comparisons`, `Lint Reports`, `Graph`.
 - At the final step of each ingest/query/lint merge pass, sort and deduplicate the index in bulk.
 
 ### 5.2 `wiki/log.md`
@@ -136,9 +166,12 @@ use that year with the fallback month from the next available source.
 |---|---|
 | `/preprocess [path] [description]`, `/preprocess --apply`, "clean up ads / empty files in raw" | [`wiki-preprocess`](.agents/skills/wiki-preprocess/SKILL.md) |
 | `/ingest <path|url>`, "summarize this material", `+ -> ingest` | [`wiki-ingest`](.agents/skills/wiki-ingest/SKILL.md) |
+| `/ingest <raw code path>`, `/ingest-loop <raw code path>`, "code wiki", "document this codebase", "analyze this repo/code" | [`wiki-ingest`](.agents/skills/wiki-ingest/SKILL.md), which auto-detects code leaves and uses [`code-documentation`](.agents/skills/code-documentation/SKILL.md), [`code-architecture`](.agents/skills/code-architecture/SKILL.md), [`code-testing`](.agents/skills/code-testing/SKILL.md), or [`code-debug`](.agents/skills/code-debug/SKILL.md) as internal helpers |
 | `/query <question>`, general questions | [`wiki-query`](.agents/skills/wiki-query/SKILL.md) |
 | `/lint`, "check the wiki" | [`wiki-lint`](.agents/skills/wiki-lint/SKILL.md) |
 | "build/update/query the graph" | [`wiki-graphify`](.agents/skills/wiki-graphify/SKILL.md) |
+| "capture this website", "open this page and save evidence", "test the web UI in browser" | [`browser-capture`](.agents/skills/browser-capture/SKILL.md) |
+| "add/update/audit a skill", "improve CLIO skills" | [`skill-maintenance`](.agents/skills/skill-maintenance/SKILL.md) |
 | Optional qmd installed | [`wiki-search-qmd`](.agents/skills/wiki-search-qmd/SKILL.md) |
 | Optional marp installed | [`wiki-marp`](.agents/skills/wiki-marp/SKILL.md) |
 
@@ -146,7 +179,7 @@ use that year with the fallback month from the next available source.
 
 ## 7. Shared Operation Principle - Leaf-First + Merge (Required)
 
-This applies to both ingest and graphify. Never start by throwing the whole root into one operation.
+This applies to ingest, Code Wiki ingest, preprocess planning, and graphify. Never start by throwing the whole root into one operation.
 
 1. **Find leaf directories**: in the target tree (`raw/`, `wiki/`), find directories with no child directories. For `raw/`, follow symlinked files/directories that are themselves located under `raw/`, keep their logical `raw/...` paths in state and citations, and track visited real paths/inodes to avoid symlink loops.
 2. **Process by chunk**: group only the files in each leaf and process them once.
@@ -165,6 +198,7 @@ This applies to both ingest and graphify. Never start by throwing the whole root
 ## 8. Graph Integration
 
 - Graph creation, update, and query operations must go through the [`wiki-graphify`](.agents/skills/wiki-graphify/SKILL.md) skill.
+- Code Wiki pages under `wiki/code/` are graph inputs. Graph nodes should connect code pages to implemented concepts, APIs, modules, and source summaries.
 - The web app Graph tab does not execute graphify directly. It sends `wiki-graphify build/update` requests to the coding agent CLI selected in Settings, and the coding agent follows this repository's rules and skills to run graphify, chunk processing, and the merge pass.
 - Wiki pages must not call the `graphify` binary directly. The coding agent running `wiki-graphify` chooses the execution path: global `graphify`, or `python3 -m graphify` when needed.
 - `wiki-query` may optionally use graph context from `wiki/graph/GRAPH_REPORT.md`, node adjacency, or `wiki-graphify query` as an auxiliary candidate/context source; it must still ground final answers in wiki/source pages.
@@ -185,6 +219,7 @@ This applies to both ingest and graphify. Never start by throwing the whole root
 - Do **not** manually edit `sessions/`, `config/local.json`, or `.env*`.
 - Do not leave credentials, API keys, or personal data in plaintext in wiki pages. If found, mask them and report them under `wiki/lint/`.
 - Do not try to ingest all of `raw/` in one pass. Always follow the chunk policy in Section 7.
+- During Code Wiki operations, do not modify source repositories under `raw/`; treat them as evidence. Any actual code changes belong to a separate coding task outside `/ingest`.
 
 ## 10. Host Coding Agent CLI
 
@@ -228,3 +263,12 @@ Mental checklist for one ingest run:
 - [ ] Did you organize parent pages and `index.md` in the merge pass?
 - [ ] Optional: did you call `wiki-graphify update`?
 - [ ] Did you record progress in the session Markdown?
+
+Mental checklist for one Code Wiki run:
+
+- [ ] Did you process only code-looking leaves under `raw/` or the requested target?
+- [ ] Did you skip generated/vendor/build directories unless requested?
+- [ ] Did you write source summaries and `wiki/code/<project>/` pages?
+- [ ] Did you connect modules/APIs/tests to existing concepts with wikilinks?
+- [ ] Did you update `wiki/index.md` under the `Code` category?
+- [ ] Did you append a `wiki/log.md` entry without editing old entries?

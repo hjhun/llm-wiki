@@ -7,7 +7,7 @@ import { Button, cx } from "../ui";
 import MarkdownPreview from "./MarkdownPreview";
 import type { Entry, WsKey } from "./types";
 
-const TEXT_EXT_RE = /\.(md|mdx|txt|json|jsonc|yaml|yml|ts|tsx|js|jsx|css|html|csv|tsv|log|toml|ini|env|sh|py|go|rs|sql|xml|svg)$/i;
+const TEXT_EXT_RE = /\.(md|mdx|txt|json|jsonc|yaml|yml|ts|tsx|js|jsx|css|html|csv|tsv|log|toml|ini|env|sh|py|go|rs|java|kt|swift|c|cc|cpp|h|hpp|cs|php|rb|sql|xml|svg)$/i;
 const IMAGE_EXT_RE = /\.(png|jpe?g|gif|webp|svg)$/i;
 const PDF_EXT_RE = /\.pdf$/i;
 const VIDEO_EXT_RE = /\.(mp4|webm|mov|m4v|ogv)$/i;
@@ -18,11 +18,13 @@ export default function Editor({
   ws,
   entry,
   readOnly,
+  targetLine,
   onSaved,
 }: {
   ws: WsKey;
   entry: Entry | null;
   readOnly: boolean;
+  targetLine?: number | null;
   onSaved?: () => void;
 }) {
   const { t } = useLanguage();
@@ -32,6 +34,8 @@ export default function Editor({
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const lastLoadedRef = useRef<string | null>(null);
+  const markdownTextareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const textTextareaRef = useRef<HTMLTextAreaElement | null>(null);
 
   const isMd = entry ? /\.(md|mdx)$/i.test(entry.path) : false;
   const isText = entry ? TEXT_EXT_RE.test(entry.path) : false;
@@ -84,6 +88,17 @@ export default function Editor({
       }
     })();
   }, [entry, ws, isText]);
+
+  useEffect(() => {
+    if (!targetLine || !isText || !content) return;
+    const textarea = isMd ? markdownTextareaRef.current : textTextareaRef.current;
+    if (!textarea) return;
+    const { start, end } = lineRange(content, targetLine);
+    textarea.focus();
+    textarea.setSelectionRange(start, end);
+    const lineHeight = Number.parseFloat(window.getComputedStyle(textarea).lineHeight) || 20;
+    textarea.scrollTop = Math.max(0, (targetLine - 4) * lineHeight);
+  }, [targetLine, isText, isMd, content]);
 
   async function onSave() {
     if (!entry) return;
@@ -227,6 +242,7 @@ export default function Editor({
                 {t.common.edit}
               </div>
               <textarea
+                ref={markdownTextareaRef}
                 value={content}
                 readOnly={readOnly}
                 spellCheck={false}
@@ -246,6 +262,7 @@ export default function Editor({
           </div>
         ) : (
           <textarea
+            ref={textTextareaRef}
             value={content}
             readOnly={readOnly}
             spellCheck={false}
@@ -256,6 +273,25 @@ export default function Editor({
       </div>
     </div>
   );
+}
+
+function lineRange(content: string, line: number): { start: number; end: number } {
+  if (line <= 1) {
+    const end = content.indexOf("\n");
+    return { start: 0, end: end === -1 ? content.length : end };
+  }
+  let current = 1;
+  let start = 0;
+  for (let i = 0; i < content.length; i += 1) {
+    if (content.charCodeAt(i) === 10) {
+      current += 1;
+      start = i + 1;
+      if (current === line) break;
+    }
+  }
+  if (current !== line) return { start: content.length, end: content.length };
+  const next = content.indexOf("\n", start);
+  return { start, end: next === -1 ? content.length : next };
 }
 
 function blobHref(ws: WsKey, path: string): string {

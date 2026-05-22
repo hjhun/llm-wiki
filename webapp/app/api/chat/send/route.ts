@@ -42,7 +42,8 @@ const Body = z.object({
    * when it detects a slash command so long-running ingest jobs are not
    * SIGTERM-ed at the 5-minute chat cap. "ingest-loop" runs the backend
    * loop that drives wiki-ingest one sub-chunk at a time until the
-   * progress state reports no remaining work.
+   * progress state reports no remaining work. Code-heavy material is handled
+   * by the normal ingest flow through project-local Code Wiki rules.
    */
   kind: z
     .enum([

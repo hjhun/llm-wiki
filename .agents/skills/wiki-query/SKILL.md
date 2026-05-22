@@ -10,7 +10,9 @@ allowed-cli: [codex, claude, gemini, cline]
 
 Answer the user's question in this order.
 
-1. Narrow candidate pages from `wiki/index.md`.
+1. Narrow candidate pages from `wiki/index.md`, including the `Code` category
+   when the question mentions code, functions, files, APIs, dependencies,
+   tests, errors, modules, or implementation details.
 2. Optionally use helper tools to improve candidate selection: `wiki-search-qmd` for search/reranking, and `wiki-graphify` for graph relationships, communities, and 1-hop neighbor clues.
 3. Read candidate pages and write an answer **with citations**.
 4. If the wiki is insufficient, use `raw/` original sources as supplementary context. **Only cite external URLs that the user provided or that already exist in the wiki/source material**; do not guess.
@@ -33,7 +35,8 @@ Answer the user's question in this order.
 
 ## Output
 
-- Chat answer in Markdown. Cited pages are shown as wikilinks.
+- Chat answer in Markdown. Cited pages are shown as wikilinks. Code answers
+  include source locations and Explorer links when available.
 - With user consent: create `wiki/answers/<slug>.md` and update `wiki/index.md` and `wiki/log.md`.
 
 ## Preflight
@@ -47,6 +50,12 @@ Answer the user's question in this order.
 ### Step 1 - Narrow Candidate Pages
 1. Read all of `wiki/index.md`.
 2. Select candidate pages based on question keywords/entities/concepts.
+   - For code questions, include `wiki/code/**` pages from the `Code` category,
+     especially `overview.md`, `locations.md`, `diagrams.md`, module/API pages,
+     `architecture.md`, `testing.md`, and `debug-notes.md`.
+   - Treat words like "함수", "클래스", "라인", "파일", "API", "route",
+     "dependency", "의존성", "구조", "call flow", "stack trace", and
+     "어디" as code-candidate signals.
 3. If `wiki-search-qmd` is active, delegate the same question and receive additional candidates via BM25 + vector + reranking.
 4. If graph context is active, inspect `wiki/graph/graph.json` and `wiki/graph/GRAPH_REPORT.md` or ask `wiki-graphify query "<question>"` for related nodes, 1-hop neighbors, communities, and cited pages. Treat these as candidate/context clues, not final evidence.
 5. If there are too many candidates (>20), filter by the one-line summaries in the index, qmd scores when present, and graph relationship clues when present; keep the top 10.
@@ -55,7 +64,11 @@ Answer the user's question in this order.
 1. Read candidate pages. Use frontmatter `sources:` to drill down one level into original summary pages.
 2. Follow wikilinks `[[...]]` to adjacent pages one hop further. Use two or more hops only when the question clearly requires it.
 3. If graph context is active, add relationship clues from `wiki/graph/GRAPH_REPORT.md` or `wiki-graphify query`, such as hub nodes, 1-hop neighbors, and communities.
-4. If information is insufficient, read original files in `raw/`. **`raw/` is read-only.**
+4. For code questions, prefer `wiki/code/<project>/locations.md` and module/API
+   pages before opening raw files. If a requested symbol is not indexed, use
+   `rg` against the relevant logical `raw/...` tree and read only the matching
+   spans.
+5. If information is insufficient, read original files in `raw/`. **`raw/` is read-only.**
 
 ### Step 3 - Write the Answer
 1. Select answer format:
@@ -64,9 +77,25 @@ Answer the user's question in this order.
 2. Cite every factual claim. Formats:
    - Wikilink: `... ([[wiki/sources/2026/2026-05/foo]])`.
    - Original source: `... (raw/articles/foo/bar.md L42-58)`.
+   - Code location: `` `raw/repos/foo/src/server.ts:L42-L88` `` plus an
+     Explorer link: `[open](/explorer?ws=raw&path=repos/foo/src/server.ts&line=42)`.
    - Graph: `... (graph: community #3, node "Karpathy")`.
-3. If a source is not in the wiki, explicitly say "source unknown" or withhold the answer.
-4. Always append these two lines at the end:
+3. For code answers, include a compact **Related Code** table when useful:
+   ```markdown
+   | Symbol/File | Role | Location | Open |
+   |---|---|---|---|
+   | `runIngestLoop` | ingest-loop driver | `raw/repos/foo/webapp/lib/ingest-loop.ts:L940-L1094` | [open](/explorer?ws=raw&path=repos/foo/webapp/lib/ingest-loop.ts&line=940) |
+   ```
+   The path after `ws=raw&path=` omits the `raw/` prefix because Explorer
+   already selects the `raw` workspace. Add `&line=<start>` so Explorer
+   scrolls/highlights the starting line, and keep the full span in the Location
+   column.
+4. If the user asks for dependency or structure visualization and a relevant
+   `wiki/code/<project>/diagrams.md` exists, cite and link it. If no diagram
+   exists but enough Code Wiki evidence exists, include a small Mermaid block in
+   the answer and recommend re-running `/ingest raw/<project>` to persist it.
+5. If a source is not in the wiki, explicitly say "source unknown" or withhold the answer.
+6. Always append these two lines at the end:
    - **Cited pages**: `[[wiki/sources/2026/2026-05/foo]], [[wiki/concepts/bar]]` ...
    - **Save**: `[ ] wiki/answers/<suggested-slug>.md` toggle, which feeds the answer back when the user clicks it.
 
@@ -100,6 +129,8 @@ Answer the user's question in this order.
 - Do not copy credentials, API keys, or personal data verbatim into answers.
 - Do not answer from qmd or graphify output alone. Helper-tool output only helps select and contextualize pages; factual claims must be grounded in wiki pages, source summaries, or read-only raw sources, with graph citations used only as supplemental relationship evidence.
 - Do not read the entire wiki in one query. The standard flow is index -> candidates -> one-hop expansion.
+- Do not treat code locations as proof unless they came from Code Wiki pages,
+  source summaries, or a targeted read/search of `raw/`.
 
 ## Minimal Scenario: Single Question
 
