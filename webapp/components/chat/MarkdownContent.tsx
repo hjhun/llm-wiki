@@ -1,0 +1,238 @@
+"use client";
+
+import {
+  Children,
+  isValidElement,
+  useEffect,
+  useRef,
+  useState,
+  type ReactElement,
+  type ReactNode,
+} from "react";
+import { Check, Copy, ExternalLink } from "lucide-react";
+import ReactMarkdown, { type Components } from "react-markdown";
+import remarkGfm from "remark-gfm";
+
+type MarkdownContentProps = {
+  content: string;
+  emptyText?: string;
+};
+
+type CodeElementProps = {
+  className?: string;
+  children?: ReactNode;
+};
+
+type CodeBlock = {
+  className?: string;
+  language: string | null;
+  source: string;
+};
+
+const markdownComponents: Components = {
+  a({ href, children, ...props }) {
+    const isExplorerLink = href?.startsWith("/explorer?");
+    if (isExplorerLink) {
+      return (
+        <a
+          href={href}
+          className="not-prose inline-flex max-w-full items-center gap-1 rounded border border-accent/40 bg-accent/10 px-1.5 py-0.5 align-baseline font-mono text-[11px] text-accent no-underline hover:border-accent hover:bg-accent/15"
+          {...props}
+        >
+          <ExternalLink aria-hidden className="h-3 w-3 shrink-0" />
+          <span className="truncate">{children}</span>
+        </a>
+      );
+    }
+    return (
+      <a href={href} {...props}>
+        {children}
+      </a>
+    );
+  },
+  pre({ children }) {
+    const block = parseCodeBlock(children);
+    if (!block) {
+      return <pre>{children}</pre>;
+    }
+
+    if (block.language === "mermaid") {
+      return <MermaidDiagram source={block.source} />;
+    }
+
+    return <CopyableCodeBlock block={block} />;
+  },
+  code({ className, children, node: _node, ...props }) {
+    return (
+      <code className={className} {...props}>
+        {children}
+      </code>
+    );
+  },
+};
+
+export default function MarkdownContent({
+  content,
+  emptyText,
+}: MarkdownContentProps) {
+  return (
+    <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
+      {content || emptyText || ""}
+    </ReactMarkdown>
+  );
+}
+
+function parseCodeBlock(children: ReactNode): CodeBlock | null {
+  const child = Children.toArray(children).find(isValidElement) as
+    | ReactElement<CodeElementProps>
+    | undefined;
+  if (!child || child.type !== "code") return null;
+
+  const className =
+    typeof child.props.className === "string" ? child.props.className : "";
+  const language = /language-([\w-]+)/.exec(className)?.[1]?.toLowerCase() ?? null;
+  const source = Children.toArray(child.props.children).join("").replace(/\n$/, "");
+
+  return { className, language, source };
+}
+
+function CopyableCodeBlock({ block }: { block: CodeBlock }) {
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    if (!copied) return;
+    const timer = window.setTimeout(() => setCopied(false), 1400);
+    return () => window.clearTimeout(timer);
+  }, [copied]);
+
+  async function copyCode() {
+    await writeClipboard(block.source);
+    setCopied(true);
+  }
+
+  return (
+    <div className="not-prose my-4 overflow-hidden rounded-md border border-line bg-bg-subtle shadow-sm">
+      <div className="flex min-h-9 items-center justify-between gap-3 border-b border-line bg-bg-panel/74 px-3 py-1.5">
+        <span className="min-w-0 truncate font-mono text-[10px] uppercase tracking-widest text-ink-faint">
+          {block.language ?? "code"}
+        </span>
+        <button
+          type="button"
+          onClick={() => void copyCode()}
+          className="inline-flex h-7 shrink-0 items-center gap-1.5 rounded border border-line bg-bg-subtle px-2 font-mono text-[10px] font-medium uppercase tracking-wide text-ink-dim transition hover:border-accent/60 hover:text-ink"
+        >
+          {copied ? (
+            <Check aria-hidden className="h-3.5 w-3.5" />
+          ) : (
+            <Copy aria-hidden className="h-3.5 w-3.5" />
+          )}
+          {copied ? "Copied" : "Copy"}
+        </button>
+      </div>
+      <pre className="m-0 max-h-[32rem] overflow-auto bg-transparent p-3 text-[12px] leading-relaxed">
+        <code className={block.className}>{block.source}</code>
+      </pre>
+    </div>
+  );
+}
+
+async function writeClipboard(text: string) {
+  if (navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return;
+    } catch {
+      // Fall through to the legacy path for non-secure or restricted contexts.
+    }
+  }
+
+  const textarea = document.createElement("textarea");
+  textarea.value = text;
+  textarea.setAttribute("readonly", "");
+  textarea.style.position = "fixed";
+  textarea.style.opacity = "0";
+  document.body.appendChild(textarea);
+  textarea.select();
+  document.execCommand("copy");
+  document.body.removeChild(textarea);
+}
+
+function MermaidDiagram({ source }: { source: string }) {
+  const [svg, setSvg] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const idRef = useRef<string | null>(null);
+  const renderCountRef = useRef(0);
+
+  if (!idRef.current) {
+    idRef.current = `chat-mermaid-${Math.random().toString(36).slice(2)}`;
+  }
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function renderDiagram() {
+      try {
+        setSvg(null);
+        setError(null);
+        const mermaid = (await import("mermaid")).default;
+        const theme =
+          document.documentElement.dataset.theme === "dark" ? "dark" : "default";
+
+        mermaid.initialize({
+          startOnLoad: false,
+          securityLevel: "strict",
+          theme,
+        });
+
+        renderCountRef.current += 1;
+        const result = await mermaid.render(
+          `${idRef.current}-${renderCountRef.current}`,
+          source,
+        );
+        if (!cancelled) {
+          setSvg(result.svg);
+          setError(null);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setSvg(null);
+          setError(err instanceof Error ? err.message : String(err));
+        }
+      }
+    }
+
+    renderDiagram();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [source]);
+
+  if (error) {
+    return (
+      <div className="not-prose my-4 overflow-hidden rounded border border-red-900/60 bg-red-950/20">
+        <div className="border-b border-red-900/60 px-3 py-2 text-xs text-red-300">
+          Mermaid render failed: {error}
+        </div>
+        <pre className="overflow-auto p-3 text-[11px] leading-relaxed text-ink-dim">
+          {source}
+        </pre>
+      </div>
+    );
+  }
+
+  if (!svg) {
+    return (
+      <div className="not-prose my-4 rounded border border-line bg-bg-subtle px-3 py-2 text-xs text-ink-faint">
+        Rendering Mermaid diagram...
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className="not-prose my-4 overflow-auto rounded border border-line bg-bg-subtle p-3 [&_svg]:h-auto [&_svg]:max-w-full"
+      dangerouslySetInnerHTML={{ __html: svg }}
+    />
+  );
+}

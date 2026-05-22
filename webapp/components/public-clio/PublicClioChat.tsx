@@ -8,13 +8,14 @@ import {
   LoaderCircle,
   LockKeyhole,
   MessageSquarePlus,
+  PanelRightClose,
+  PanelRightOpen,
   Send,
   Trash2,
   UserRound,
 } from "lucide-react";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
 import AgentMascot from "../agent-panel/AgentMascot";
+import MarkdownContent from "../chat/MarkdownContent";
 import { Button, IconButton, StatusBadge, cx } from "../ui";
 
 type PublicMessage = {
@@ -134,6 +135,7 @@ export default function PublicClioChat() {
   const [value, setValue] = useState("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [sessionInfoOpen, setSessionInfoOpen] = useState(false);
   const taRef = useRef<HTMLTextAreaElement | null>(null);
   const endRef = useRef<HTMLDivElement | null>(null);
   const activeConversation =
@@ -411,7 +413,14 @@ export default function PublicClioChat() {
           </div>
         ) : null}
 
-        <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[minmax(0,1fr)_280px]">
+        <div
+          className={cx(
+            "grid min-h-0 flex-1 grid-cols-1 transition-[grid-template-columns]",
+            sessionInfoOpen
+              ? "lg:grid-cols-[minmax(0,1fr)_280px]"
+              : "lg:grid-cols-[minmax(0,1fr)_40px]",
+          )}
+        >
           <div className="min-h-0 overflow-auto">
             <div className="mx-auto flex min-h-full max-w-4xl flex-col gap-3 px-4 py-5 sm:px-6">
               {messages.length === 0 ? (
@@ -448,21 +457,56 @@ export default function PublicClioChat() {
             </div>
           </div>
 
-          <aside className="hidden border-l border-line bg-bg-subtle/72 p-5 lg:flex lg:flex-col lg:justify-between">
-            <div>
-              <div className="font-mono text-[10px] uppercase tracking-widest text-ink-faint">
-                session
-              </div>
-              <div className="mt-2 text-sm font-medium text-ink">
-                Local browser history
-              </div>
-              <div className="mt-1 text-xs leading-relaxed text-ink-faint">
-                {conversations.length} chats · {messages.length} messages
-              </div>
-            </div>
-            <div className="flex justify-center">
-              <AgentMascot running={pending} />
-            </div>
+          <aside
+            className={cx(
+              "hidden overflow-hidden border-l border-line bg-bg-subtle/72 lg:flex",
+              sessionInfoOpen
+                ? "flex-col justify-between p-5"
+                : "items-stretch p-0",
+            )}
+          >
+            {sessionInfoOpen ? (
+              <>
+                <div>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="font-mono text-[10px] uppercase tracking-widest text-ink-faint">
+                        session
+                      </div>
+                      <div className="mt-2 text-sm font-medium text-ink">
+                        Local browser history
+                      </div>
+                    </div>
+                    <IconButton
+                      icon={PanelRightClose}
+                      label="Hide session info"
+                      onClick={() => setSessionInfoOpen(false)}
+                      variant="ghost"
+                      className="shrink-0"
+                    />
+                  </div>
+                  <div className="mt-1 text-xs leading-relaxed text-ink-faint">
+                    {conversations.length} chats · {messages.length} messages
+                  </div>
+                </div>
+                <div className="flex justify-center">
+                  <AgentMascot running={pending} />
+                </div>
+              </>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setSessionInfoOpen(true)}
+                className="flex h-full w-full flex-col items-center justify-center gap-3 text-ink-faint transition hover:bg-bg-panel/64 hover:text-ink"
+                aria-label="Show session info"
+                title="Show session info"
+              >
+                <PanelRightOpen aria-hidden className="h-4 w-4" />
+                <span className="font-mono text-[10px] font-semibold uppercase tracking-widest [writing-mode:vertical-rl]">
+                  session
+                </span>
+              </button>
+            )}
           </aside>
         </div>
 
@@ -727,9 +771,7 @@ function MessageBubble({ message }: { message: PublicMessage }) {
         <span className="shrink-0 font-mono">{message.ts}</span>
       </header>
       <div className="prose prose-theme max-w-none text-[13.5px]">
-        <ReactMarkdown remarkPlugins={[remarkGfm]}>
-          {message.content}
-        </ReactMarkdown>
+        <MarkdownContent content={message.content} />
       </div>
     </article>
   );
