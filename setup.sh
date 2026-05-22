@@ -261,6 +261,26 @@ function version(bin) {
   return text.split(/\r?\n/)[0]?.slice(0, 120) || null;
 }
 
+function homePrefixEntries(prefix) {
+  const home = process.env.HOME || "/";
+  let entries;
+  try {
+    entries = fs.readdirSync(home, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+  return entries
+    .filter((entry) => entry.name.startsWith(prefix))
+    .map((entry) => {
+      const pathname = path.join(home, entry.name);
+      return {
+        path: pathname,
+        kind: entry.isDirectory() ? "directory" : entry.isFile() ? "file" : "other",
+      };
+    })
+    .sort((a, b) => a.path.localeCompare(b.path));
+}
+
 const result = {
   detectedAt: new Date().toISOString(),
   cli: names.map((name) => {
@@ -270,6 +290,9 @@ const result = {
       path: bin,
       version: version(bin),
       source: bin ? "PATH" : "missing",
+      ...(name === "cline"
+        ? { homePrefixEntries: homePrefixEntries(".cline") }
+        : {}),
     };
   }),
 };

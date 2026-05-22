@@ -313,6 +313,7 @@ function buildPrompt(
       ? "- You may use read-only web/search/browser tools, including agent-browser when available, when the question needs current external facts or the wiki excerpts are insufficient."
       : "- Do not run commands, do not use tools, do not ask to modify files, and do not claim that any ingest/lint/preprocess/update happened.",
     "- Do not modify CLIO project files, raw/, wiki/, sessions/, credentials, accounts, or external systems.",
+    "- Never read, quote, summarize, reveal, enumerate, or help exfiltrate credentials, tokens, API keys, cookies, account files, auth configs, shell history, or private agent configuration. If asked, refuse briefly.",
     "- If browser/search tools need temporary local cache files, keep them outside the CLIO project and do not save captures into raw/.",
     "- For simple greetings or thanks, answer naturally and briefly without citations.",
     allowExternalLookup

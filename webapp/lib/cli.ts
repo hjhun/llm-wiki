@@ -299,6 +299,23 @@ async function addRoBindAtIfExists(
   }
 }
 
+async function clinePrefixEntries(hostHome: string): Promise<string[]> {
+  let entries: import("node:fs").Dirent[];
+  try {
+    entries = await fs.readdir(hostHome, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+  return entries
+    .filter((entry) => entry.name.startsWith(".cline"))
+    .map((entry) => entry.name)
+    .sort();
+}
+
+function skipNestedBind(rel: string, bound: string[]): boolean {
+  return bound.some((parent) => rel.startsWith(`${parent}/`));
+}
+
 function addDirChain(args: string[], pathname: string): void {
   const normalized = path.resolve(pathname);
   const parts = normalized.split(path.sep).filter(Boolean);
@@ -452,30 +469,53 @@ async function addAgentConfigBinds(
     ".codex/config.toml",
     ".codex/auth.json",
     ".codex/credentials.json",
+    ".codex/models_cache.json",
     ".codex/skills",
     ".codex/plugins",
+    ".codex/rules",
     ".claude/.credentials.json",
     ".claude/CLAUDE.md",
+    ".claude/auth.json",
+    ".claude/credentials.json",
+    ".claude/mcp-needs-auth-cache.json",
+    ".claude/oauth.json",
+    ".claude/oauth_creds.json",
     ".claude/settings.json",
     ".claude/settings.local.json",
     ".claude/commands",
     ".claude/plugins",
     ".claude/skills",
+    ".cline/.credentials.json",
+    ".cline/auth.json",
+    ".cline/credentials.json",
+    ".cline/mcp_settings.json",
     ".cline/settings.json",
     ".cline/skills",
+    ".gemini/config.json",
+    ".gemini/google_accounts.json",
+    ".gemini/oauth_creds.json",
+    ".gemini/projects.json",
     ".gemini/settings.json",
+    ".gemini/antigravity/mcp_config.json",
     ".config/codex",
     ".config/claude",
     ".config/cline",
     ".config/gemini",
+    ".config/anthropic",
   ];
+  const entries = Array.from(
+    new Set([...sharedEntries, ...(await clinePrefixEntries(hostHome))]),
+  ).sort((a, b) => a.split("/").length - b.split("/").length || a.localeCompare(b));
 
-  for (const rel of sharedEntries) {
+  const bound: string[] = [];
+  for (const rel of entries) {
+    if (skipNestedBind(rel, bound)) continue;
     await addRoBindAtIfExists(
       args,
       path.join(hostHome, rel),
       path.join(sandboxHomeTarget, rel),
     );
+    if (await exists(path.join(hostHome, rel))) bound.push(rel);
   }
 }
 
