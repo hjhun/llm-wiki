@@ -76,6 +76,11 @@ const Body = z.object({
         .nullable(),
     })
     .optional(),
+  publicQuery: z
+    .object({
+      enabled: z.boolean(),
+    })
+    .optional(),
   autoIngest: z
     .object({
       enabled: z.boolean(),
@@ -173,6 +178,7 @@ export async function PUT(req: Request) {
             sessionTtlSec: parsed.data.auth.sessionTtlSec,
           }
         : undefined,
+      publicQuery: parsed.data.publicQuery,
       autoIngest: parsed.data.autoIngest,
       autoLint: parsed.data.autoLint,
     } satisfies Partial<Config>;

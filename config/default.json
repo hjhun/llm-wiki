@@ -65,6 +65,9 @@
     "sessionSecret": null,
     "sessionTtlSec": 86400
   },
+  "publicQuery": {
+    "enabled": false
+  },
   "autoIngest": {
     "enabled": false,
     "mode": "watch",

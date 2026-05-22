@@ -56,6 +56,9 @@ export type SettingsConfig = {
     passwordSet: boolean;
     sessionTtlSec: number | null;
   };
+  publicQuery: {
+    enabled: boolean;
+  };
   autoIngest: {
     enabled: boolean;
     mode: "watch" | "schedule";

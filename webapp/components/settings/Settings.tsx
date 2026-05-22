@@ -55,6 +55,7 @@ function cloneConfig(config: SettingsConfig): SettingsConfig {
     graph: { ...config.graph },
     ui: { ...config.ui },
     auth: { ...config.auth },
+    publicQuery: { ...config.publicQuery },
     autoIngest: {
       ...config.autoIngest,
       watch: { ...config.autoIngest.watch },
@@ -187,6 +188,7 @@ export default function Settings() {
           auth: {
             sessionTtlSec: draft.auth.sessionTtlSec,
           },
+          publicQuery: draft.publicQuery,
           autoIngest: draft.autoIngest,
           autoLint: draft.autoLint,
         }),
@@ -676,6 +678,32 @@ export default function Settings() {
                     </div>
                     <p className="mt-2 text-xs leading-relaxed text-ink-faint">
                       {t.settings.sessionDesc}
+                    </p>
+                  </Panel>
+
+                  <Panel title={t.settings.publicQuery} eyebrow="share">
+                    <label className="flex items-center justify-between gap-4 rounded border border-line bg-bg px-3 py-2">
+                      <span>
+                        <span className="block text-sm font-medium text-ink">
+                          {t.settings.publicQueryEnabled}
+                        </span>
+                        <span className="block text-xs text-ink-faint">
+                          {t.settings.publicQueryDesc}
+                        </span>
+                      </span>
+                      <input
+                        type="checkbox"
+                        checked={draft.publicQuery.enabled}
+                        onChange={(e) =>
+                          updateDraft((next) => {
+                            next.publicQuery.enabled = e.target.checked;
+                          })
+                        }
+                        className="h-4 w-4 accent-accent"
+                      />
+                    </label>
+                    <p className="mt-2 break-all font-mono text-[11px] text-ink-faint">
+                      /clio
                     </p>
                   </Panel>
 

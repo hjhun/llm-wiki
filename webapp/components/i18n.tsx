@@ -261,6 +261,10 @@ export const TEXT = {
       loginSession: "Login Session",
       keepSignedIn: "계속 유지",
       sessionDesc: "변경 후 새로 로그인한 세션부터 적용됩니다.",
+      publicQuery: "Public Query",
+      publicQueryEnabled: "비밀번호 없는 /clio 공유 사용",
+      publicQueryDesc:
+        "켜면 로그인 없이 /clio query-only 채팅에 접근할 수 있습니다. 대화는 접속한 브라우저에만 저장되고, 공개 API는 파일 변경 명령을 실행하지 않습니다.",
       password: "Password",
       admin: "admin",
       currentPassword: "Current password",
@@ -618,6 +622,10 @@ export const TEXT = {
       loginSession: "Login Session",
       keepSignedIn: "Keep signed in",
       sessionDesc: "Changes apply to newly logged-in sessions.",
+      publicQuery: "Public Query",
+      publicQueryEnabled: "Enable passwordless /clio sharing",
+      publicQueryDesc:
+        "When enabled, anyone who can reach the server can use the /clio query-only chat. Conversation history stays in the visitor's browser and the public API does not execute file-changing commands.",
       password: "Password",
       admin: "admin",
       currentPassword: "Current password",

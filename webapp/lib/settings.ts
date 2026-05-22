@@ -161,6 +161,7 @@ export async function readSettingsState() {
         passwordSet: cfg.auth.passwordHash != null,
         sessionTtlSec: cfg.auth.sessionTtlSec,
       },
+      publicQuery: cfg.publicQuery,
       autoIngest: cfg.autoIngest,
       autoLint: cfg.autoLint,
     },

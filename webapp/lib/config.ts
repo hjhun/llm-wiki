@@ -258,6 +258,16 @@ export const ConfigSchema = z.object({
      */
     cliToken: z.string().nullable().default(null),
   }),
+  publicQuery: z
+    .object({
+      /**
+       * Passwordless, query-only CLIO sharing endpoint. Disabled by default
+       * because enabling it exposes read access to wiki-derived answers to
+       * anyone who can reach the web server.
+       */
+      enabled: z.boolean().default(false),
+    })
+    .default({ enabled: false }),
   /**
    * Auto-ingest trigger. When enabled, a background watcher or scheduler
    * runs the same /ingest-loop driver used by manual ingest. Defaults to
@@ -444,6 +454,7 @@ const DEFAULT_CONFIG: Config = ConfigSchema.parse({
   cli: {},
   ui: {},
   auth: {},
+  publicQuery: {},
   automation: {},
 });
 
