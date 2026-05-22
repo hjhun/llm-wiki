@@ -305,7 +305,8 @@ export const ConfigSchema = z.object({
        * Public chat runs in a bubblewrap process sandbox by default. Admins
        * may disable it on trusted local/LAN deployments when they need fewer
        * process boundaries. The sandbox still exposes allowlisted read-only
-       * helper runtimes such as agent-browser when they are installed.
+       * agent config directories and helper runtimes such as agent-browser
+       * when they are installed.
        */
       sandboxEnabled: z.boolean().default(true),
     })

@@ -12,7 +12,7 @@ Read material newly dropped by the user into `raw/` and perform the following.
 
 1. Write one `wiki/sources/<YYYY>/<YYYY-MM>/<slug>.md` summary page per original source.
 2. Create or update related entity/concept pages, reusing existing pages instead of creating near-duplicates (see Step 2.3).
-3. If a leaf is code-heavy, create or update Code Wiki pages under `wiki/code/<project>/` with module/API documentation, architecture/testing/debug notes, code locations, and Mermaid diagrams.
+3. If a leaf is code-heavy, create or update Code Wiki pages under `wiki/code/<project>/` with one file-level page per code file plus module/API documentation, architecture/testing/debug notes, code locations, and Mermaid diagrams.
 4. Keep `wiki/index.md` and `wiki/log.md` consistent.
 5. Graph synchronization is **not** performed by this skill. The webapp triggers `wiki-graphify` as separate invocations after ingest progress is detected. Ingest workers must not run graphify or write anything under `wiki/graph/`.
 
@@ -52,7 +52,7 @@ externalized to `wiki/.progress/ingest/`.
 ## Output
 
 - List of new/updated `wiki/**` Markdown files.
-- For code-heavy inputs, graph-ready Code Wiki pages under `wiki/code/<project>/`.
+- For code-heavy inputs, graph-ready Code Wiki pages under `wiki/code/<project>/`, including `wiki/code/<project>/files/*.md` pages for each code file.
 - Session Markdown with chat log: `sessions/<date>/<time>_ingest.md` (conversation only).
 - Externalized progress: `wiki/.progress/ingest/.state.json` + `wiki/.progress/ingest/leaves/<hash>.json` + human-readable `wiki/.progress/ingest/DASHBOARD.md`.
 - Ingest entries appended to `wiki/log.md`.
@@ -199,6 +199,12 @@ For exactly **one** sub-chunk whose `status === "pending"`:
 3. If the sub-chunk is code-heavy, update Code Wiki pages **from source summaries and symbol/dependency takeaways**:
    - `wiki/code/<project>/overview.md` — project purpose, entry points,
      directories, build/test commands, and links to modules/APIs.
+   - `wiki/code/<project>/files/<file-slug>.md` — one page per code file in
+     the sub-chunk. Include the file role, key symbols, dependencies,
+     important line locations, tests touching it, risks, and links to its
+     `wiki/sources/...` source summary. The page must have required
+     frontmatter with `type: code` and must mention the logical `raw/...` path
+     so the backend can verify file-level coverage.
    - `wiki/code/<project>/modules/<module>.md` — module role, key files,
      public symbols, dependencies, tests, risks, and code locations.
    - `wiki/code/<project>/apis/<api>.md` — public routes, CLIs, functions,
@@ -216,6 +222,10 @@ For exactly **one** sub-chunk whose `status === "pending"`:
      hand-written guesses. If the script misses a language feature, supplement
      it with targeted `rg` searches and mark uncertain line numbers as unknown
      instead of inventing them.
+   Record every file-level page and any other Code Wiki pages written in the
+   sub-chunk's `code_outputs`; do not mark a code/mixed leaf complete until
+   each code file in that leaf has a valid `wiki/code/<project>/files/*.md`
+   page.
    Use the internal helper skills `code-documentation`, `code-architecture`,
    `code-testing`, and `code-debug` as needed. They are implementation helpers,
    not separate user-facing commands.

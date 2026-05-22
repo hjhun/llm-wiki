@@ -9,6 +9,7 @@ import { maybeRefreshQmdIndex } from "./qmd";
 import {
   buildEntityRegistryReference,
   buildCodeWikiStatusReference,
+  buildSourcePageStatusReference,
   buildLoopContinuationPrompt,
   buildProgressReference,
   clearStopFlag,
@@ -109,8 +110,9 @@ function operationPolicy(kind: OrchestratedKind): string {
   if (kind === "ingest-loop") {
     return [
       "You are an ingest worker in a backend-managed loop. Follow wiki-ingest and process at most one sub-chunk or one merge-pass parent, then exit.",
-      "Code Wiki is part of ingest, not a separate command. During enumeration, classify leaves as prose/code/mixed/ignore. For code or mixed leaves, run scripts/code-index.mjs when applicable, write/update wiki/code/<project>/ pages, and record those paths in code_outputs.",
-      "If the progress state shows a done code/mixed leaf with missing valid wiki/code outputs, treat that as the next unit of work and repair the Code Wiki outputs before reporting that ingest is complete.",
+      "Every non-ignored leaf must have one wiki/sources page per original raw file recorded in source_pages_written. Repair missing source pages before reporting completion.",
+      "Code Wiki is part of ingest, not a separate command. During enumeration, classify leaves as prose/code/mixed/ignore. For code or mixed leaves, run scripts/code-index.mjs when applicable, write/update wiki/code/<project>/ pages, create one wiki/code/<project>/files/*.md page per code file, and record those paths in code_outputs.",
+      "If the progress state shows a done code/mixed leaf with missing valid wiki/code outputs or missing file-level Code Wiki pages, treat that as the next unit of work and repair the Code Wiki outputs before reporting that ingest is complete.",
       "A symlink located under raw/ is a valid source entry: follow it read-only even if its real target is outside the repository, preserve logical raw/... paths in state/citations, and reject only broken links or loops.",
       "If wiki/.progress/ingest/.lock is held by another live process, report that you are standing by and exit successfully. The manager will launch the next round.",
       "Do NOT run wiki-graphify and do NOT write anything under wiki/graph/. The backend triggers graph updates as separate invocations only after all ingest work and merge passes are complete.",
@@ -118,8 +120,9 @@ function operationPolicy(kind: OrchestratedKind): string {
   }
   return [
     "You are an ingest worker. Follow wiki-ingest and process exactly one sub-chunk or one merge-pass parent, then exit.",
-    "Code Wiki is part of ingest, not a separate command. During enumeration, classify leaves as prose/code/mixed/ignore. For code or mixed leaves, run scripts/code-index.mjs when applicable, write/update wiki/code/<project>/ pages, and record those paths in code_outputs.",
-    "If the progress state shows a done code/mixed leaf with missing valid wiki/code outputs, treat that as the next unit of work and repair the Code Wiki outputs before reporting that ingest is complete.",
+    "Every non-ignored leaf must have one wiki/sources page per original raw file recorded in source_pages_written. Repair missing source pages before reporting completion.",
+    "Code Wiki is part of ingest, not a separate command. During enumeration, classify leaves as prose/code/mixed/ignore. For code or mixed leaves, run scripts/code-index.mjs when applicable, write/update wiki/code/<project>/ pages, create one wiki/code/<project>/files/*.md page per code file, and record those paths in code_outputs.",
+    "If the progress state shows a done code/mixed leaf with missing valid wiki/code outputs or missing file-level Code Wiki pages, treat that as the next unit of work and repair the Code Wiki outputs before reporting that ingest is complete.",
     "A symlink located under raw/ is a valid source entry: follow it read-only even if its real target is outside the repository, preserve logical raw/... paths in state/citations, and reject only broken links or loops.",
     "If wiki/.progress/ingest/.lock is held by another live process, report that you are standing by and exit successfully.",
     "Do NOT run wiki-graphify and do NOT write anything under wiki/graph/. The backend triggers graph updates as separate invocations only after all ingest work and merge passes are complete.",
@@ -133,6 +136,7 @@ function wrapWorkerPrompt(input: {
   round: number;
   totalWorkers: number;
   entityRegistryRef?: string | null;
+  sourcePageStatusRef?: string | null;
   codeWikiStatusRef?: string | null;
 }): string {
   const lines = [
@@ -148,6 +152,9 @@ function wrapWorkerPrompt(input: {
   // Round 1 only: continuation rounds already carry the registry in basePrompt.
   if (input.round === 1 && input.entityRegistryRef) {
     lines.push(input.entityRegistryRef);
+  }
+  if (input.sourcePageStatusRef) {
+    lines.push(input.sourcePageStatusRef);
   }
   if (input.codeWikiStatusRef) {
     lines.push(input.codeWikiStatusRef);
@@ -190,6 +197,10 @@ async function runWorkerBatch(input: {
     input.kind === "ingest" || input.kind === "ingest-loop"
       ? await buildCodeWikiStatusReference({ rawScope: input.rawScope })
       : null;
+  const sourcePageStatusRef =
+    input.kind === "ingest" || input.kind === "ingest-loop"
+      ? await buildSourcePageStatusReference({ rawScope: input.rawScope })
+      : null;
   return Promise.all(
     input.workers.map(async (worker): Promise<WorkerRun> => {
       const prompt = wrapWorkerPrompt({
@@ -199,6 +210,7 @@ async function runWorkerBatch(input: {
         round: input.round,
         totalWorkers: input.workers.length,
         entityRegistryRef,
+        sourcePageStatusRef,
         codeWikiStatusRef,
       });
       const started = Date.now();
@@ -242,7 +254,7 @@ function buildManagerPrompt(input: {
   const writePolicy =
     input.kind === "lint"
       ? "For /lint, use worker findings as inspection input, then perform exactly one manager write pass following wiki-lint, including report/log/index updates and --fix only if requested."
-      : "For ingest operations, do not re-run ingest work in this manager pass. Review progress and worker outputs, and do not call the run complete when detected code/mixed leaves still lack valid wiki/code pages recorded in code_outputs.";
+      : "For ingest operations, do not re-run ingest work in this manager pass. Review progress and worker outputs, and do not call the run complete when done leaves still lack source_pages_written coverage or detected code/mixed leaves still lack valid wiki/code file pages recorded in code_outputs.";
 
   return [
     "You are the central manager agent for an LLM Wiki multi-agent run.",
@@ -304,7 +316,9 @@ function ingestWorkComplete(snapshot: ProgressSnapshot): boolean {
     snapshot.leavesTotal > 0 &&
     snapshot.leavesDone === snapshot.leavesTotal &&
     snapshot.mergePendingParents === 0 &&
-    snapshot.codeLeavesMissingOutputs === 0
+    snapshot.sourcePagesMissing === 0 &&
+    snapshot.codeLeavesMissingOutputs === 0 &&
+    snapshot.codeFilePagesMissing === 0
   );
 }
 
@@ -482,6 +496,9 @@ async function runLoopOperation(input: {
             progressRef:
               initialProgressRef ?? (await buildProgressReference()),
             entityRegistryRef: await buildEntityRegistryReference(),
+            sourcePageStatusRef: await buildSourcePageStatusReference({
+              rawScope,
+            }),
             codeWikiStatusRef: await buildCodeWikiStatusReference({ rawScope }),
             rawScope,
           });
@@ -522,7 +539,9 @@ async function runLoopOperation(input: {
       stopRequested: await stopFlagExists(input.sessionPath),
       iteration: round,
       maxIter: maxRounds,
+      sourcePagesMissing: snap.sourcePagesMissing,
       codeLeavesMissingOutputs: snap.codeLeavesMissingOutputs,
+      codeFilePagesMissing: snap.codeFilePagesMissing,
     });
     if (decision.halt) {
       haltKind = decision.kind;

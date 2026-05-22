@@ -428,6 +428,57 @@ async function addAgentBrowserRuntimeBinds(
   );
 }
 
+async function addAgentConfigBinds(
+  args: string[],
+  sandboxHomeSource: string,
+  sandboxHomeTarget: string,
+): Promise<void> {
+  const hostHome = process.env.HOME;
+  if (!hostHome) return;
+
+  for (const dir of [".codex", ".claude", ".cline", ".gemini"]) {
+    await fs.mkdir(path.join(sandboxHomeSource, dir), {
+      recursive: true,
+      mode: 0o700,
+    });
+  }
+
+  const sharedEntries = [
+    ".claude.json",
+    ".codex.json",
+    ".cline.json",
+    ".gemini.json",
+    ".codex/AGENTS.md",
+    ".codex/config.toml",
+    ".codex/auth.json",
+    ".codex/credentials.json",
+    ".codex/skills",
+    ".codex/plugins",
+    ".claude/.credentials.json",
+    ".claude/CLAUDE.md",
+    ".claude/settings.json",
+    ".claude/settings.local.json",
+    ".claude/commands",
+    ".claude/plugins",
+    ".claude/skills",
+    ".cline/settings.json",
+    ".cline/skills",
+    ".gemini/settings.json",
+    ".config/codex",
+    ".config/claude",
+    ".config/cline",
+    ".config/gemini",
+  ];
+
+  for (const rel of sharedEntries) {
+    await addRoBindAtIfExists(
+      args,
+      path.join(hostHome, rel),
+      path.join(sandboxHomeTarget, rel),
+    );
+  }
+}
+
 async function buildBubblewrapSpawnPlan(input: {
   cli: CliName;
   cliPath: string;
@@ -490,6 +541,7 @@ async function buildBubblewrapSpawnPlan(input: {
   }
   await addResolvedFileBindIfNeeded(args, "/etc/resolv.conf");
 
+  await addAgentConfigBinds(args, sandboxHomeSource, sandboxHomeTarget);
   const sandboxCliPath = await addCliRuntimeBinds(args, input.cli, input.cliPath);
   await addAgentBrowserRuntimeBinds(args, sandboxHomeSource, sandboxHomeTarget);
 

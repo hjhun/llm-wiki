@@ -34,10 +34,16 @@ export type StateSummary = {
 export type ProgressSnapshot = {
   leavesTotal: number;
   leavesDone: number;
+  sourcePagesMissing: number;
+  missingSourceLeaves: string[];
   codeLeavesTotal: number;
   codeLeavesWithOutputs: number;
   codeLeavesMissingOutputs: number;
   missingCodeLeaves: string[];
+  codeFilePagesTotal: number;
+  codeFilePagesWithOutputs: number;
+  codeFilePagesMissing: number;
+  missingCodeFiles: string[];
   codeOutputsWritten: number;
   subChunksTotal: number;
   subChunksDone: number;
@@ -58,10 +64,16 @@ export type ProgressScope = {
 export const EMPTY_SNAPSHOT: ProgressSnapshot = {
   leavesTotal: 0,
   leavesDone: 0,
+  sourcePagesMissing: 0,
+  missingSourceLeaves: [],
   codeLeavesTotal: 0,
   codeLeavesWithOutputs: 0,
   codeLeavesMissingOutputs: 0,
   missingCodeLeaves: [],
+  codeFilePagesTotal: 0,
+  codeFilePagesWithOutputs: 0,
+  codeFilePagesMissing: 0,
+  missingCodeFiles: [],
   codeOutputsWritten: 0,
   subChunksTotal: 0,
   subChunksDone: 0,
@@ -268,6 +280,63 @@ function collectCodeOutputs(leaf: Record<string, unknown>): string[] {
   return [...outputs];
 }
 
+function collectSourcePages(leaf: Record<string, unknown>): string[] {
+  const outputs = new Set<string>();
+  const add = (value: unknown) => {
+    if (typeof value === "string" && value.trim()) outputs.add(value.trim());
+  };
+  if (Array.isArray(leaf.source_pages_written)) {
+    for (const output of leaf.source_pages_written) add(output);
+  }
+  if (Array.isArray(leaf.sub_chunks)) {
+    for (const rawSc of leaf.sub_chunks) {
+      const sc =
+        rawSc && typeof rawSc === "object"
+          ? (rawSc as Record<string, unknown>)
+          : null;
+      if (!sc || !Array.isArray(sc.source_pages_written)) continue;
+      for (const output of sc.source_pages_written) add(output);
+    }
+  }
+  return [...outputs];
+}
+
+async function validMarkdownFrontmatterType(
+  relPath: string,
+  typePattern: RegExp,
+): Promise<string | null> {
+  const rel = normalizePosixPath(relPath);
+  const abs = path.resolve(PROJECT_ROOT, rel);
+  const root = `${PROJECT_ROOT}${path.sep}`;
+  if (abs !== PROJECT_ROOT && !abs.startsWith(root)) return null;
+  try {
+    const st = await fs.stat(abs);
+    if (!st.isFile()) return null;
+    const head = (await fs.readFile(abs, "utf8")).slice(0, 4096);
+    if (!head.startsWith("---")) return null;
+    if (!typePattern.test(head)) return null;
+    return rel;
+  } catch {
+    return null;
+  }
+}
+
+async function collectValidSourcePages(
+  leaf: Record<string, unknown>,
+): Promise<string[]> {
+  const valid: string[] = [];
+  for (const output of collectSourcePages(leaf)) {
+    const rel = normalizePosixPath(output);
+    if (!rel.startsWith("wiki/sources/") || !rel.endsWith(".md")) continue;
+    const checked = await validMarkdownFrontmatterType(
+      rel,
+      /\ntype:\s*["']?source["']?\b/,
+    );
+    if (checked) valid.push(checked);
+  }
+  return valid;
+}
+
 async function collectValidCodeOutputs(
   leaf: Record<string, unknown>,
 ): Promise<string[]> {
@@ -275,21 +344,41 @@ async function collectValidCodeOutputs(
   for (const output of collectCodeOutputs(leaf)) {
     const rel = normalizePosixPath(output);
     if (!rel.startsWith("wiki/code/") || !rel.endsWith(".md")) continue;
-    const abs = path.resolve(PROJECT_ROOT, rel);
-    const root = `${PROJECT_ROOT}${path.sep}`;
-    if (abs !== PROJECT_ROOT && !abs.startsWith(root)) continue;
-    try {
-      const st = await fs.stat(abs);
-      if (!st.isFile()) continue;
-      const head = (await fs.readFile(abs, "utf8")).slice(0, 2048);
-      if (!head.startsWith("---")) continue;
-      if (!/\ntype:\s*["']?(code|architecture)["']?\b/.test(head)) continue;
-      valid.push(rel);
-    } catch {
-      // Missing or unreadable outputs are not valid Code Wiki evidence.
-    }
+    const checked = await validMarkdownFrontmatterType(
+      rel,
+      /\ntype:\s*["']?(code|architecture)["']?\b/,
+    );
+    if (checked) valid.push(checked);
   }
   return valid;
+}
+
+async function collectValidCodeFileOutputs(
+  leaf: Record<string, unknown>,
+  codeFiles: string[],
+): Promise<Set<string>> {
+  const covered = new Set<string>();
+  for (const output of collectCodeOutputs(leaf)) {
+    const rel = normalizePosixPath(output);
+    if (
+      !rel.startsWith("wiki/code/") ||
+      !rel.includes("/files/") ||
+      !rel.endsWith(".md")
+    ) {
+      continue;
+    }
+    const checked = await validMarkdownFrontmatterType(
+      rel,
+      /\ntype:\s*["']?code["']?\b/,
+    );
+    if (!checked) continue;
+    const abs = path.resolve(PROJECT_ROOT, checked);
+    const body = await fs.readFile(abs, "utf8").catch(() => "");
+    for (const file of codeFiles) {
+      if (body.includes(file)) covered.add(file);
+    }
+  }
+  return covered;
 }
 
 function leafMatchesScope(
@@ -378,7 +467,37 @@ export async function buildCodeWikiStatusReference(
   return [
     `Code Wiki status${scopeLabel}: ${snap.codeLeavesWithOutputs}/${snap.codeLeavesTotal} code/mixed leaves have valid wiki/code outputs.`,
     missingLine,
-    "For a done code/mixed leaf with no valid outputs, treat the next unit of work as a Code Wiki repair: run `node scripts/code-index.mjs raw/<project-or-leaf> --format=json` and `--format=markdown` when applicable, write/update Markdown files under `wiki/code/<project>/` with required frontmatter, then record those paths in `code_outputs` before reporting completion.",
+    `File-level Code Wiki coverage${scopeLabel}: ${snap.codeFilePagesWithOutputs}/${snap.codeFilePagesTotal} code files have valid \`wiki/code/<project>/files/*.md\` pages.`,
+    snap.missingCodeFiles.length > 0
+      ? `Missing file-level Code Wiki pages for: ${snap.missingCodeFiles.slice(0, CODE_STATUS_MAX).join(", ")}${snap.missingCodeFiles.length > CODE_STATUS_MAX ? ` … (+${snap.missingCodeFiles.length - CODE_STATUS_MAX} more)` : ""}`
+      : "All detected code files have file-level Code Wiki pages.",
+    "For a done code/mixed leaf with missing valid outputs, treat the next unit of work as a Code Wiki repair: run `node scripts/code-index.mjs raw/<project-or-leaf> --format=json` and `--format=markdown` when applicable, write/update Markdown files under `wiki/code/<project>/`, create one file page under `wiki/code/<project>/files/` for each code file, and record those paths in `code_outputs` before reporting completion.",
+  ].join("\n");
+}
+
+export async function buildSourcePageStatusReference(
+  options: ProgressScope = {},
+): Promise<string | null> {
+  const snap = await readProgressSnapshot(options);
+  const scopeLabel = options.rawScope ? ` for ${options.rawScope}` : "";
+  if (snap.leavesTotal === 0) {
+    return (
+      `Source page status${scopeLabel}: no leaves are currently detected in ` +
+      `${PROGRESS_STATE_PATH}. During enumeration, create one source summary ` +
+      "page per original raw file and record it in `source_pages_written`."
+    );
+  }
+  const missing = snap.missingSourceLeaves.slice(0, CODE_STATUS_MAX);
+  const suffix =
+    snap.missingSourceLeaves.length > CODE_STATUS_MAX
+      ? ` … (+${snap.missingSourceLeaves.length - CODE_STATUS_MAX} more)`
+      : "";
+  return [
+    `Source page status${scopeLabel}: ${snap.sourcePagesWritten}/${snap.filesTotal} raw files have recorded source pages.`,
+    missing.length > 0
+      ? `Missing source page coverage for done leaves: ${missing.join(", ")}${suffix}`
+      : "All done leaves have recorded source page coverage.",
+    "For a done leaf with missing source page coverage, treat the next unit of work as a source-page repair: write one `wiki/sources/<YYYY>/<YYYY-MM>/<slug>.md` page per original raw file, then record those paths in the matching sub-chunk `source_pages_written` before reporting completion.",
   ].join("\n");
 }
 
@@ -400,10 +519,16 @@ export async function readProgressSnapshot(
     const snap: ProgressSnapshot = {
       leavesTotal: 0,
       leavesDone: 0,
+      sourcePagesMissing: 0,
+      missingSourceLeaves: [],
       codeLeavesTotal: 0,
       codeLeavesWithOutputs: 0,
       codeLeavesMissingOutputs: 0,
       missingCodeLeaves: [],
+      codeFilePagesTotal: 0,
+      codeFilePagesWithOutputs: 0,
+      codeFilePagesMissing: 0,
+      missingCodeFiles: [],
       codeOutputsWritten: 0,
       subChunksTotal: 0,
       subChunksDone: 0,
@@ -426,10 +551,40 @@ export async function readProgressSnapshot(
         if (!leafMatchesScope(leafPath, leaf, options.rawScope)) continue;
         const leafKind = inferLeafKind(leafPath, leaf);
         const codeOutputs = await collectValidCodeOutputs(leaf);
+        const validSourcePages = await collectValidSourcePages(leaf);
+        const leafFiles = collectLeafFiles(leafPath, leaf).filter(
+          (file) => !isIgnoredCodePath(file),
+        );
+        const codeFiles = leafFiles.filter(
+          (file) => fileLooksLikeCode(file) || fileLooksLikeRuntimeEvidence(file),
+        );
+        const coveredCodeFiles = await collectValidCodeFileOutputs(
+          leaf,
+          codeFiles,
+        );
+        snap.sourcePagesWritten += validSourcePages.length;
         const isCodeLeaf = leafKind === "code" || leafKind === "mixed";
+        const sourceCoverageMissing =
+          leaf.status === "done" &&
+          leafKind !== "ignore" &&
+          leafFiles.length > 0 &&
+          validSourcePages.length < leafFiles.length;
+        if (sourceCoverageMissing) {
+          snap.sourcePagesMissing += 1;
+          snap.missingSourceLeaves.push(leafPath);
+        }
         if (isCodeLeaf) {
           snap.codeLeavesTotal += 1;
           snap.codeOutputsWritten += codeOutputs.length;
+          snap.codeFilePagesTotal += codeFiles.length;
+          snap.codeFilePagesWithOutputs += coveredCodeFiles.size;
+          const missingCodeFiles = codeFiles.filter(
+            (file) => !coveredCodeFiles.has(file),
+          );
+          if (leaf.status === "done" && missingCodeFiles.length > 0) {
+            snap.codeFilePagesMissing += missingCodeFiles.length;
+            snap.missingCodeFiles.push(...missingCodeFiles);
+          }
           if (codeOutputs.length > 0) {
             snap.codeLeavesWithOutputs += 1;
           } else if (leaf.status === "done") {
@@ -459,9 +614,6 @@ export async function readProgressSnapshot(
             }
             if (sc.status === "done") {
               snap.subChunksDone += 1;
-              if (Array.isArray(sc.source_pages_written)) {
-                snap.sourcePagesWritten += sc.source_pages_written.length;
-              }
             }
           }
         }
@@ -469,6 +621,8 @@ export async function readProgressSnapshot(
     }
     doneLeaves.sort();
     snap.missingCodeLeaves.sort();
+    snap.missingCodeFiles.sort();
+    snap.missingSourceLeaves.sort();
     snap.filesTotal = filePaths.size;
     snap.bytesTotal = await totalRelativeFileBytes(filePaths);
     return snap;
@@ -503,8 +657,10 @@ export function ingestMadeProgress(
     after.subChunksDone > before.subChunksDone ||
     after.leavesDone > before.leavesDone ||
     after.sourcePagesWritten > before.sourcePagesWritten ||
+    after.sourcePagesMissing < before.sourcePagesMissing ||
     after.codeOutputsWritten > before.codeOutputsWritten ||
     after.codeLeavesMissingOutputs < before.codeLeavesMissingOutputs ||
+    after.codeFilePagesMissing < before.codeFilePagesMissing ||
     (after.mergeDone && !before.mergeDone) ||
     // A merge pass drained a parent from merge_pass.pending_parents — real
     // progress even though no sub-chunk or leaf counter moved.
@@ -609,7 +765,9 @@ export function decideLoopHalt(input: {
   stopRequested: boolean;
   iteration: number;
   maxIter: number;
+  sourcePagesMissing?: number;
   codeLeavesMissingOutputs?: number;
+  codeFilePagesMissing?: number;
 }): LoopDecision {
   if (input.exitCode !== 0) {
     return {
@@ -646,7 +804,9 @@ export function decideLoopHalt(input: {
     input.summary.pending === 0 &&
     input.summary.in_progress === 0 &&
     input.summary.partial === 0 &&
+    (input.sourcePagesMissing ?? 0) === 0 &&
     (input.codeLeavesMissingOutputs ?? 0) === 0 &&
+    (input.codeFilePagesMissing ?? 0) === 0 &&
     (input.mergeDone || !input.mergePending)
   ) {
     return {
@@ -659,13 +819,18 @@ export function decideLoopHalt(input: {
   }
   if (
     input.idleRounds >= LOOP_STAGNATION_LIMIT &&
-    (input.codeLeavesMissingOutputs ?? 0) > 0
+    ((input.sourcePagesMissing ?? 0) > 0 ||
+      (input.codeLeavesMissingOutputs ?? 0) > 0 ||
+      (input.codeFilePagesMissing ?? 0) > 0)
   ) {
     return {
       halt: true,
       kind: "stalled",
       reason:
-        `Code Wiki output 누락 ${input.codeLeavesMissingOutputs}건이 ` +
+        `ingest 산출물 누락 ` +
+        `(source leaves=${input.sourcePagesMissing ?? 0}, ` +
+        `code leaves=${input.codeLeavesMissingOutputs ?? 0}, ` +
+        `code files=${input.codeFilePagesMissing ?? 0})이 ` +
         `연속 ${input.idleRounds}개 라운드에서 해결되지 않아 중단`,
     };
   }
@@ -689,6 +854,7 @@ export function buildLoopContinuationPrompt(input: {
   iteration: number;
   progressRef: string | null;
   entityRegistryRef?: string | null;
+  sourcePageStatusRef?: string | null;
   codeWikiStatusRef?: string | null;
   rawScope?: string | null;
 }): string {
@@ -705,6 +871,7 @@ export function buildLoopContinuationPrompt(input: {
   }
   if (input.progressRef) lines.push(input.progressRef);
   if (input.entityRegistryRef) lines.push(input.entityRegistryRef);
+  if (input.sourcePageStatusRef) lines.push(input.sourcePageStatusRef);
   if (input.codeWikiStatusRef) lines.push(input.codeWikiStatusRef);
   lines.push(
     `This is /ingest-loop iteration ${input.iteration}. Pick the next pending sub-chunk, merge-pass parent, or missing Code Wiki output repair from wiki/.progress/ingest/.state.json${rawScope ? ` within ${rawScope}` : ""} and process exactly one unit per the wiki-ingest skill, then exit. Do not loop yourself — the backend will spawn the next iteration.`,
@@ -1293,6 +1460,9 @@ export async function runIngestLoop(
             iteration,
             progressRef: progressRef ?? (await buildProgressReference()),
             entityRegistryRef: await buildEntityRegistryReference(),
+            sourcePageStatusRef: await buildSourcePageStatusReference({
+              rawScope,
+            }),
             codeWikiStatusRef: await buildCodeWikiStatusReference({ rawScope }),
             rawScope,
           });
@@ -1363,7 +1533,9 @@ export async function runIngestLoop(
       stopRequested: await stopFlagExists(sessionPath),
       iteration,
       maxIter,
+      sourcePagesMissing: snap.sourcePagesMissing,
       codeLeavesMissingOutputs: snap.codeLeavesMissingOutputs,
+      codeFilePagesMissing: snap.codeFilePagesMissing,
     });
     if (decision.halt) {
       haltKind = decision.kind;

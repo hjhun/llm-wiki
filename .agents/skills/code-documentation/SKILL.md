@@ -15,7 +15,8 @@ summarized.
 ## Inputs
 
 - Existing `wiki/sources/...` source summaries.
-- Existing `wiki/code/<project>/...` pages.
+- Existing `wiki/code/<project>/...` pages, including file-level pages under
+  `wiki/code/<project>/files/`.
 - Read-only code evidence under `raw/...` when the summaries are insufficient.
 
 ## Documentation Types
@@ -23,6 +24,8 @@ summarized.
 Choose the smallest useful type:
 
 - **Overview**: project/module purpose, entry points, main flows.
+- **File Page**: one code file's role, symbols, dependencies, important
+  locations, tests, risks, and related module/API pages.
 - **API Reference**: exported functions, routes, CLI commands, schemas.
 - **Configuration Guide**: env vars, config files, defaults, operational knobs.
 - **Runbook**: recurring operation, setup, build, deploy, or troubleshooting
@@ -37,8 +40,34 @@ Choose the smallest useful type:
 4. Do not paste long code. Use short snippets only when they clarify an
    interface or invariant.
 5. Mark unknowns explicitly instead of guessing.
+6. For file-level pages, mention the logical `raw/...` path in the body and
+   use `type: code` frontmatter so ingest coverage checks can verify them.
 
 ## Templates
+
+### File Documentation
+
+```markdown
+---
+title: <Project> / <relative file path>
+type: code
+tags: [code, file, <project>]
+sources: [wiki/sources/<YYYY>/<YYYY-MM>/<slug>.md]
+updated: YYYY-MM-DD
+---
+
+# <relative file path>
+
+## 역할
+## 주요 심볼
+## 의존성
+## 위치
+## 테스트/검증
+## 리스크
+## 관련 페이지
+
+Source: `raw/...`
+```
 
 ### Module Documentation
 

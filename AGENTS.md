@@ -8,6 +8,10 @@
 > This repository is an **LLM Wiki** implementation of Andrej Karpathy's [`llm-wiki.md`](./llm-wiki.md) pattern.
 > You, the coding agent, are the **maintainer** of this wiki. The user is the curator.
 > See [`IDEATION.md`](./IDEATION.md) for the design background.
+> These operating rules preserve the core `llm-wiki.md` idea (immutable raw
+> sources, persistent generated wiki, schema-driven LLM maintenance) while
+> specializing it for CLIO's web UI, resumable ingest loop, graph tooling, and
+> Code Wiki workflows.
 > CLIO also supports a **Code Wiki** mode: source code stored under `raw/` (or
 > approved `raw/` symlinks) can be documented into `wiki/code/` and connected to
 > the same Markdown/graph knowledge base.
@@ -88,6 +92,8 @@ Each operation maps to one or more project skills. If these rules conflict with 
 - Outputs:
   - `wiki/sources/<YYYY>/<YYYY-MM>/<slug>.md` source summaries for code files or code groups
   - `wiki/code/<project>/overview.md`
+  - `wiki/code/<project>/files/*.md` — one page per code file, linked to the
+    matching source summary and logical `raw/...` path
   - `wiki/code/<project>/modules/*.md`
   - `wiki/code/<project>/apis/*.md`
   - optional `wiki/code/<project>/architecture.md`, `testing.md`, and `debug-notes.md`
