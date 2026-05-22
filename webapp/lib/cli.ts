@@ -278,6 +278,16 @@ async function addRoBindIfExists(args: string[], pathname: string): Promise<void
   if (await exists(pathname)) args.push("--ro-bind", pathname, pathname);
 }
 
+async function addResolvedFileBindIfNeeded(
+  args: string[],
+  pathname: string,
+): Promise<void> {
+  const realPath = await fs.realpath(pathname).catch(() => null);
+  if (!realPath || realPath === pathname || !(await exists(realPath))) return;
+  addDirChain(args, path.dirname(realPath));
+  args.push("--ro-bind", realPath, realPath);
+}
+
 function addDirChain(args: string[], pathname: string): void {
   const normalized = path.resolve(pathname);
   const parts = normalized.split(path.sep).filter(Boolean);
@@ -395,6 +405,7 @@ async function buildBubblewrapSpawnPlan(input: {
   ]) {
     await addRoBindIfExists(args, systemPath);
   }
+  await addResolvedFileBindIfNeeded(args, "/etc/resolv.conf");
 
   const sandboxCliPath = await addCliRuntimeBinds(args, input.cli, input.cliPath);
 
@@ -520,9 +531,13 @@ export async function runCli(
       opts.onStderr?.(chunk);
     });
 
+    let timeoutKillTimer: ReturnType<typeof setTimeout> | null = null;
     const timer = opts.timeoutMs
       ? setTimeout(() => {
           child.kill("SIGTERM");
+          timeoutKillTimer ??= setTimeout(() => {
+            if (!closed) child.kill("SIGKILL");
+          }, 2000);
         }, opts.timeoutMs)
       : null;
     const killOnAbort = opts.killOnAbort ?? true;
@@ -543,6 +558,7 @@ export async function runCli(
     child.on("error", (err) => {
       closed = true;
       if (timer) clearTimeout(timer);
+      if (timeoutKillTimer) clearTimeout(timeoutKillTimer);
       if (abortKillTimer) clearTimeout(abortKillTimer);
       if (killOnAbort) opts.signal?.removeEventListener("abort", onAbort);
       reject(err);
@@ -550,6 +566,7 @@ export async function runCli(
     child.on("close", (code) => {
       closed = true;
       if (timer) clearTimeout(timer);
+      if (timeoutKillTimer) clearTimeout(timeoutKillTimer);
       if (abortKillTimer) clearTimeout(abortKillTimer);
       if (killOnAbort) opts.signal?.removeEventListener("abort", onAbort);
       resolve({

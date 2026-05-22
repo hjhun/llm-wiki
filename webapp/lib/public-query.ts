@@ -33,6 +33,7 @@ const MAX_QUESTION_CHARS = 4000;
 const MAX_DOC_BYTES = 256 * 1024;
 const MAX_CONTEXT_DOCS = 8;
 const MAX_EXCERPT_CHARS = 1400;
+const PUBLIC_QUERY_CLI_TIMEOUT_MS = 120_000;
 const MARKDOWN_EXT = /\.(md|mdx)$/i;
 const PUBLIC_CLI_HOME = path.join(CONFIG_ROOT, "public-cli-home");
 const SKIP_DIRS = new Set([
@@ -252,6 +253,21 @@ function formatFallbackAnswer(question: string, sources: PublicQuerySource[]): s
   return lines.join("\n\n");
 }
 
+function summarizeAgentStderr(stderr: string): string {
+  const important = stderr
+    .split(/\r?\n/)
+    .filter((line) =>
+      /\b(ERROR|WARN|Unauthorized|failed|timeout|not found|required)\b/i.test(
+        line,
+      ),
+    )
+    .slice(0, 12)
+    .join("\n")
+    .slice(0, 2000);
+  if (important) return important;
+  return stderr.split(/\r?\n/).slice(0, 8).join("\n").slice(0, 1000);
+}
+
 function buildPrompt(question: string, sources: PublicQuerySource[]): string {
   const context = sources
     .map(
@@ -325,11 +341,13 @@ export async function runPublicQuery(
   }
 
   const prompt = buildPrompt(question, sources);
+  const configuredTimeout = cfg.cli.timeouts.query ?? PUBLIC_QUERY_CLI_TIMEOUT_MS;
+  const timeoutMs = Math.min(configuredTimeout, PUBLIC_QUERY_CLI_TIMEOUT_MS);
   try {
     const result = await withTempDir((dir) =>
       runCli(agent, prompt, {
         safeMode: true,
-        timeoutMs: cfg.cli.timeouts.query ?? undefined,
+        timeoutMs,
         signal,
         cwd: dir,
         projectRoot: dir,
@@ -342,6 +360,11 @@ export async function runPublicQuery(
         maxStderrBytes: 64 * 1024,
       }),
     );
+    if (result.exitCode !== 0) {
+      console.warn(
+        `[public-query] ${agent} exited with ${result.exitCode}: ${summarizeAgentStderr(result.stderr)}`,
+      );
+    }
     const answer =
       result.exitCode === 0 && result.stdout.trim()
         ? result.stdout.trim()
@@ -354,7 +377,8 @@ export async function runPublicQuery(
       agent,
       durationMs: Date.now() - started,
     };
-  } catch {
+  } catch (err) {
+    console.warn("[public-query] agent run failed:", err);
     return {
       mode: "query",
       question,

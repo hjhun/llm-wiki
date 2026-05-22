@@ -330,6 +330,7 @@ PUBLIC_HOME="$PWD/config/public-cli-home"
 WORKDIR="$(mktemp -d)"
 CLI_BIN="$(command -v "$CLI")"
 CLI_REAL="$(readlink -f "$CLI_BIN")"
+RESOLV_CONF_REAL="$(readlink -f /etc/resolv.conf)"
 CLI_BIN_DIR="$(dirname "$CLI_BIN")"
 CLI_ROOT="$(node -e '
 const path = require("node:path");
@@ -363,6 +364,8 @@ bwrap \
   --ro-bind /lib /lib \
   --ro-bind /lib64 /lib64 \
   --ro-bind /etc /etc \
+  --dir "$(dirname "$RESOLV_CONF_REAL")" \
+  --ro-bind "$RESOLV_CONF_REAL" "$RESOLV_CONF_REAL" \
   --ro-bind "$CLI_BIN_DIR" "$CLI_BIN_DIR" \
   --ro-bind "$CLI_ROOT" "$CLI_ROOT" \
   --bind "$WORKDIR" "$WORKDIR" \
