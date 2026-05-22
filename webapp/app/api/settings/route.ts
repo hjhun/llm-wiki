@@ -58,6 +58,17 @@ const Body = z.object({
         .optional(),
     })
     .optional(),
+  search: z
+    .object({
+      qmd: z.object({
+        enabled: z.boolean(),
+        autoUpdateOnWikiChange: z.boolean(),
+        scope: z.enum(["wiki", "wiki+raw"]),
+        defaultNoRerank: z.boolean(),
+        embedEnabled: z.boolean(),
+      }),
+    })
+    .optional(),
   ui: z
     .object({
       language: z.enum(["ko", "en"]),
@@ -170,6 +181,15 @@ export async function PUT(req: Request) {
             partialThresholds: {
               ...current.graph.partialThresholds,
               ...parsed.data.graph.partialThresholds,
+            },
+          }
+        : undefined,
+      search: parsed.data.search
+        ? {
+            ...current.search,
+            qmd: {
+              ...current.search.qmd,
+              ...parsed.data.search.qmd,
             },
           }
         : undefined,

@@ -105,7 +105,7 @@ drained, so graphify reads a stable wiki state.
 
 This follows the same principle as `wiki-ingest`.
 
-1. **Find leaf directories**: list directories with no child directories in `wiki/` and optionally `raw/`.
+1. **Find leaf directories**: list directories with no child directories in `wiki/` and optionally `raw/`. Also treat files that live directly inside a non-leaf directory as a small pseudo-leaf for that directory, so root files such as `wiki/index.md` and `wiki/log.md` are not skipped.
 2. **Build partial graphs**: for each leaf, use the selected graphify execution path with only the files in that leaf.
    - Output path: `wiki/graph/parts/<sha1(leaf path)>.json`.
    - Options: use supported graphify CLI commands where they fit, or call installed `graphify` Python package modules directly. Choose the narrowest input shape supported by the selected executable/package.

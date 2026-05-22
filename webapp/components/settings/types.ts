@@ -9,10 +9,11 @@ export type CliInfo = {
 
 export type ToolStatus = {
   name: "graphify" | "qmd" | "marp" | "bwrap";
-  status: "ready" | "missing";
+  status: "ready" | "warning" | "missing";
   path: string | null;
   version: string | null;
   note: string;
+  details?: Record<string, string | number | boolean | null>;
 };
 
 export type SettingsConfig = {
@@ -44,6 +45,15 @@ export type SettingsConfig = {
       minFiles: number;
       minBytes: number;
       minSubChunks: number;
+    };
+  };
+  search: {
+    qmd: {
+      enabled: boolean;
+      autoUpdateOnWikiChange: boolean;
+      scope: "wiki" | "wiki+raw";
+      defaultNoRerank: boolean;
+      embedEnabled: boolean;
     };
   };
   ui: {

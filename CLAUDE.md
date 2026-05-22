@@ -172,16 +172,16 @@ use that year with the fallback month from the next available source.
 | "build/update/query the graph" | [`wiki-graphify`](.agents/skills/wiki-graphify/SKILL.md) |
 | "capture this website", "open this page and save evidence", "test the web UI in browser" | [`browser-capture`](.agents/skills/browser-capture/SKILL.md) |
 | "add/update/audit a skill", "improve CLIO skills" | [`skill-maintenance`](.agents/skills/skill-maintenance/SKILL.md) |
-| Optional qmd installed | [`wiki-search-qmd`](.agents/skills/wiki-search-qmd/SKILL.md) |
+| qmd installed (default setup) | [`wiki-search-qmd`](.agents/skills/wiki-search-qmd/SKILL.md) |
 | Optional marp installed | [`wiki-marp`](.agents/skills/wiki-marp/SKILL.md) |
 
-**Priority**: `.agents/skills/` (project-local) > global skills. graphify execution uses the **global `graphify` command from `PATH`**. If missing, `setup.sh` installs the official `graphifyy` package and runs `graphify install`.
+**Priority**: `.agents/skills/` (project-local) > global skills. qmd is installed by default under `tools/qmd/` when possible and falls back to a global `qmd` from `PATH`. graphify execution uses the **global `graphify` command from `PATH`**. If missing, `setup.sh` installs the official `graphifyy` package and runs `graphify install`.
 
 ## 7. Shared Operation Principle - Leaf-First + Merge (Required)
 
 This applies to ingest, Code Wiki ingest, preprocess planning, and graphify. Never start by throwing the whole root into one operation.
 
-1. **Find leaf directories**: in the target tree (`raw/`, `wiki/`), find directories with no child directories. For `raw/`, follow symlinked files/directories that are themselves located under `raw/`, keep their logical `raw/...` paths in state and citations, and track visited real paths/inodes to avoid symlink loops.
+1. **Find leaf directories**: in the target tree (`raw/`, `wiki/`), find directories with no child directories. For graphify, also treat direct files in a non-leaf directory as a pseudo-leaf so root files such as `wiki/index.md` and `wiki/log.md` are included. For `raw/`, follow symlinked files/directories that are themselves located under `raw/`, keep their logical `raw/...` paths in state and citations, and track visited real paths/inodes to avoid symlink loops.
 2. **Process by chunk**: group only the files in each leaf and process them once.
 3. **Preserve partial outputs**:
    - ingest: immediately save chunk-level summaries/entity pages.

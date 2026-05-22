@@ -46,9 +46,16 @@ export type GraphData = {
 
 export type GraphState = {
   exists: boolean;
+  status: "missing" | "partial-only" | "ready" | "invalid";
   graph: GraphData | null;
   report: string | null;
   graphPath: string;
   reportPath: string;
   updatedAt: string | null;
+  diagnostics: {
+    partsCount: number;
+    stateExists: boolean;
+    reportExists: boolean;
+    message: string | null;
+  };
 };

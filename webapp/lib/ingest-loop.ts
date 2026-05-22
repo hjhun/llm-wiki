@@ -4,6 +4,7 @@ import path from "node:path";
 import { runCli, type CliName, type RunResult } from "./cli";
 import type { Config } from "./config";
 import { buildGraphifyPrompt } from "./graph";
+import { maybeRefreshQmdIndex } from "./qmd";
 import {
   PROJECT_ROOT,
   WIKI_GRAPH_PATH,
@@ -1381,6 +1382,15 @@ export async function runIngestLoop(
 
   const loopAfter = await readProgressSnapshot({ rawScope });
   if (haltKind !== "error") {
+    if (ingestMadeProgress(loopBefore, loopAfter)) {
+      const qmd = await maybeRefreshQmdIndex({
+        cfg,
+        signal,
+        onChunk,
+      });
+      if (qmd.note) finalReply += qmd.note;
+    }
+
     const alreadyCoversLatest =
       lastMergedSnap !== null &&
       loopAfter.leavesDone <= lastMergedSnap.leavesDone &&

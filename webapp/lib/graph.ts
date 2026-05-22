@@ -69,11 +69,18 @@ export type GraphData = {
 
 export type GraphState = {
   exists: boolean;
+  status: "missing" | "partial-only" | "ready" | "invalid";
   graph: GraphData | null;
   report: string | null;
   graphPath: string;
   reportPath: string;
   updatedAt: string | null;
+  diagnostics: {
+    partsCount: number;
+    stateExists: boolean;
+    reportExists: boolean;
+    message: string | null;
+  };
 };
 
 export type GraphRunAction = "build" | "update" | "update-partial";
@@ -423,31 +430,90 @@ async function fileUpdatedAt(filePath: string): Promise<string | null> {
   }
 }
 
+async function graphDiagnostics() {
+  const graphDir = path.dirname(WIKI_GRAPH_PATH);
+  const partsDir = path.join(graphDir, "parts");
+  const statePath = path.join(graphDir, ".state.json");
+  const [partEntries, stateStat, reportStat] = await Promise.all([
+    fs.readdir(partsDir).catch((err: NodeJS.ErrnoException) => {
+      if (err.code === "ENOENT") return [] as string[];
+      throw err;
+    }),
+    fs.stat(statePath).catch((err: NodeJS.ErrnoException) => {
+      if (err.code === "ENOENT") return null;
+      throw err;
+    }),
+    fs.stat(WIKI_GRAPH_REPORT_PATH).catch((err: NodeJS.ErrnoException) => {
+      if (err.code === "ENOENT") return null;
+      throw err;
+    }),
+  ]);
+  return {
+    partsCount: partEntries.filter((entry) => entry.endsWith(".json")).length,
+    stateExists: stateStat?.isFile() ?? false,
+    reportExists: reportStat?.isFile() ?? false,
+  };
+}
+
 export async function readGraphState(): Promise<GraphState> {
-  const [graphText, report, updatedAt] = await Promise.all([
+  const [graphText, report, updatedAt, diagnosticsBase] = await Promise.all([
     readTextIfExists(WIKI_GRAPH_PATH),
     readTextIfExists(WIKI_GRAPH_REPORT_PATH),
     fileUpdatedAt(WIKI_GRAPH_PATH),
+    graphDiagnostics(),
   ]);
 
   if (!graphText) {
+    const partialOnly =
+      diagnosticsBase.partsCount > 0 || diagnosticsBase.stateExists;
     return {
       exists: false,
+      status: partialOnly ? "partial-only" : "missing",
       graph: null,
       report,
       graphPath: path.relative(process.cwd(), WIKI_GRAPH_PATH),
       reportPath: path.relative(process.cwd(), WIKI_GRAPH_REPORT_PATH),
       updatedAt: null,
+      diagnostics: {
+        ...diagnosticsBase,
+        message: partialOnly
+          ? "wiki/graph has partial artifacts but no connected graph.json. Run wiki-graphify update to finish the merge pass."
+          : null,
+      },
+    };
+  }
+
+  let graph: GraphData;
+  try {
+    graph = normalizeGraph(JSON.parse(graphText));
+  } catch (err) {
+    return {
+      exists: true,
+      status: "invalid",
+      graph: null,
+      report,
+      graphPath: path.relative(process.cwd(), WIKI_GRAPH_PATH),
+      reportPath: path.relative(process.cwd(), WIKI_GRAPH_REPORT_PATH),
+      updatedAt,
+      diagnostics: {
+        ...diagnosticsBase,
+        message: `graph.json could not be parsed: ${errorMessage(err)}`,
+      },
     };
   }
 
   return {
     exists: true,
-    graph: await attachDocuments(normalizeGraph(JSON.parse(graphText))),
+    status: "ready",
+    graph: await attachDocuments(graph),
     report,
     graphPath: path.relative(process.cwd(), WIKI_GRAPH_PATH),
     reportPath: path.relative(process.cwd(), WIKI_GRAPH_REPORT_PATH),
     updatedAt,
+    diagnostics: {
+      ...diagnosticsBase,
+      message: null,
+    },
   };
 }
 

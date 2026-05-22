@@ -25,7 +25,7 @@ SKIP_CLI=0
 START_SERVER=0
 SHUTDOWN_SERVER=0
 RESTART_EXISTING=1
-WITH_QMD=0
+SKIP_QMD=0
 WITH_MARP=0
 WITH_AGENT_BROWSER=0
 INSTALL_CLI=""
@@ -62,7 +62,8 @@ Options:
   --skip-npm-install            Do not run npm install in webapp/ (default skips when dependencies are present)
   --skip-build                  Do not run npm run build
   --skip-cli                    Do not build the Rust `clio` CLI (cli-rs/)
-  --with-qmd                    Best-effort optional qmd clone into tools/qmd
+  --skip-qmd                    Do not install qmd; use existing qmd if available
+  --with-qmd                    Deprecated no-op; qmd is installed by default
   --with-marp                   Best-effort optional Marp CLI install
   --with-agent-browser          Best-effort optional agent-browser install
   --install-cli=<names>         Best-effort install for codex,claude,gemini,cline
@@ -128,8 +129,12 @@ while [[ $# -gt 0 ]]; do
       SKIP_CLI=1
       shift
       ;;
+    --skip-qmd)
+      SKIP_QMD=1
+      shift
+      ;;
     --with-qmd)
-      WITH_QMD=1
+      SKIP_QMD=0
       shift
       ;;
     --with-marp)
@@ -453,6 +458,77 @@ log_graphify_status() {
     fi
   else
     warn "global graphify was not found; Graph Build/Update will need graphify installed"
+  fi
+}
+
+find_qmd_bin() {
+  local candidate
+  for candidate in \
+    "${TOOLS_DIR}/qmd/node_modules/.bin/qmd" \
+    "${TOOLS_DIR}/qmd/bin/qmd" \
+    "${TOOLS_DIR}/qmd/.venv/bin/qmd" \
+    "${TOOLS_DIR}/qmd/run.sh" \
+    "$(command -v qmd 2>/dev/null || true)" \
+    "${HOME:-}/.npm-global/bin/qmd" \
+    "/usr/local/bin/qmd"; do
+    if [[ -n "${candidate}" && -x "${candidate}" ]]; then
+      printf '%s\n' "${candidate}"
+      return 0
+    fi
+  done
+
+  return 1
+}
+
+log_qmd_status() {
+  local qmd_bin=""
+  qmd_bin="$(find_qmd_bin || true)"
+  if [[ -n "${qmd_bin}" ]]; then
+    local version=""
+    version="$("${qmd_bin}" --version 2>/dev/null | head -n 1 || true)"
+    log "qmd available: ${qmd_bin}${version:+ (${version})}"
+  else
+    warn "qmd was not found; wiki-search-qmd will stay inactive until qmd is installed"
+  fi
+}
+
+ensure_qmd_wiki_index() {
+  local qmd_bin="$1"
+  local collections=""
+
+  collections="$("${qmd_bin}" collection list 2>&1 || true)"
+  if printf '%s\n' "${collections}" | grep -qi "No collections"; then
+    log "initializing qmd wiki collection"
+    "${qmd_bin}" collection add wiki || {
+      warn "qmd collection add wiki failed; run it manually if wiki-search-qmd needs indexing"
+      return 0
+    }
+  fi
+
+  log "refreshing qmd index"
+  "${qmd_bin}" update || warn "qmd update failed; run it manually after setup"
+}
+
+install_or_upgrade_qmd_local() {
+  local qmd_bin=""
+  qmd_bin="$(find_qmd_bin || true)"
+  if [[ -n "${qmd_bin}" ]]; then
+    log_qmd_status
+    ensure_qmd_wiki_index "${qmd_bin}"
+    return 0
+  fi
+
+  require_command npm
+  mkdir -p "${TOOLS_DIR}/qmd"
+  log "installing qmd locally into tools/qmd via npm package @tobilu/qmd"
+  npm install --prefix "${TOOLS_DIR}/qmd" @tobilu/qmd || {
+    warn "qmd install failed; rerun setup or install manually with: npm install --prefix tools/qmd @tobilu/qmd"
+    return 0
+  }
+  log_qmd_status
+  qmd_bin="$(find_qmd_bin || true)"
+  if [[ -n "${qmd_bin}" ]]; then
+    ensure_qmd_wiki_index "${qmd_bin}"
   fi
 }
 
@@ -1136,8 +1212,11 @@ main() {
     log_graphify_status
   fi
 
-  if [[ "${WITH_QMD}" -eq 1 ]]; then
-    clone_if_missing "${TOOLS_DIR}/qmd" "https://github.com/tobi/qmd.git" "qmd"
+  if [[ "${SKIP_QMD}" -eq 0 ]]; then
+    install_or_upgrade_qmd_local
+  else
+    log "skipping qmd install; wiki-search-qmd will use project-local or PATH qmd if available"
+    log_qmd_status
   fi
 
   if [[ "${WITH_MARP}" -eq 1 ]]; then

@@ -22,6 +22,7 @@ Priority:
 
 Candidate execution paths:
 
+- `tools/qmd/node_modules/.bin/qmd`
 - `tools/qmd/bin/qmd`
 - `tools/qmd/.venv/bin/qmd`
 - `tools/qmd/run.sh`
@@ -55,7 +56,7 @@ Return a candidate list for `wiki-query`.
 ## Workflow
 
 1. Check the qmd execution path. If unavailable, leave this message and exit:
-   > qmd is not installed, so I will continue with the default wiki search. Run `./setup.sh --with-qmd` if you need qmd.
+   > qmd is not installed, so I will continue with the default wiki search. Run `./setup.sh` or `npm install --prefix tools/qmd @tobilu/qmd` if you need qmd.
 2. Search only `wiki/` by default. Include `raw/` as read-only input only when `--scope=wiki+raw` is explicit.
 3. Use `config/default.json` chunk limits (`chunking.maxFiles`, `chunking.maxBytes`) so large inputs are not passed at once.
 4. If qmd creates indexes or caches, use `tools/qmd/`, `.cache/`, or qmd's own default cache location. Do not create cache files inside wiki documents.
@@ -74,14 +75,15 @@ Return a candidate list for `wiki-query`.
 Project-local install:
 
 ```bash
-./setup.sh --with-qmd
+./setup.sh
 ```
 
 Manual install:
 
 ```bash
-cd tools
-git clone https://github.com/tobi/qmd.git
+npm install --prefix tools/qmd @tobilu/qmd
+tools/qmd/node_modules/.bin/qmd collection add wiki
+tools/qmd/node_modules/.bin/qmd update
 ```
 
 After installation, check `qmd` status in the Tools section of the Settings tab.

@@ -9,26 +9,70 @@ import { PROJECT_ROOT } from "./paths";
 
 export type ToolStatus = {
   name: "graphify" | "qmd" | "marp" | "bwrap";
-  status: "ready" | "missing";
+  status: "ready" | "warning" | "missing";
   path: string | null;
   version: string | null;
   note: string;
+  details?: Record<string, string | number | boolean | null>;
 };
 
-async function runVersion(absPath: string): Promise<string | null> {
+async function runTool(
+  absPath: string,
+  args: string[],
+  timeout = 4000,
+): Promise<{ exitCode: number | null; output: string }> {
   return new Promise((resolve) => {
-    const child = spawn(absPath, ["--version"], {
+    const child = spawn(absPath, args, {
       stdio: ["ignore", "pipe", "pipe"],
-      timeout: 4000,
+      timeout,
     });
     let buf = "";
     child.stdout?.on("data", (d) => (buf += d.toString()));
     child.stderr?.on("data", (d) => (buf += d.toString()));
-    child.on("error", () => resolve(null));
-    child.on("close", () => {
-      resolve(buf.trim().split(/\r?\n/)[0]?.slice(0, 80) || null);
+    child.on("error", () => resolve({ exitCode: null, output: buf }));
+    child.on("close", (code) => {
+      resolve({ exitCode: code, output: buf });
     });
   });
+}
+
+async function runVersion(absPath: string): Promise<string | null> {
+  const result = await runTool(absPath, ["--version"]);
+  return result.output.trim().split(/\r?\n/)[0]?.slice(0, 80) || null;
+}
+
+async function runQmdStatus(absPath: string): Promise<{
+  status: ToolStatus["status"];
+  note: string;
+  details: Record<string, string | number | boolean | null>;
+}> {
+  const result = await runTool(absPath, ["collection", "list"], 5000);
+  const output = result.output;
+  const hasCollections = !/No collections/i.test(output);
+  const details = {
+    collections: hasCollections,
+  };
+
+  if (result.exitCode !== 0) {
+    return {
+      status: "warning",
+      note: "qmd는 감지됐지만 상태 확인에 실패했습니다. qmd status를 터미널에서 확인하세요.",
+      details,
+    };
+  }
+  if (!hasCollections) {
+    return {
+      status: "warning",
+      note: "qmd는 설치됐지만 wiki 컬렉션/인덱스가 비어 있습니다. `qmd collection add wiki && qmd update`를 실행하세요.",
+      details,
+    };
+  }
+
+  return {
+    status: "ready",
+    note: "qmd 컬렉션이 준비되어 있습니다. wiki-search-qmd가 후보 검색에 사용할 수 있습니다.",
+    details,
+  };
 }
 
 async function graphifyPython(absPath: string): Promise<string> {
@@ -95,6 +139,47 @@ async function whichBin(bin: string): Promise<string | null> {
   return null;
 }
 
+async function firstExecutable(candidates: string[]): Promise<string | null> {
+  for (const candidate of candidates) {
+    try {
+      const st = await fs.stat(candidate);
+      if (st.isFile()) return candidate;
+    } catch {
+      // continue
+    }
+  }
+  return null;
+}
+
+async function detectQmd(): Promise<ToolStatus> {
+  const local = await firstExecutable([
+    path.join(PROJECT_ROOT, "tools", "qmd", "node_modules", ".bin", "qmd"),
+    path.join(PROJECT_ROOT, "tools", "qmd", "bin", "qmd"),
+    path.join(PROJECT_ROOT, "tools", "qmd", ".venv", "bin", "qmd"),
+    path.join(PROJECT_ROOT, "tools", "qmd", "run.sh"),
+  ]);
+  const found = local ?? (await whichBin("qmd"));
+  if (!found) {
+    return {
+      name: "qmd",
+      status: "missing",
+      path: null,
+      version: null,
+      note: "qmd가 없습니다. ./setup.sh를 실행하거나 npm install --prefix tools/qmd @tobilu/qmd를 실행하세요.",
+    };
+  }
+
+  const qmd = await runQmdStatus(found);
+  return {
+    name: "qmd",
+    status: qmd.status,
+    path: found,
+    version: await runVersion(found),
+    note: qmd.note,
+    details: qmd.details,
+  };
+}
+
 async function detectGraphify(): Promise<ToolStatus> {
   const global = await whichBin("graphify");
   if (global) {
@@ -144,7 +229,7 @@ export async function readSettingsState() {
   const [cli, graphify, qmd, marp, bwrap] = await Promise.all([
     detectAllCli(),
     detectGraphify(),
-    detectOptionalTool("qmd", "qmd"),
+    detectQmd(),
     detectOptionalTool("marp", "marp"),
     detectOptionalTool("bwrap", "bwrap"),
   ]);
@@ -157,6 +242,7 @@ export async function readSettingsState() {
       agent: cfg.agent,
       chunking: cfg.chunking,
       graph: cfg.graph,
+      search: cfg.search,
       ui: cfg.ui,
       auth: {
         passwordSet: cfg.auth.passwordHash != null,

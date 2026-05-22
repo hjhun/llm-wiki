@@ -113,6 +113,22 @@ function nodeSummary(node: GraphNode): string {
   return bits.join(" · ") || node.id;
 }
 
+function graphStatusLabel(
+  status: GraphState["status"],
+  text: ReturnType<typeof useLanguage>["t"]["graph"],
+): string {
+  switch (status) {
+    case "ready":
+      return text.graphStatusReady;
+    case "partial-only":
+      return text.graphStatusPartialOnly;
+    case "invalid":
+      return text.graphStatusInvalid;
+    case "missing":
+      return text.graphStatusMissing;
+  }
+}
+
 function documentKey(doc: GraphDocument): string {
   return `${doc.ws ?? "none"}:${doc.path ?? doc.source}`;
 }
@@ -368,6 +384,19 @@ export default function Graph() {
         <div className="border-b border-line bg-bg-subtle px-4 py-1 text-[11px] text-ink-faint">
           {t.graph.runSummary(lastRun.exitCode, lastRun.durationMs)}{" "}
           <span className="font-mono text-ink-dim">{lastRun.sessionPath}</span>
+        </div>
+      ) : null}
+      {state?.status === "partial-only" || state?.status === "invalid" ? (
+        <div className="border-b border-warning/50 bg-warning/10 px-4 py-2 text-xs text-warning">
+          <span className="font-mono uppercase">
+            {graphStatusLabel(state.status, t.graph)}
+          </span>
+          <span className="ml-2">
+            {state.diagnostics.message ?? t.graph.graphNeedsUpdate}
+          </span>
+          <span className="ml-2 font-mono text-[11px]">
+            parts={state.diagnostics.partsCount}
+          </span>
         </div>
       ) : null}
       {busy ? (

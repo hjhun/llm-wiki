@@ -32,6 +32,15 @@
       "minSubChunks": 4
     }
   },
+  "search": {
+    "qmd": {
+      "enabled": true,
+      "autoUpdateOnWikiChange": true,
+      "scope": "wiki",
+      "defaultNoRerank": true,
+      "embedEnabled": false
+    }
+  },
   "chat": {
     "contextTurns": 6,
     "includeProgressDashboard": true

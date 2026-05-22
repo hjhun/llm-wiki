@@ -278,7 +278,7 @@ Order:
    - If at least one is found, continue. If none are found, warn and continue so the user can set a manual path in Settings.
    - **Automatic installation is disabled by default.** Only if the user passes `--install-cli=<name>[,<name>...]` should setup attempt official installation for that CLI, for example `--install-cli=claude` -> `npm i -g @anthropic-ai/claude-code`.
    - Installation failures print guidance and do not stop setup.
-4. **Optional helper tools**: qmd, marp, and similar tools are marked optional and installed only behind flags such as `--with-qmd`.
+4. **Helper tools**: qmd is installed by default as the wiki search helper; heavier or presentation-focused tools such as Marp remain opt-in.
 5. **App build**: `cd webapp && npm install && npm run build`, or pnpm.
 6. **Initialization**: create templates for `wiki/index.md`, `wiki/log.md`, `wiki/.gitignore`, and `config/local.json` if missing.
 7. **First run**: prompt for administrator password, save hash, and show service start instructions such as `cd webapp && npm start` or `./run.sh`.
@@ -288,7 +288,7 @@ Flags:
 
 - `--port <n>` default 9091
 - `--install-cli=<name>[,<name>]` opt-in install attempt for missing coding agent CLIs; default behavior is detection only
-- `--with-qmd`, `--with-marp` optional tool setup
+- `--skip-qmd`, `--with-marp` helper tool setup
 - `--dev` development mode using `pnpm dev` with hot reload
 
 ---

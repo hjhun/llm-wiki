@@ -50,7 +50,7 @@ const INSTALL_HINTS: Partial<Record<AutomationToolName, string>> = {
   "agent-browser": "npm install -g agent-browser && agent-browser install",
   "yt-dlp": "Install yt-dlp with your OS package manager, pipx, or pip.",
   gh: "Install GitHub CLI from https://cli.github.com/ and authenticate with gh auth login.",
-  qmd: "Run ./setup.sh --with-qmd or install qmd manually.",
+  qmd: "Run ./setup.sh or install with npm install --prefix tools/qmd @tobilu/qmd.",
   marp: "Run ./setup.sh --with-marp or npm install -g @marp-team/marp-cli.",
 };
 
@@ -82,6 +82,25 @@ async function whichBin(bin: string): Promise<string | null> {
   return null;
 }
 
+async function localToolBin(name: AutomationToolName): Promise<string | null> {
+  if (name !== "qmd") return null;
+  const candidates = [
+    path.join(PROJECT_ROOT, "tools", "qmd", "node_modules", ".bin", "qmd"),
+    path.join(PROJECT_ROOT, "tools", "qmd", "bin", "qmd"),
+    path.join(PROJECT_ROOT, "tools", "qmd", ".venv", "bin", "qmd"),
+    path.join(PROJECT_ROOT, "tools", "qmd", "run.sh"),
+  ];
+  for (const candidate of candidates) {
+    try {
+      const st = await fs.stat(candidate);
+      if (st.isFile()) return candidate;
+    } catch {
+      // continue
+    }
+  }
+  return null;
+}
+
 async function version(absPath: string): Promise<string | null> {
   return new Promise((resolve) => {
     const child = spawn(absPath, ["--version"], {
@@ -101,7 +120,7 @@ async function version(absPath: string): Promise<string | null> {
 export async function detectAutomationTools(): Promise<AutomationToolInventory> {
   const tools = await Promise.all(
     TOOL_NAMES.map(async (name): Promise<AutomationToolStatus> => {
-      const found = await whichBin(name);
+      const found = (await localToolBin(name)) ?? (await whichBin(name));
       return {
         name,
         status: found ? "ready" : "missing",

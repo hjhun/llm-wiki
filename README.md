@@ -125,7 +125,7 @@ The project setup and full workflows need:
 - Optional: a Rust toolchain (`cargo`) to build the `clio` CLI from source.
   Release installs try the prebuilt `clio` asset for Ubuntu, Windows, or macOS
   first, then fall back to a local cargo build when no matching asset exists.
-- Optional: `graphify`, `qmd`, and Marp CLI
+- Helper tools: `graphify` and `qmd` install by default; Marp CLI is optional
 - Optional: `agent-browser` for browser-based automation jobs
 
 `setup.sh` detects installed agent CLIs and writes the result to `config/cli-detected.json`. Missing CLIs can be installed manually or configured by path in Settings.
@@ -455,7 +455,7 @@ Common `setup.sh` options:
 | `--skip-npm-install` | Skip `webapp/` dependency checks and installation. |
 | `--skip-build` | Skip `npm run build`. |
 | `--skip-cli` | Skip building the Rust `clio` CLI. |
-| `--with-qmd` | Best-effort optional qmd setup. |
+| `--skip-qmd` | Do not install qmd. Setup installs project-local qmd by default. |
 | `--with-marp` | Best-effort optional Marp CLI setup. |
 | `--with-agent-browser` | Best-effort optional agent-browser setup for browser automation tasks. |
 | `--install-cli=<names>` | Best-effort CLI install for `codex`, `claude`, `gemini`, or `cline`. |
@@ -559,7 +559,7 @@ release when it is the latest release, or when users pass `--version vX.Y.Z`.
 ├── examples/raw/         # Sample source material
 ├── raw/                  # User-owned source material
 ├── scripts/              # Installer and utility scripts
-├── tools/                # Optional local helper tools such as qmd
+├── tools/                # Project-local helper tools such as qmd
 ├── webapp/               # Next.js web application
 └── wiki/                 # Agent-maintained Markdown wiki
 ```

@@ -5,6 +5,7 @@ import type { Config } from "./config";
 import type { ChatKind } from "./chat-events";
 import { appendMessage } from "./sessions";
 import { errorMessage } from "./api";
+import { maybeRefreshQmdIndex } from "./qmd";
 import {
   buildEntityRegistryReference,
   buildCodeWikiStatusReference,
@@ -367,6 +368,12 @@ async function runSingleRoundOperation(input: {
     progressNote = `ingest progress advanced=${progressAdvanced}`;
     const bestExit = runs.some((run) => run.result?.exitCode === 0) ? 0 : 1;
     if (progressAdvanced && ingestWorkComplete(ingestAfter)) {
+      const qmd = await maybeRefreshQmdIndex({
+        cfg: input.cfg,
+        signal: input.signal,
+        onChunk: input.onChunk,
+      });
+      if (qmd.note) progressNote += `\n${qmd.note}`;
       const finalGraph = await maybeAutoRunGraphify({
         cfg: input.cfg,
         agent: orchestrationCli,
@@ -538,6 +545,30 @@ async function runLoopOperation(input: {
     haltKind !== "error" &&
     ingestWorkComplete(loopAfter)
   ) {
+    const qmd = await maybeRefreshQmdIndex({
+      cfg: input.cfg,
+      signal: input.signal,
+      onChunk: input.onChunk,
+    });
+    if (qmd.note) {
+      allRuns.push({
+        worker: {
+          index: workers.length,
+          name: "qmd",
+          cli: orchestrationCli,
+        },
+        round,
+        result: {
+          stdout: qmd.note,
+          stderr: "",
+          exitCode: qmd.ok ? 0 : 1,
+          durationMs: 0,
+          stdoutTruncated: null,
+          stderrTruncated: null,
+        },
+        error: null,
+      });
+    }
     const finalGraph = await maybeAutoRunGraphify({
       cfg: input.cfg,
       agent: orchestrationCli,

@@ -23,13 +23,20 @@ Used for knowledge graph creation, updates, and queries. The Graph tab does not 
 
 Using `./setup.sh --skip-graphify` skips installation attempts and uses only an already-installed global `graphify` from `PATH`.
 
-## qmd (Optional)
+## qmd
 
-When installed, the [`wiki-search-qmd`](../.agents/skills/wiki-search-qmd/SKILL.md) skill is activated automatically and delegates wiki search to a BM25 + vector + reranking hybrid flow.
+qmd is installed by default when `setup.sh` runs. The [`wiki-search-qmd`](../.agents/skills/wiki-search-qmd/SKILL.md) skill uses it as an auxiliary candidate search tool for `wiki-query`; final answers must still be grounded in wiki/source/raw pages that the agent actually reads.
 
-- Source: <https://github.com/tobi/qmd>
+- Package: `@tobilu/qmd`
 - Recommended location: `tools/qmd/`
-- Setup: `setup.sh --with-qmd`, or clone manually and follow its README.
+- Setup: `setup.sh` installs qmd when missing, creates the `wiki` collection when no collections exist, and runs `qmd update`.
+- Skip setup: `setup.sh --skip-qmd`
+- Manual install:
+  ```bash
+  npm install --prefix tools/qmd @tobilu/qmd
+  tools/qmd/node_modules/.bin/qmd collection add wiki
+  tools/qmd/node_modules/.bin/qmd update
+  ```
 
 ## marp (Optional)
 

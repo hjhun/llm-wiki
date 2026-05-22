@@ -53,6 +53,7 @@ function cloneConfig(config: SettingsConfig): SettingsConfig {
     },
     chunking: { ...config.chunking },
     graph: { ...config.graph },
+    search: { ...config.search, qmd: { ...config.search.qmd } },
     ui: { ...config.ui },
     auth: { ...config.auth },
     publicQuery: { ...config.publicQuery },
@@ -72,8 +73,10 @@ function cloneConfig(config: SettingsConfig): SettingsConfig {
   };
 }
 
-function statusTone(status: "ready" | "missing") {
-  return status === "ready" ? "status-ready" : "status-disabled";
+function statusTone(status: "ready" | "warning" | "missing") {
+  if (status === "ready") return "status-ready";
+  if (status === "warning") return "status-warning";
+  return "status-disabled";
 }
 
 export default function Settings() {
@@ -181,6 +184,7 @@ export default function Settings() {
           agent: draft.agent,
           chunking: draft.chunking,
           graph: draft.graph,
+          search: draft.search,
           ui: {
             ...draft.ui,
             language,
@@ -956,7 +960,11 @@ function CliCard({
 function ToolRow({ tool }: { tool: ToolStatus }) {
   const { t } = useLanguage();
   const statusLabel =
-    tool.status === "ready" ? "ready" : t.settings.missing.toLowerCase();
+    tool.status === "ready"
+      ? "ready"
+      : tool.status === "warning"
+        ? "needs setup"
+        : t.settings.missing.toLowerCase();
   return (
     <div className="rounded border border-line bg-bg px-3 py-2">
       <div className="flex items-center justify-between gap-3">
@@ -971,6 +979,18 @@ function ToolRow({ tool }: { tool: ToolStatus }) {
         {tool.path ?? t.settings.notDetected}
       </div>
       <p className="mt-1 text-xs leading-relaxed text-ink-faint">{tool.note}</p>
+      {tool.details ? (
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {Object.entries(tool.details).map(([key, value]) => (
+            <span
+              key={key}
+              className="rounded border border-line bg-bg-subtle px-1.5 py-0.5 font-mono text-[10px] text-ink-faint"
+            >
+              {key}:{String(value)}
+            </span>
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }

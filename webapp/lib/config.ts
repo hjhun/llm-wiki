@@ -108,6 +108,33 @@ export const ConfigSchema = z.object({
         minSubChunks: 4,
       }),
   }),
+  search: z
+    .object({
+      qmd: z
+        .object({
+          enabled: z.boolean().default(true),
+          autoUpdateOnWikiChange: z.boolean().default(true),
+          scope: z.enum(["wiki", "wiki+raw"]).default("wiki"),
+          defaultNoRerank: z.boolean().default(true),
+          embedEnabled: z.boolean().default(false),
+        })
+        .default({
+          enabled: true,
+          autoUpdateOnWikiChange: true,
+          scope: "wiki",
+          defaultNoRerank: true,
+          embedEnabled: false,
+        }),
+    })
+    .default({
+      qmd: {
+        enabled: true,
+        autoUpdateOnWikiChange: true,
+        scope: "wiki",
+        defaultNoRerank: true,
+        embedEnabled: false,
+      },
+    }),
   chat: z.object({
     /**
      * Number of recent turns re-injected into the prompt for stateless CLI
@@ -469,6 +496,7 @@ const DEFAULT_CONFIG: Config = ConfigSchema.parse({
   agent: {},
   chunking: {},
   graph: {},
+  search: {},
   chat: {},
   cli: {},
   ui: {},
