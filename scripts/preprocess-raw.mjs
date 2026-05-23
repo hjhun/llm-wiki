@@ -109,7 +109,29 @@ function buildRegex(pattern, extraFlags) {
   return new RegExp(lifted.pattern, lifted.flags);
 }
 
-async function walk(dir, baseAbs, out = []) {
+async function statSafe(abs) {
+  try {
+    return await fs.stat(abs);
+  } catch (err) {
+    if (err?.code === "ENOENT") return null;
+    throw err;
+  }
+}
+
+async function realpathSafe(abs) {
+  try {
+    return await fs.realpath(abs);
+  } catch {
+    return null;
+  }
+}
+
+async function walk(dir, baseAbs, out = [], visitedDirs = new Set()) {
+  const real = await realpathSafe(dir);
+  if (real) {
+    if (visitedDirs.has(real)) return out;
+    visitedDirs.add(real);
+  }
   let entries;
   try {
     entries = await fs.readdir(dir, { withFileTypes: true });
@@ -119,13 +141,18 @@ async function walk(dir, baseAbs, out = []) {
   }
   for (const entry of entries) {
     const abs = path.join(dir, entry.name);
-    if (entry.isDirectory()) {
+    const targetStat = entry.isSymbolicLink()
+      ? await statSafe(abs)
+      : null;
+    const isDirectory = entry.isDirectory() || targetStat?.isDirectory();
+    const isFile = entry.isFile() || targetStat?.isFile();
+    if (isDirectory) {
       if (EXCLUDED_DIR_NAMES.has(entry.name)) continue;
       if (entry.name.startsWith(".") && !entry.name.startsWith(".cleaned")) {
         continue;
       }
-      await walk(abs, baseAbs, out);
-    } else if (entry.isFile()) {
+      await walk(abs, baseAbs, out, visitedDirs);
+    } else if (isFile) {
       out.push({
         abs,
         rel: toPosix(path.relative(baseAbs, abs)),

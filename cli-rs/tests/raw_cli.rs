@@ -105,6 +105,13 @@ fn raw_add_can_symlink_directory_without_expanding_it() {
         fs::canonicalize(&src_dir).unwrap()
     );
     assert_eq!(fs::read(linked.join("a.md")).unwrap(), b"a");
+
+    clio()
+        .env("CLIO_HOME", project.path())
+        .args(["raw", "list"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("raw/notes/a.md"));
 }
 
 #[test]

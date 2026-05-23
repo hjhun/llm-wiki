@@ -39,6 +39,9 @@ export type EntryKind = "dir" | "file";
 export type Entry = {
   name: string;
   kind: EntryKind;
+  isSymlink?: boolean;
+  linkTarget?: string | null;
+  broken?: boolean;
   size: number;
   mtime: number;
   /** 워크스페이스 루트 기준 상대 경로 (POSIX) */
@@ -72,6 +75,55 @@ async function statSafe(abs: string): Promise<Stats | null> {
   }
 }
 
+async function lstatSafe(abs: string): Promise<Stats | null> {
+  try {
+    return await fs.lstat(abs);
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") return null;
+    throw err;
+  }
+}
+
+async function symlinkTargetSafe(abs: string): Promise<string | null> {
+  try {
+    return await fs.readlink(abs);
+  } catch {
+    return null;
+  }
+}
+
+async function rawPathCrossesSymlink(
+  abs: string,
+  includeFinal: boolean,
+): Promise<boolean> {
+  const rawRoot = WORKSPACE_ROOTS.raw;
+  const rel = path.relative(rawRoot, abs);
+  if (!rel || rel.startsWith("..") || path.isAbsolute(rel)) return false;
+
+  const parts = rel.split(path.sep).filter(Boolean);
+  let cur = rawRoot;
+  for (let i = 0; i < parts.length; i += 1) {
+    cur = path.join(cur, parts[i]);
+    const isFinal = i === parts.length - 1;
+    if (isFinal && !includeFinal) return false;
+    const st = await lstatSafe(cur);
+    if (!st) return false;
+    if (st.isSymbolicLink()) return true;
+  }
+  return false;
+}
+
+async function assertRawWriteDoesNotCrossSymlink(
+  ws: WsKey,
+  abs: string,
+  includeFinal: boolean,
+): Promise<void> {
+  if (ws !== "raw") return;
+  if (await rawPathCrossesSymlink(abs, includeFinal)) {
+    throw new Error("raw symlink targets are read-only");
+  }
+}
+
 export async function listDir(
   ws: WsKey,
   rel: string,
@@ -87,13 +139,20 @@ export async function listDir(
     const childRel = toPosix(path.join(rel, name));
     if (isSensitive(childRel)) continue;
     const childAbs = path.join(abs, name);
-    const cs = await statSafe(childAbs);
-    if (!cs) continue;
+    const ls = await lstatSafe(childAbs);
+    if (!ls) continue;
+    const isSymlink = ls.isSymbolicLink();
+    const cs = isSymlink ? await statSafe(childAbs) : ls;
+    const linkTarget = isSymlink ? await symlinkTargetSafe(childAbs) : null;
+    const broken = isSymlink && !cs;
     out.push({
       name,
-      kind: cs.isDirectory() ? "dir" : "file",
-      size: cs.size,
-      mtime: Math.floor(cs.mtimeMs),
+      kind: cs?.isDirectory() ? "dir" : "file",
+      isSymlink,
+      linkTarget,
+      broken,
+      size: cs?.size ?? ls.size,
+      mtime: Math.floor((cs ?? ls).mtimeMs),
       path: childRel,
     });
   }
@@ -137,6 +196,7 @@ export async function writeText(
     throw new Error(`workspace is read-only via UI: ${ws}`);
   }
   const abs = resolveEntry(ws, rel);
+  await assertRawWriteDoesNotCrossSymlink(ws, abs, true);
   await ensureDirForFile(abs);
   await fs.writeFile(abs, content, "utf8");
 }
@@ -150,6 +210,7 @@ export async function writeBytes(
     throw new Error(`workspace is read-only via UI: ${ws}`);
   }
   const abs = resolveEntry(ws, rel);
+  await assertRawWriteDoesNotCrossSymlink(ws, abs, true);
   await ensureDirForFile(abs);
   await fs.writeFile(abs, bytes);
 }
@@ -163,8 +224,9 @@ export async function createEntry(
     throw new Error(`workspace is read-only via UI: ${ws}`);
   }
   const abs = resolveEntry(ws, rel);
-  const st = await statSafe(abs);
+  const st = await lstatSafe(abs);
   if (st) throw new Error("already exists");
+  await assertRawWriteDoesNotCrossSymlink(ws, abs, false);
   if (kind === "dir") {
     await fs.mkdir(abs, { recursive: true });
   } else {
@@ -183,8 +245,10 @@ export async function renameEntry(
   }
   const fromAbs = resolveEntry(ws, fromRel);
   const toAbs = resolveEntry(ws, toRel);
-  if (!(await statSafe(fromAbs))) throw new Error("source not found");
-  if (await statSafe(toAbs)) throw new Error("target already exists");
+  if (!(await lstatSafe(fromAbs))) throw new Error("source not found");
+  if (await lstatSafe(toAbs)) throw new Error("target already exists");
+  await assertRawWriteDoesNotCrossSymlink(ws, fromAbs, false);
+  await assertRawWriteDoesNotCrossSymlink(ws, toAbs, false);
   await ensureDirForFile(toAbs);
   await fs.rename(fromAbs, toAbs);
 }
@@ -198,7 +262,8 @@ export async function moveToTrash(ws: WsKey, rel: string): Promise<string> {
     throw new Error(`workspace is read-only via UI: ${ws}`);
   }
   const abs = resolveEntry(ws, rel);
-  if (!(await statSafe(abs))) throw new Error("not found");
+  if (!(await lstatSafe(abs))) throw new Error("not found");
+  await assertRawWriteDoesNotCrossSymlink(ws, abs, false);
 
   const stamp = new Date()
     .toISOString()

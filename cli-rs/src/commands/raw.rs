@@ -334,14 +334,20 @@ async fn run_list(ctx: &Ctx, args: ListArgs) -> Result<u8> {
     }
     let mut count = 0usize;
     for entry in WalkDir::new(&base)
-        .follow_links(false)
+        .follow_links(true)
         .into_iter()
         .filter_entry(|e| {
             let name = e.file_name().to_string_lossy();
             !(name == ".trash" || name == ".gitkeep")
         })
     {
-        let entry = entry.with_context(|| format!("walking {}", base.display()))?;
+        let entry = match entry {
+            Ok(entry) => entry,
+            Err(err) => {
+                eprintln!("{} {err}", style("warn:").yellow());
+                continue;
+            }
+        };
         if !(entry.file_type().is_file() || entry.path_is_symlink()) {
             continue;
         }

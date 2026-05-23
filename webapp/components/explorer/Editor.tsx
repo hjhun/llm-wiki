@@ -45,6 +45,7 @@ export default function Editor({
   const isAudio = entry ? AUDIO_EXT_RE.test(entry.path) : false;
   const isOffice = entry ? OFFICE_EXT_RE.test(entry.path) : false;
   const dirty = entry?.kind === "file" && content !== original;
+  const rawSymlinkFile = ws === "raw" && entry?.isSymlink;
 
   useEffect(() => {
     if (!entry || entry.kind !== "file") {
@@ -52,6 +53,13 @@ export default function Editor({
       setOriginal("");
       setError(null);
       lastLoadedRef.current = null;
+      return;
+    }
+    if (entry.broken) {
+      setContent("");
+      setOriginal("");
+      setError("broken symlink");
+      lastLoadedRef.current = `${ws}:${entry.path}`;
       return;
     }
     const key = `${ws}:${entry.path}`;
@@ -127,7 +135,7 @@ export default function Editor({
     function handleKey(e: KeyboardEvent) {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s") {
         e.preventDefault();
-        if (!readOnly && dirty && !saving) onSave();
+        if (!readOnly && !rawSymlinkFile && dirty && !saving) onSave();
       }
     }
     window.addEventListener("keydown", handleKey);
@@ -166,11 +174,21 @@ export default function Editor({
             {entry.size.toLocaleString()} bytes · {t.explorer.modified}{" "}
             {new Date(entry.mtime).toLocaleString()}
           </div>
+          {entry.isSymlink ? (
+            <div className="mt-0.5 flex items-center gap-1 text-[10px] text-ink-faint">
+              <ExternalLink className="h-3 w-3" />
+              <span className="truncate">
+                {entry.broken
+                  ? "broken symlink"
+                  : `symlink -> ${entry.linkTarget ?? "unknown"}`}
+              </span>
+            </div>
+          ) : null}
         </div>
         <div className="flex items-center gap-1">
           <Button
             onClick={onSave}
-            disabled={readOnly || !dirty || saving || !isText}
+            disabled={readOnly || rawSymlinkFile || !dirty || saving || !isText}
             variant="primary"
             icon={Save}
             className="h-7 px-2.5 text-[11px]"

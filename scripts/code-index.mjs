@@ -62,7 +62,15 @@ async function statSafe(abs) {
   }
 }
 
-async function collectFiles(abs, out = []) {
+async function realpathSafe(abs) {
+  try {
+    return await fs.realpath(abs);
+  } catch {
+    return null;
+  }
+}
+
+async function collectFiles(abs, out = [], visitedDirs = new Set()) {
   if (out.length >= MAX_FILES) return out;
   const st = await statSafe(abs);
   if (!st) return out;
@@ -76,11 +84,19 @@ async function collectFiles(abs, out = []) {
     return out;
   }
   if (!st.isDirectory()) return out;
+  const real = await realpathSafe(abs);
+  if (real) {
+    if (visitedDirs.has(real)) return out;
+    visitedDirs.add(real);
+  }
   const entries = await fs.readdir(abs, { withFileTypes: true });
   for (const entry of entries) {
     if (out.length >= MAX_FILES) break;
-    if (entry.isDirectory() && IGNORE_DIRS.has(entry.name)) continue;
-    await collectFiles(path.join(abs, entry.name), out);
+    const childAbs = path.join(abs, entry.name);
+    const childStat = entry.isSymbolicLink() ? await statSafe(childAbs) : null;
+    const childIsDirectory = entry.isDirectory() || childStat?.isDirectory();
+    if (childIsDirectory && IGNORE_DIRS.has(entry.name)) continue;
+    await collectFiles(childAbs, out, visitedDirs);
   }
   return out;
 }
