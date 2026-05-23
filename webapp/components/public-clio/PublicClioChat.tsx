@@ -183,7 +183,7 @@ export default function PublicClioChat({
   useEffect(() => {
     if (!taRef.current) return;
     taRef.current.style.height = "auto";
-    taRef.current.style.height = `${Math.min(taRef.current.scrollHeight, 180)}px`;
+    taRef.current.style.height = `${Math.min(taRef.current.scrollHeight, 240)}px`;
   }, [value]);
 
   useEffect(() => {
@@ -349,7 +349,7 @@ export default function PublicClioChat({
 
   return (
     <main className="flex h-screen w-screen overflow-hidden bg-bg/80 text-ink">
-      <aside className="hidden w-72 shrink-0 border-r border-line bg-bg-subtle/82 lg:flex lg:flex-col">
+      <aside className="hidden w-64 shrink-0 border-r border-line bg-bg-subtle/82 lg:flex lg:flex-col">
         <PublicConversationList
           conversations={conversations}
           activeId={activeId}
@@ -427,7 +427,7 @@ export default function PublicClioChat({
         ) : null}
 
         <div className="min-h-0 flex-1 overflow-auto">
-          <div className="flex min-h-full flex-col gap-3 px-6 py-5">
+          <div className="flex min-h-full flex-col gap-4 px-5 py-5 sm:px-6 lg:px-8">
             {messages.length === 0 ? (
               <div className="flex min-h-40 flex-col justify-end border-b border-line/70 pb-6">
                 <div className="max-w-2xl text-2xl font-semibold leading-tight text-ink sm:text-3xl">
@@ -441,7 +441,7 @@ export default function PublicClioChat({
             ))}
 
             {pending ? (
-              <article className="rounded-md border border-line bg-bg-subtle px-4 py-3 text-sm">
+              <article className="rounded-md border border-line bg-bg-subtle px-5 py-4 text-[15px]">
                 <header className="mb-2 flex items-center gap-2 text-[11px] text-ink-faint">
                   <LoaderCircle
                     aria-hidden
@@ -462,7 +462,7 @@ export default function PublicClioChat({
           </div>
         </div>
 
-        <div className="border-t border-line bg-bg-subtle px-4 py-3">
+        <div className="border-t border-line bg-bg-subtle px-5 py-4 sm:px-6 lg:px-8">
           <div className="flex items-end gap-2">
             <textarea
               ref={taRef}
@@ -477,7 +477,7 @@ export default function PublicClioChat({
               }}
               placeholder="질문 입력"
               disabled={pending}
-              className="block w-full resize-none rounded-md border border-line bg-bg px-3 py-2.5 text-sm leading-relaxed text-ink outline-none transition-colors placeholder:text-ink-faint focus:border-accent disabled:opacity-60"
+              className="block w-full resize-none rounded-md border border-line bg-bg px-4 py-3 text-[15px] leading-relaxed text-ink outline-none transition-colors placeholder:text-ink-faint focus:border-accent disabled:opacity-60"
             />
             <Button
               onClick={() => void send()}
@@ -714,13 +714,13 @@ function MessageBubble({ message }: { message: PublicMessage }) {
   return (
     <article
       className={cx(
-        "chat-message rounded-md border px-4 py-3 text-sm leading-relaxed shadow-[inset_0_1px_0_rgb(255_255_255_/_0.03)]",
+        "chat-message rounded-md border px-5 py-4 text-[15px] leading-relaxed shadow-[inset_0_1px_0_rgb(255_255_255_/_0.03)]",
         message.role === "user" && "chat-message-user",
         message.role === "assistant" && "chat-message-assistant",
         message.role === "system" && "chat-message-system",
       )}
     >
-      <header className="mb-2 flex items-center gap-2 text-[11px] text-ink-faint">
+      <header className="mb-2 flex items-center gap-2 text-[11.5px] text-ink-faint">
         <div className="flex min-w-0 flex-1 items-center gap-2">
           <Icon aria-hidden className="h-3.5 w-3.5 shrink-0" />
           <span className="truncate font-mono uppercase tracking-widest">
@@ -729,7 +729,7 @@ function MessageBubble({ message }: { message: PublicMessage }) {
           <span className="shrink-0 font-mono">{message.ts}</span>
         </div>
       </header>
-      <div className="prose prose-theme max-w-none text-[13.5px]">
+      <div className="prose prose-theme max-w-none text-sm">
         <MarkdownContent content={message.content} />
       </div>
       <div className="mt-2 flex justify-end">
