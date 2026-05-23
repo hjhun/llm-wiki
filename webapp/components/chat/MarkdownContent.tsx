@@ -4,6 +4,7 @@ import {
   Children,
   isValidElement,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type ReactElement,
@@ -13,6 +14,8 @@ import {
   Check,
   Code2,
   Copy,
+  Clipboard,
+  ClipboardCheck,
   Download,
   ExternalLink,
   Workflow,
@@ -24,6 +27,7 @@ import { writeClipboard } from "./clipboard";
 type MarkdownContentProps = {
   content: string;
   emptyText?: string;
+  liveMermaid?: boolean;
 };
 
 type CodeElementProps = {
@@ -42,54 +46,62 @@ type SvgSize = {
   height: number;
 };
 
-const markdownComponents: Components = {
-  a({ href, children, ...props }) {
-    const isExplorerLink = href?.startsWith("/explorer?");
-    if (isExplorerLink) {
+function createMarkdownComponents(liveMermaid: boolean): Components {
+  return {
+    a({ href, children, ...props }) {
+      const isExplorerLink = href?.startsWith("/explorer?");
+      if (isExplorerLink) {
+        return (
+          <a
+            href={href}
+            className="not-prose inline-flex max-w-full items-center gap-1 rounded border border-accent/40 bg-accent/10 px-1.5 py-0.5 align-baseline font-mono text-[11px] text-accent no-underline hover:border-accent hover:bg-accent/15"
+            {...props}
+          >
+            <ExternalLink aria-hidden className="h-3 w-3 shrink-0" />
+            <span className="truncate">{children}</span>
+          </a>
+        );
+      }
       return (
-        <a
-          href={href}
-          className="not-prose inline-flex max-w-full items-center gap-1 rounded border border-accent/40 bg-accent/10 px-1.5 py-0.5 align-baseline font-mono text-[11px] text-accent no-underline hover:border-accent hover:bg-accent/15"
-          {...props}
-        >
-          <ExternalLink aria-hidden className="h-3 w-3 shrink-0" />
-          <span className="truncate">{children}</span>
+        <a href={href} {...props}>
+          {children}
         </a>
       );
-    }
-    return (
-      <a href={href} {...props}>
-        {children}
-      </a>
-    );
-  },
-  pre({ children }) {
-    const block = parseCodeBlock(children);
-    if (!block) {
-      return <pre>{children}</pre>;
-    }
+    },
+    pre({ children }) {
+      const block = parseCodeBlock(children);
+      if (!block) {
+        return <pre>{children}</pre>;
+      }
 
-    if (block.language === "mermaid") {
-      return <MermaidDiagram source={block.source} />;
-    }
+      if (block.language === "mermaid") {
+        return <MermaidDiagram source={block.source} live={liveMermaid} />;
+      }
 
-    return <CopyableCodeBlock block={block} />;
-  },
-  code({ className, children, node: _node, ...props }) {
-    return (
-      <code className={className} {...props}>
-        {children}
-      </code>
-    );
-  },
-};
+      return <CopyableCodeBlock block={block} />;
+    },
+    code({ className, children, node: _node, ...props }) {
+      return (
+        <code className={className} {...props}>
+          {children}
+        </code>
+      );
+    },
+  };
+}
 
 export default function MarkdownContent({
   content,
   emptyText,
+  liveMermaid = false,
 }: MarkdownContentProps) {
+  const components = useMemo(
+    () => createMarkdownComponents(liveMermaid),
+    [liveMermaid],
+  );
+
   return (
-    <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
+    <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
       {content || emptyText || ""}
     </ReactMarkdown>
   );
@@ -123,40 +135,55 @@ function CopyableCodeBlock({ block }: { block: CodeBlock }) {
     setCopied(true);
   }
 
+  const copyLabel = copied ? "Copied code" : "Copy code";
+
   return (
-    <div className="not-prose my-4 overflow-hidden rounded-md border border-line bg-bg-subtle shadow-sm">
-      <div className="flex min-h-9 items-center justify-between gap-3 border-b border-line bg-bg-panel/74 px-3 py-1.5">
-        <span className="min-w-0 truncate font-mono text-[10px] uppercase tracking-widest text-ink-faint">
-          {block.language ?? "code"}
-        </span>
-        <button
-          type="button"
-          onClick={() => void copyCode()}
-          className="inline-flex h-7 shrink-0 items-center gap-1.5 rounded border border-line bg-bg-subtle px-2 font-mono text-[10px] font-medium uppercase tracking-wide text-ink-dim transition hover:border-accent/60 hover:text-ink"
-        >
-          {copied ? (
-            <Check aria-hidden className="h-3.5 w-3.5" />
-          ) : (
-            <Copy aria-hidden className="h-3.5 w-3.5" />
-          )}
-          {copied ? "Copied" : "Copy"}
-        </button>
-      </div>
-      <pre className="m-0 max-h-[32rem] overflow-auto bg-transparent p-3 text-[12px] leading-relaxed">
+    <div className="not-prose relative my-4 overflow-hidden rounded-md border border-line bg-bg-subtle shadow-sm">
+      <span className="pointer-events-none absolute left-3 top-2 z-10 max-w-[calc(100%-5rem)] truncate rounded border border-line bg-bg-panel/90 px-2 py-1 font-mono text-[10px] uppercase tracking-widest text-ink-faint shadow-sm backdrop-blur">
+        {block.language ?? "code"}
+      </span>
+      <button
+        type="button"
+        onClick={() => void copyCode()}
+        title={copyLabel}
+        aria-label={copyLabel}
+        className={[
+          "absolute right-2 top-2 z-10 inline-flex h-7 shrink-0 items-center gap-1.5 rounded border bg-bg-panel/90 px-2 font-mono text-[10px] font-medium uppercase tracking-wide shadow-sm backdrop-blur transition",
+          copied
+            ? "border-success/50 text-success"
+            : "border-accent/40 text-accent hover:border-accent hover:bg-accent/15",
+        ].join(" ")}
+      >
+        {copied ? (
+          <ClipboardCheck aria-hidden className="h-3.5 w-3.5" />
+        ) : (
+          <Clipboard aria-hidden className="h-3.5 w-3.5" />
+        )}
+        {copied ? "Copied" : "Copy"}
+      </button>
+      <pre className="m-0 max-h-[32rem] overflow-auto bg-transparent px-3 pb-3 pt-12 text-[12px] leading-relaxed">
         <code className={block.className}>{block.source}</code>
       </pre>
     </div>
   );
 }
 
-function MermaidDiagram({ source }: { source: string }) {
+function MermaidDiagram({
+  source,
+  live = false,
+}: {
+  source: string;
+  live?: boolean;
+}) {
   const [svg, setSvg] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [mode, setMode] = useState<"diagram" | "source">("diagram");
   const [copied, setCopied] = useState(false);
   const [downloadError, setDownloadError] = useState<string | null>(null);
+  const [rendering, setRendering] = useState(false);
   const idRef = useRef<string | null>(null);
   const renderCountRef = useRef(0);
+  const renderTokenRef = useRef(0);
 
   if (!idRef.current) {
     idRef.current = `chat-mermaid-${Math.random().toString(36).slice(2)}`;
@@ -164,11 +191,24 @@ function MermaidDiagram({ source }: { source: string }) {
 
   useEffect(() => {
     let cancelled = false;
+    const renderToken = renderTokenRef.current + 1;
+    renderTokenRef.current = renderToken;
+
+    if (!source.trim()) {
+      setSvg(null);
+      setError(null);
+      setRendering(false);
+      return;
+    }
+
+    setRendering(true);
+    setError(null);
+    if (!live) {
+      setSvg(null);
+    }
 
     async function renderDiagram() {
       try {
-        setSvg(null);
-        setError(null);
         const mermaid = (await import("mermaid")).default;
         const theme =
           document.documentElement.dataset.theme === "dark" ? "dark" : "default";
@@ -184,25 +224,34 @@ function MermaidDiagram({ source }: { source: string }) {
           `${idRef.current}-${renderCountRef.current}`,
           source,
         );
-        if (!cancelled) {
+        if (!cancelled && renderTokenRef.current === renderToken) {
           setSvg(result.svg);
           setError(null);
           setDownloadError(null);
         }
       } catch (err) {
-        if (!cancelled) {
-          setSvg(null);
+        if (!cancelled && renderTokenRef.current === renderToken) {
+          if (!live) {
+            setSvg(null);
+          }
           setError(err instanceof Error ? err.message : String(err));
+        }
+      } finally {
+        if (!cancelled && renderTokenRef.current === renderToken) {
+          setRendering(false);
         }
       }
     }
 
-    renderDiagram();
+    const timer = window.setTimeout(() => {
+      void renderDiagram();
+    }, live ? 180 : 0);
 
     return () => {
       cancelled = true;
+      window.clearTimeout(timer);
     };
-  }, [source]);
+  }, [source, live]);
 
   useEffect(() => {
     if (!copied) return;
@@ -324,13 +373,37 @@ function MermaidDiagram({ source }: { source: string }) {
     </div>
   ) : null;
 
-  if (error) {
+  const liveRenderNotice =
+    live && error ? (
+      <div className="border-b border-warning/40 bg-warning/10 px-3 py-2 text-xs text-warning">
+        Waiting for complete Mermaid syntax...
+      </div>
+    ) : rendering && live ? (
+      <div className="border-b border-info/40 bg-info/10 px-3 py-2 text-xs text-info">
+        Updating Mermaid preview...
+      </div>
+    ) : null;
+
+  if (error && (!live || !svg)) {
     return (
-      <div className="not-prose my-4 overflow-hidden rounded-md border border-red-900/60 bg-red-950/20 shadow-sm">
+      <div
+        className={[
+          "not-prose my-4 overflow-hidden rounded-md shadow-sm",
+          live
+            ? "border border-line bg-bg-subtle"
+            : "border border-red-900/60 bg-red-950/20",
+        ].join(" ")}
+      >
         {toolbar}
-        <div className="border-b border-red-900/60 px-3 py-2 text-xs text-red-300">
-          Mermaid render failed: {error}
-        </div>
+        {live ? (
+          <div className="border-b border-warning/40 bg-warning/10 px-3 py-2 text-xs text-warning">
+            Waiting for complete Mermaid syntax...
+          </div>
+        ) : (
+          <div className="border-b border-red-900/60 px-3 py-2 text-xs text-red-300">
+            Mermaid render failed: {error}
+          </div>
+        )}
         {sourceView}
       </div>
     );
@@ -351,8 +424,9 @@ function MermaidDiagram({ source }: { source: string }) {
       <div className="not-prose my-4 overflow-hidden rounded-md border border-line bg-bg-subtle shadow-sm">
         {toolbar}
         {downloadErrorView}
+        {liveRenderNotice}
         <div className="px-3 py-2 text-xs text-ink-faint">
-          Rendering Mermaid diagram...
+          {live ? "Waiting for Mermaid content..." : "Rendering Mermaid diagram..."}
         </div>
       </div>
     );
@@ -362,6 +436,7 @@ function MermaidDiagram({ source }: { source: string }) {
     <div className="not-prose my-4 overflow-hidden rounded-md border border-line bg-bg-subtle shadow-sm">
       {toolbar}
       {downloadErrorView}
+      {liveRenderNotice}
       <div
         className="overflow-auto p-3 [&_svg]:h-auto [&_svg]:max-w-full"
         dangerouslySetInnerHTML={{ __html: svg }}

@@ -66,6 +66,8 @@ export default function MessageList({
       {messages.map((m, i) => {
         const RoleIcon =
           m.role === "user" ? UserRound : m.role === "assistant" ? Bot : Terminal;
+        const liveMermaid =
+          pending && m.role === "assistant" && m.agent === "streaming";
         return (
           <article
             key={i}
@@ -86,7 +88,11 @@ export default function MessageList({
               </div>
             </header>
             <div className="prose prose-theme max-w-none text-[13.5px]">
-              <MarkdownContent content={m.content} emptyText={t.chat.empty} />
+              <MarkdownContent
+                content={m.content}
+                emptyText={t.chat.empty}
+                liveMermaid={liveMermaid}
+              />
             </div>
             <div className="mt-2 flex justify-end">
               <MessageCopyButton
