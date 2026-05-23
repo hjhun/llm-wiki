@@ -93,6 +93,7 @@ const Body = z.object({
       enabled: z.boolean(),
       allowExternalLookup: z.boolean(),
       sandboxEnabled: z.boolean(),
+      sandboxReadOnlyHomePaths: z.array(z.string().min(1)).optional(),
     })
     .optional(),
   autoIngest: z
@@ -210,7 +211,12 @@ export async function PUT(req: Request) {
             sessionTtlSec: parsed.data.auth.sessionTtlSec,
           }
         : undefined,
-      publicQuery: parsed.data.publicQuery,
+      publicQuery: parsed.data.publicQuery
+        ? {
+            ...current.publicQuery,
+            ...parsed.data.publicQuery,
+          }
+        : undefined,
       autoIngest: parsed.data.autoIngest,
       autoLint: parsed.data.autoLint,
     } satisfies Partial<Config>;

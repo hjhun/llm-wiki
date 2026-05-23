@@ -206,6 +206,8 @@ type BubblewrapSandbox = {
   kind: "bubblewrap";
   /** Dedicated HOME exposed to the public CLI process. */
   homeDir?: string;
+  /** Read-only host paths exposed inside the sandbox. */
+  readOnlyPaths?: string[];
 };
 
 type CliSandbox = BubblewrapSandbox;
@@ -312,8 +314,8 @@ async function clinePrefixEntries(hostHome: string): Promise<string[]> {
     .sort();
 }
 
-function skipNestedBind(rel: string, bound: string[]): boolean {
-  return bound.some((parent) => rel.startsWith(`${parent}/`));
+function skipNestedBind(target: string, boundTargets: string[]): boolean {
+  return boundTargets.some((parent) => target.startsWith(`${parent}/`));
 }
 
 function addDirChain(args: string[], pathname: string): void {
@@ -449,73 +451,49 @@ async function addAgentConfigBinds(
   args: string[],
   sandboxHomeSource: string,
   sandboxHomeTarget: string,
+  configuredReadOnlyPaths: string[],
 ): Promise<void> {
   const hostHome = process.env.HOME;
   if (!hostHome) return;
 
-  for (const dir of [".codex", ".claude", ".cline", ".gemini"]) {
+  for (const dir of [
+    ".codex",
+    ".claude",
+    ".cline",
+    ".gemini",
+    ".antigravity",
+    ".agents",
+  ]) {
     await fs.mkdir(path.join(sandboxHomeSource, dir), {
       recursive: true,
       mode: 0o700,
     });
   }
 
-  const sharedEntries = [
-    ".claude.json",
-    ".codex.json",
-    ".cline.json",
-    ".gemini.json",
-    ".codex/AGENTS.md",
-    ".codex/config.toml",
-    ".codex/auth.json",
-    ".codex/credentials.json",
-    ".codex/models_cache.json",
-    ".codex/skills",
-    ".codex/plugins",
-    ".codex/rules",
-    ".claude/.credentials.json",
-    ".claude/CLAUDE.md",
-    ".claude/auth.json",
-    ".claude/credentials.json",
-    ".claude/mcp-needs-auth-cache.json",
-    ".claude/oauth.json",
-    ".claude/oauth_creds.json",
-    ".claude/settings.json",
-    ".claude/settings.local.json",
-    ".claude/commands",
-    ".claude/plugins",
-    ".claude/skills",
-    ".cline/.credentials.json",
-    ".cline/auth.json",
-    ".cline/credentials.json",
-    ".cline/mcp_settings.json",
-    ".cline/settings.json",
-    ".cline/skills",
-    ".gemini/config.json",
-    ".gemini/google_accounts.json",
-    ".gemini/oauth_creds.json",
-    ".gemini/projects.json",
-    ".gemini/settings.json",
-    ".gemini/antigravity/mcp_config.json",
-    ".config/codex",
-    ".config/claude",
-    ".config/cline",
-    ".config/gemini",
-    ".config/anthropic",
-  ];
   const entries = Array.from(
-    new Set([...sharedEntries, ...(await clinePrefixEntries(hostHome))]),
-  ).sort((a, b) => a.split("/").length - b.split("/").length || a.localeCompare(b));
+    new Set([...configuredReadOnlyPaths, ...(await clinePrefixEntries(hostHome))]),
+  )
+    .map((entry) =>
+      entry.startsWith("~/")
+        ? entry.slice(2)
+        : entry.startsWith(`${hostHome}/`)
+          ? path.relative(hostHome, entry)
+          : entry,
+    )
+    .filter((entry) => entry && !path.isAbsolute(entry) && !entry.startsWith(".."))
+    .sort((a, b) => a.split("/").length - b.split("/").length || a.localeCompare(b));
 
-  const bound: string[] = [];
+  const boundTargets: string[] = [];
   for (const rel of entries) {
-    if (skipNestedBind(rel, bound)) continue;
+    const target = path.join(sandboxHomeTarget, rel);
+    if (skipNestedBind(target, boundTargets)) continue;
+    const source = path.join(hostHome, rel);
     await addRoBindAtIfExists(
       args,
-      path.join(hostHome, rel),
-      path.join(sandboxHomeTarget, rel),
+      source,
+      target,
     );
-    if (await exists(path.join(hostHome, rel))) bound.push(rel);
+    if (await exists(source)) boundTargets.push(target);
   }
 }
 
@@ -581,7 +559,12 @@ async function buildBubblewrapSpawnPlan(input: {
   }
   await addResolvedFileBindIfNeeded(args, "/etc/resolv.conf");
 
-  await addAgentConfigBinds(args, sandboxHomeSource, sandboxHomeTarget);
+  await addAgentConfigBinds(
+    args,
+    sandboxHomeSource,
+    sandboxHomeTarget,
+    input.sandbox.readOnlyPaths ?? [],
+  );
   const sandboxCliPath = await addCliRuntimeBinds(args, input.cli, input.cliPath);
   await addAgentBrowserRuntimeBinds(args, sandboxHomeSource, sandboxHomeTarget);
 
@@ -676,7 +659,12 @@ export async function runCli(
         cliPath: info.path,
         cliArgs: args,
         cwd,
-        sandbox: opts.sandbox,
+        sandbox: {
+          ...opts.sandbox,
+          readOnlyPaths:
+            opts.sandbox.readOnlyPaths ??
+            cfg.publicQuery.sandboxReadOnlyHomePaths,
+        },
       })
     : {
         command: info.path,

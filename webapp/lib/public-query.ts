@@ -396,6 +396,7 @@ export async function runPublicQuery(
           ? {
               kind: "bubblewrap",
               homeDir: PUBLIC_CLI_HOME,
+              readOnlyPaths: cfg.publicQuery.sandboxReadOnlyHomePaths,
             }
           : undefined,
         maxStdoutBytes: 512 * 1024,

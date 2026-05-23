@@ -309,8 +309,41 @@ config/public-cli-home/
 does not have `bwrap`, public CLIO falls back to safe read-only responses
 instead of running the host CLI outside the sandbox.
 
-The public sandbox does not use your normal `~/.codex`, `~/.claude`, or other
-personal CLI login state. Log in once using the dedicated public CLI home:
+The public sandbox uses a dedicated writable HOME, then overlays selected host
+agent configuration paths read-only so the CLI can see existing login, MCP,
+plugin, and skill state without modifying the host files. By default these
+HOME-relative paths are exposed:
+
+```json
+{
+  "publicQuery": {
+    "sandboxReadOnlyHomePaths": [
+      ".codex",
+      ".claude",
+      ".cline",
+      ".gemini",
+      ".antigravity",
+      ".agents",
+      ".claude.json",
+      ".codex.json",
+      ".cline.json",
+      ".gemini.json",
+      ".config/codex",
+      ".config/claude",
+      ".config/cline",
+      ".config/gemini",
+      ".config/anthropic"
+    ]
+  }
+}
+```
+
+Override that list in `config/local.json` when another CLI keeps its config in
+a different HOME-relative path. Cline variants whose names begin with `.cline`
+are detected and added automatically.
+
+If you do not want to share the host login state, remove the relevant path from
+`sandboxReadOnlyHomePaths` and log in once using the dedicated public CLI home:
 
 ```bash
 cd ~/.clio

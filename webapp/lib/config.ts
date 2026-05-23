@@ -319,11 +319,52 @@ export const ConfigSchema = z.object({
        * when they are installed.
        */
       sandboxEnabled: z.boolean().default(true),
+      /**
+       * Host HOME-relative paths exposed read-only inside the public CLI
+       * sandbox. Use full agent homes rather than hand-picking credential
+       * files because CLIs frequently add provider/plugin state over time.
+       */
+      sandboxReadOnlyHomePaths: z
+        .array(z.string().min(1))
+        .default([
+          ".codex",
+          ".claude",
+          ".cline",
+          ".gemini",
+          ".antigravity",
+          ".agents",
+          ".claude.json",
+          ".codex.json",
+          ".cline.json",
+          ".gemini.json",
+          ".config/codex",
+          ".config/claude",
+          ".config/cline",
+          ".config/gemini",
+          ".config/anthropic",
+        ]),
     })
     .default({
       enabled: false,
       allowExternalLookup: false,
       sandboxEnabled: true,
+      sandboxReadOnlyHomePaths: [
+        ".codex",
+        ".claude",
+        ".cline",
+        ".gemini",
+        ".antigravity",
+        ".agents",
+        ".claude.json",
+        ".codex.json",
+        ".cline.json",
+        ".gemini.json",
+        ".config/codex",
+        ".config/claude",
+        ".config/cline",
+        ".config/gemini",
+        ".config/anthropic",
+      ],
     }),
   /**
    * Auto-ingest trigger. When enabled, a background watcher or scheduler

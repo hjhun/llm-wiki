@@ -94,6 +94,7 @@ export type SettingsConfig = {
     enabled: boolean;
     allowExternalLookup: boolean;
     sandboxEnabled: boolean;
+    sandboxReadOnlyHomePaths: string[];
   };
   autoIngest: {
     enabled: boolean;

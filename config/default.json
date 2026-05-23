@@ -79,7 +79,24 @@
   "publicQuery": {
     "enabled": false,
     "allowExternalLookup": false,
-    "sandboxEnabled": true
+    "sandboxEnabled": true,
+    "sandboxReadOnlyHomePaths": [
+      ".codex",
+      ".claude",
+      ".cline",
+      ".gemini",
+      ".antigravity",
+      ".agents",
+      ".claude.json",
+      ".codex.json",
+      ".cline.json",
+      ".gemini.json",
+      ".config/codex",
+      ".config/claude",
+      ".config/cline",
+      ".config/gemini",
+      ".config/anthropic"
+    ]
   },
   "autoIngest": {
     "enabled": false,
