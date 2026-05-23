@@ -30,6 +30,7 @@ WITH_MARP=0
 WITH_AGENT_BROWSER=0
 INSTALL_CLI=""
 CLIO_SKILL_TARGETS="${CLIO_SKILL_TARGETS:-global}"
+DETECT_CLI_RUNTIME=1
 
 log() {
   printf '[llm-wiki] %s\n' "$*"
@@ -67,6 +68,8 @@ Options:
   --with-marp                   Best-effort optional Marp CLI install
   --with-agent-browser          Best-effort optional agent-browser install
   --install-cli=<names>         Best-effort install for codex,claude,gemini,cline
+  --detect-cli-runtime          Detect CLI config paths for bwrap (default)
+  --skip-detect-cli-runtime     Skip CLI runtime config path detection
   --clio-skill <target>         Install bundled clio skill to global, project,
                                 both, or none (default: global)
   --clio-skill=<target>         Same as --clio-skill <target>
@@ -147,6 +150,14 @@ while [[ $# -gt 0 ]]; do
       ;;
     --install-cli=*)
       INSTALL_CLI="${1#*=}"
+      shift
+      ;;
+    --detect-cli-runtime)
+      DETECT_CLI_RUNTIME=1
+      shift
+      ;;
+    --skip-detect-cli-runtime)
+      DETECT_CLI_RUNTIME=0
       shift
       ;;
     --clio-skill)
@@ -300,6 +311,296 @@ const result = {
 fs.mkdirSync(path.dirname(out), { recursive: true });
 fs.writeFileSync(out, JSON.stringify(result, null, 2) + "\n");
 NODE
+}
+
+detect_cli_runtime_json() {
+  if [[ "${DETECT_CLI_RUNTIME}" -eq 0 ]]; then
+    log "skipping CLI runtime config detection (--skip-detect-cli-runtime)"
+    return
+  fi
+
+  local out="${CONFIG_DIR}/cli-runtime-detected.json"
+  node - "${out}" "${ROOT_DIR}" <<'NODE'
+const fs = require("node:fs");
+const os = require("node:os");
+const path = require("node:path");
+const { spawnSync } = require("node:child_process");
+
+const out = process.argv[2];
+const projectRoot = process.argv[3];
+const home = process.env.HOME || "/";
+const names = ["codex", "claude", "gemini", "cline"];
+const extras = [
+  path.join(home, ".npm-global", "bin"),
+  path.join(home, ".local", "bin"),
+  "/usr/local/bin",
+  "/usr/bin",
+  "/bin",
+];
+const dirs = [...(process.env.PATH || "").split(path.delimiter), ...extras]
+  .filter(Boolean);
+
+const AGENT_PREFIXES = {
+  codex: [
+    ".codex",
+    ".codex.json",
+    ".config/codex",
+    ".local/share/codex",
+    ".local/state/codex",
+    ".cache/codex",
+    ".agents",
+  ],
+  claude: [
+    ".claude",
+    ".claude.json",
+    ".config/claude",
+    ".config/anthropic",
+    ".local/share/claude",
+    ".local/share/anthropic",
+    ".local/state/claude",
+    ".local/state/anthropic",
+    ".cache/claude",
+    ".cache/anthropic",
+    ".agents",
+  ],
+  gemini: [
+    ".gemini",
+    ".gemini.json",
+    ".config/gemini",
+    ".config/gcloud",
+    ".config/google-cloud",
+    ".local/share/gemini",
+    ".local/state/gemini",
+    ".cache/gemini",
+    ".agents",
+  ],
+  cline: [
+    ".cline",
+    ".cline.json",
+    ".config/cline",
+    ".local/share/cline",
+    ".local/state/cline",
+    ".cache/cline",
+    ".agents",
+  ],
+};
+
+const EDITOR_STORAGE_BASES = [
+  ".config/Code/User/globalStorage",
+  ".config/Code - Insiders/User/globalStorage",
+  ".config/VSCodium/User/globalStorage",
+  ".config/Cursor/User/globalStorage",
+  ".config/Windsurf/User/globalStorage",
+];
+const EDITOR_EXTENSION_BASES = [
+  ".vscode/extensions",
+  ".vscode-insiders/extensions",
+  ".vscode-server/extensions",
+  ".vscode-server-insiders/extensions",
+  ".cursor/extensions",
+  ".windsurf/extensions",
+];
+const CLINE_HINT = /(cline|claude-dev|saoudrizwan)/i;
+
+function findBin(name) {
+  const seen = new Set();
+  for (const dir of dirs) {
+    if (seen.has(dir)) continue;
+    seen.add(dir);
+    const candidate = path.join(dir, name);
+    try {
+      const st = fs.statSync(candidate);
+      if (st.isFile()) return candidate;
+    } catch {}
+  }
+  return null;
+}
+
+function version(bin) {
+  if (!bin) return null;
+  const res = spawnSync(bin, ["--version"], {
+    encoding: "utf8",
+    timeout: 4000,
+  });
+  const text = `${res.stdout || ""}${res.stderr || ""}`.trim();
+  return text.split(/\r?\n/)[0]?.slice(0, 120) || null;
+}
+
+function existingHomeRel(rel) {
+  try {
+    fs.statSync(path.join(home, rel));
+    return rel;
+  } catch {
+    return null;
+  }
+}
+
+function homeRel(abs) {
+  if (!abs || !path.isAbsolute(abs)) return null;
+  const normalized = path.normalize(abs);
+  const normalizedHome = path.resolve(home);
+  const rel = path.relative(normalizedHome, normalized);
+  if (!rel || rel === "." || rel.startsWith("..") || path.isAbsolute(rel)) {
+    return null;
+  }
+  if (projectRoot && normalized.startsWith(path.resolve(projectRoot) + path.sep)) {
+    return null;
+  }
+  return rel.split(path.sep).join("/");
+}
+
+function decodeTraceString(raw) {
+  try {
+    return JSON.parse(`"${raw}"`);
+  } catch {
+    return raw.replace(/\\"/g, '"').replace(/\\\\/g, "\\");
+  }
+}
+
+function listChildren(baseRel, predicate) {
+  const dir = path.join(home, baseRel);
+  try {
+    return fs
+      .readdirSync(dir, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory() && predicate(entry.name))
+      .map((entry) => path.posix.join(baseRel.split(path.sep).join("/"), entry.name));
+  } catch {
+    return [];
+  }
+}
+
+function clinePrefixEntries() {
+  try {
+    return fs
+      .readdirSync(home, { withFileTypes: true })
+      .filter((entry) => entry.name.startsWith(".cline"))
+      .map((entry) => entry.name)
+      .sort();
+  } catch {
+    return [];
+  }
+}
+
+function knownCandidates(name) {
+  const base = (AGENT_PREFIXES[name] || [])
+    .map(existingHomeRel)
+    .filter(Boolean);
+  if (name !== "cline") return base;
+  return [
+    ...base,
+    ...clinePrefixEntries(),
+    ...EDITOR_STORAGE_BASES.flatMap((rel) => listChildren(rel, (name) => CLINE_HINT.test(name))),
+    ...EDITOR_EXTENSION_BASES.flatMap((rel) => listChildren(rel, (name) => CLINE_HINT.test(name))),
+  ];
+}
+
+function promoteRel(rel, cliName) {
+  const normalized = path.posix.normalize(rel.replace(/\\/g, "/"));
+  if (
+    !normalized ||
+    normalized === "." ||
+    normalized.startsWith("../") ||
+    normalized.includes("/../")
+  ) {
+    return null;
+  }
+
+  for (const prefix of AGENT_PREFIXES[cliName] || []) {
+    if (normalized === prefix || normalized.startsWith(`${prefix}/`)) {
+      return prefix;
+    }
+  }
+
+  if (cliName === "cline") {
+    for (const base of [...EDITOR_STORAGE_BASES, ...EDITOR_EXTENSION_BASES]) {
+      const posixBase = base.split(path.sep).join("/");
+      if (normalized === posixBase || normalized.startsWith(`${posixBase}/`)) {
+        const rest = normalized.slice(posixBase.length + 1).split("/");
+        if (rest[0] && CLINE_HINT.test(rest[0])) {
+          return `${posixBase}/${rest[0]}`;
+        }
+      }
+    }
+  }
+
+  return null;
+}
+
+function traceCliHomePaths(straceBin, cliName, bin) {
+  if (!straceBin || !bin) return { paths: [], status: "skipped" };
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "clio-cli-runtime-"));
+  const logPath = path.join(dir, "trace.log");
+  try {
+    const res = spawnSync(
+      straceBin,
+      ["-f", "-qq", "-e", "trace=%file", "-o", logPath, bin, "--version"],
+      {
+        encoding: "utf8",
+        timeout: 8000,
+        input: "",
+        env: {
+          ...process.env,
+          CI: process.env.CI || "1",
+          NO_COLOR: "1",
+        },
+      },
+    );
+    const text = fs.existsSync(logPath) ? fs.readFileSync(logPath, "utf8") : "";
+    const paths = new Set();
+    for (const match of text.matchAll(/"((?:\\.|[^"\\])*)"/g)) {
+      const rel = homeRel(decodeTraceString(match[1]));
+      const promoted = rel ? promoteRel(rel, cliName) : null;
+      if (promoted) paths.add(promoted);
+    }
+    return {
+      paths: Array.from(paths).sort(),
+      status: res.error
+        ? `failed: ${res.error.message}`
+        : res.status === 124
+          ? "timeout"
+          : "ok",
+    };
+  } catch (err) {
+    return { paths: [], status: `failed: ${err.message}` };
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+function uniqueSorted(values) {
+  return Array.from(new Set(values.filter(Boolean))).sort();
+}
+
+const straceBin = findBin("strace");
+const result = {
+  detectedAt: new Date().toISOString(),
+  strace: {
+    path: straceBin,
+    available: Boolean(straceBin),
+  },
+  cli: names.map((name) => {
+    const bin = findBin(name);
+    const fallback = knownCandidates(name);
+    const traced = traceCliHomePaths(straceBin, name, bin);
+    const sandboxReadOnlyHomePaths = uniqueSorted([...fallback, ...traced.paths]);
+    return {
+      name,
+      path: bin,
+      version: version(bin),
+      source: bin ? "PATH" : "missing",
+      fallbackHomePaths: uniqueSorted(fallback),
+      tracedHomePaths: traced.paths,
+      traceStatus: traced.status,
+      sandboxReadOnlyHomePaths,
+    };
+  }),
+};
+
+fs.mkdirSync(path.dirname(out), { recursive: true });
+fs.writeFileSync(out, JSON.stringify(result, null, 2) + "\n");
+NODE
+
+  log "wrote CLI runtime config detection to ${out}"
 }
 
 install_cli_best_effort() {
@@ -1231,6 +1532,7 @@ main() {
   install_bubblewrap_best_effort
   install_cli_best_effort "${INSTALL_CLI}"
   detect_cli_json
+  detect_cli_runtime_json
 
   if [[ "${SKIP_GRAPHIFY}" -eq 0 ]]; then
     install_or_upgrade_graphify_global

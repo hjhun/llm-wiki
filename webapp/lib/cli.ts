@@ -4,7 +4,11 @@ import { spawn } from "node:child_process";
 import { existsSync, promises as fs } from "node:fs";
 import path from "node:path";
 import { loadConfig } from "./config";
-import { CONFIG_ROOT, PROJECT_ROOT } from "./paths";
+import {
+  CLI_RUNTIME_DETECTED_PATH,
+  CONFIG_ROOT,
+  PROJECT_ROOT,
+} from "./paths";
 
 export type CliName = "codex" | "claude" | "gemini" | "cline";
 export const CLI_NAMES: readonly CliName[] = [
@@ -274,6 +278,15 @@ type ReadOnlyBindCandidate = {
 
 type SandboxEnvOverrides = Record<string, string | undefined>;
 
+type CliRuntimeDetectedEntry = {
+  name?: string;
+  sandboxReadOnlyHomePaths?: unknown;
+};
+
+type CliRuntimeDetectedFile = {
+  cli?: unknown;
+};
+
 /**
  * Bounded, tail-priority string buffer. Keeps at most `cap` characters,
  * discarding from the head when chunks arrive beyond the cap. Tracks how
@@ -388,6 +401,47 @@ function homeRelativeEntry(entry: string, hostHome: string): string | null {
     return null;
   }
   return normalized;
+}
+
+async function detectedRuntimeHomePaths(cli: CliName): Promise<string[]> {
+  let parsed: CliRuntimeDetectedFile;
+  try {
+    parsed = JSON.parse(
+      await fs.readFile(CLI_RUNTIME_DETECTED_PATH, "utf8"),
+    ) as CliRuntimeDetectedFile;
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") return [];
+    console.warn("[runCli] could not read CLI runtime detection:", err);
+    return [];
+  }
+
+  if (!Array.isArray(parsed.cli)) return [];
+  const entry = parsed.cli.find((item): item is CliRuntimeDetectedEntry => {
+    return (
+      typeof item === "object" &&
+      item != null &&
+      (item as CliRuntimeDetectedEntry).name === cli
+    );
+  });
+  if (!entry || !Array.isArray(entry.sandboxReadOnlyHomePaths)) return [];
+
+  return entry.sandboxReadOnlyHomePaths.filter(
+    (item): item is string => typeof item === "string" && item.trim() !== "",
+  );
+}
+
+function mergeHomePathEntries(
+  hostHome: string,
+  ...lists: Array<string[] | undefined>
+): string[] {
+  const seen = new Set<string>();
+  for (const list of lists) {
+    for (const entry of list ?? []) {
+      const rel = homeRelativeEntry(entry, hostHome);
+      if (rel) seen.add(rel);
+    }
+  }
+  return Array.from(seen).sort();
 }
 
 function hostXdgBaseRel(
@@ -716,6 +770,11 @@ async function buildBubblewrapSpawnPlan(input: {
   const sandboxHomeTarget = hostHome.startsWith("/")
     ? hostHome
     : "/home/clio-public";
+  const readOnlyHomePaths = mergeHomePathEntries(
+    hostHome,
+    input.sandbox.readOnlyPaths ?? [],
+    await detectedRuntimeHomePaths(input.cli),
+  );
   const cwd = path.resolve(input.cwd);
   const args = [
     "--die-with-parent",
@@ -760,7 +819,7 @@ async function buildBubblewrapSpawnPlan(input: {
     args,
     sandboxHomeSource,
     sandboxHomeTarget,
-    input.sandbox.readOnlyPaths ?? [],
+    readOnlyHomePaths,
   );
   const sandboxCliPath = await addCliRuntimeBinds(args, input.cli, input.cliPath);
   await addAgentBrowserRuntimeBinds(args, sandboxHomeSource, sandboxHomeTarget);

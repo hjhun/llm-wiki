@@ -38,6 +38,10 @@ export const SKILLS_ROOT = path.join(PROJECT_ROOT, ".agents", "skills");
 export const CONFIG_DEFAULT_PATH = path.join(CONFIG_ROOT, "default.json");
 export const CONFIG_LOCAL_PATH = path.join(CONFIG_ROOT, "local.json");
 export const CLI_DETECTED_PATH = path.join(CONFIG_ROOT, "cli-detected.json");
+export const CLI_RUNTIME_DETECTED_PATH = path.join(
+  CONFIG_ROOT,
+  "cli-runtime-detected.json",
+);
 
 export const WIKI_INDEX_PATH = path.join(WIKI_ROOT, "index.md");
 export const WIKI_LOG_PATH = path.join(WIKI_ROOT, "log.md");

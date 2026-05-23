@@ -128,7 +128,7 @@ The project setup and full workflows need:
 - Helper tools: `graphify` and `qmd` install by default; Marp CLI is optional
 - Optional: `agent-browser` for browser-based automation jobs
 
-`setup.sh` detects installed agent CLIs and writes the result to `config/cli-detected.json`. Missing CLIs can be installed manually or configured by path in Settings.
+`setup.sh` detects installed agent CLIs and writes the result to `config/cli-detected.json`. It also runs a best-effort runtime config detection pass and writes `config/cli-runtime-detected.json`; that file records HOME-relative config paths that should be exposed to the public bwrap sandbox. Missing CLIs can be installed manually or configured by path in Settings.
 
 ## Current State
 
@@ -363,7 +363,11 @@ a different HOME-relative path. When the host uses custom XDG base directories
 such as `XDG_CONFIG_HOME` under the same HOME, CLIO maps the matching allowlist
 entry to that subpath as well, for example `.config/codex` can also expose
 `$XDG_CONFIG_HOME/codex`. Cline variants whose names begin with `.cline` are
-detected and added automatically.
+detected and added automatically. If `config/cli-runtime-detected.json` exists,
+public CLI sandboxing also merges the detected paths for the selected CLI into
+the bwrap read-only HOME binds. The setup detection combines known CLI/XDG
+locations, Cline editor-extension storage candidates, and `strace` file-access
+evidence when `strace` is available; it stores paths only, never file contents.
 
 If you do not want to share the host login state, remove the relevant path from
 `sandboxReadOnlyHomePaths` and log in once using the dedicated public CLI home:
@@ -508,6 +512,7 @@ Common `setup.sh` options:
 | `--dev` | Use the development server command. |
 | `--skip-graphify` | Do not install or upgrade graphify. |
 | `--skip-bubblewrap` | Do not install `bubblewrap`; public CLI sandboxing will require a manual install. |
+| `--skip-detect-cli-runtime` | Skip the default CLI runtime config path detection pass for bwrap. |
 | `--skip-npm-install` | Skip `webapp/` dependency checks and installation. |
 | `--skip-build` | Skip `npm run build`. |
 | `--skip-cli` | Skip building the Rust `clio` CLI. |

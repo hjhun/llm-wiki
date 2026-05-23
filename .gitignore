@@ -16,6 +16,7 @@ build/
 !.env.example
 config/local.json
 config/cli-detected.json
+config/cli-runtime-detected.json
 config/public-cli-home/
 
 # ── Rust clio CLI ──────────────────────────────────────────────
