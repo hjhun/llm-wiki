@@ -8,6 +8,7 @@ import {
   ExternalLink,
   Gauge,
   KeyRound,
+  LoaderCircle,
   Package,
   RefreshCw,
   Save,
@@ -910,10 +911,17 @@ function UpdatePanel({
   const { t } = useLanguage();
   const latestVersion = releaseInfo?.latestVersion ?? "-";
   const currentVersion = releaseInfo?.currentVersion ?? "-";
-  const releaseTone = releaseInfo?.updateAvailable ? "warning" : "ready";
-  const releaseLabel = releaseInfo?.updateAvailable
-    ? t.settings.updateAvailable
-    : t.settings.upToDate;
+  const isUpdating = busy === "update";
+  const releaseTone = isUpdating
+    ? "running"
+    : releaseInfo?.updateAvailable
+      ? "warning"
+      : "ready";
+  const releaseLabel = isUpdating
+    ? t.settings.updatingRelease
+    : releaseInfo?.updateAvailable
+      ? t.settings.updateAvailable
+      : t.settings.upToDate;
 
   return (
     <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(320px,420px)]">
@@ -932,14 +940,32 @@ function UpdatePanel({
               onClick={onUpdate}
               disabled={busy != null}
               variant="primary"
-              icon={Download}
+              icon={isUpdating ? LoaderCircle : Download}
+              className={isUpdating ? "[&>svg]:animate-spin" : undefined}
             >
-              {busy === "update"
-                ? t.settings.updatingRelease
-                : t.settings.updateNow}
+              {isUpdating ? t.settings.updatingRelease : t.settings.updateNow}
             </Button>
           </div>
         </div>
+
+        {isUpdating ? (
+          <div
+            role="status"
+            aria-live="polite"
+            className="mt-4 rounded border border-warning/45 bg-warning/10 px-3 py-3"
+          >
+            <div className="flex items-center gap-2 text-sm font-medium text-ink">
+              <LoaderCircle aria-hidden className="h-4 w-4 animate-spin text-warning" />
+              <span>{t.settings.updateInProgressTitle}</span>
+            </div>
+            <p className="mt-1 text-xs leading-relaxed text-ink-faint">
+              {t.settings.updateInProgressDesc}
+            </p>
+            <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-bg-panel">
+              <div className="h-full w-2/3 animate-pulse rounded-full bg-warning" />
+            </div>
+          </div>
+        ) : null}
 
         <div className="mt-4 grid gap-3 md:grid-cols-2">
           <InfoTile label={t.settings.currentVersion} value={currentVersion} />

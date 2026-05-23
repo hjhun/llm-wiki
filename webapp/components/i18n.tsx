@@ -297,6 +297,9 @@ export const TEXT = {
       checkRelease: "릴리즈 확인",
       updateNow: "업데이트 실행",
       updatingRelease: "업데이트 중...",
+      updateInProgressTitle: "업데이트 명령 실행 중",
+      updateInProgressDesc:
+        "완료될 때까지 기다리면 아래에 업데이트 로그와 종료 코드가 표시됩니다.",
       updateDoneNotice: "업데이트 명령이 완료되었습니다. 서버 재시작이 필요할 수 있습니다.",
       currentVersion: "현재 버전",
       latestVersion: "최신 릴리즈",
@@ -691,6 +694,9 @@ export const TEXT = {
       checkRelease: "Check release",
       updateNow: "Run update",
       updatingRelease: "Updating...",
+      updateInProgressTitle: "Update command running",
+      updateInProgressDesc:
+        "When it finishes, the update log and exit code will appear below.",
       updateDoneNotice: "Update command finished. A server restart may be required.",
       currentVersion: "Current version",
       latestVersion: "Latest release",
