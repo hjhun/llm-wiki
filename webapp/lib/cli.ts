@@ -219,6 +219,61 @@ type SpawnPlan = {
   env: NodeJS.ProcessEnv;
 };
 
+const AGENT_CONFIG_HOME_DIRS = [
+  ".codex",
+  ".claude",
+  ".cline",
+  ".gemini",
+  ".antigravity",
+  ".agents",
+] as const;
+
+const XDG_AGENT_SUBDIRS = [
+  "codex",
+  "claude",
+  "cline",
+  "gemini",
+  "anthropic",
+  "antigravity",
+] as const;
+
+const XDG_CONFIG_EXTRA_SUBDIRS = [
+  "gcloud",
+  "google-cloud",
+] as const;
+
+const XDG_BASES = [
+  {
+    envName: "XDG_CONFIG_HOME",
+    defaultRel: ".config",
+    subdirs: [...XDG_AGENT_SUBDIRS, ...XDG_CONFIG_EXTRA_SUBDIRS],
+  },
+  {
+    envName: "XDG_DATA_HOME",
+    defaultRel: ".local/share",
+    subdirs: XDG_AGENT_SUBDIRS,
+  },
+  {
+    envName: "XDG_STATE_HOME",
+    defaultRel: ".local/state",
+    subdirs: XDG_AGENT_SUBDIRS,
+  },
+  {
+    envName: "XDG_CACHE_HOME",
+    defaultRel: ".cache",
+    subdirs: XDG_AGENT_SUBDIRS,
+  },
+] as const;
+
+type XdgEnvName = (typeof XDG_BASES)[number]["envName"];
+
+type ReadOnlyBindCandidate = {
+  source: string;
+  target: string;
+};
+
+type SandboxEnvOverrides = Record<string, string | undefined>;
+
 /**
  * Bounded, tail-priority string buffer. Keeps at most `cap` characters,
  * discarding from the head when chunks arrive beyond the cap. Tracks how
@@ -314,6 +369,124 @@ async function clinePrefixEntries(hostHome: string): Promise<string[]> {
     .sort();
 }
 
+function homeRelativeEntry(entry: string, hostHome: string): string | null {
+  const trimmed = entry.trim();
+  const homePrefix = `${hostHome}/`;
+  const withoutHome = trimmed.startsWith("~/")
+    ? trimmed.slice(2)
+    : trimmed.startsWith(homePrefix)
+      ? path.relative(hostHome, trimmed)
+      : trimmed;
+  const normalized = path.normalize(withoutHome);
+  if (
+    !normalized ||
+    normalized === "." ||
+    path.isAbsolute(normalized) ||
+    normalized === ".." ||
+    normalized.startsWith("../")
+  ) {
+    return null;
+  }
+  return normalized;
+}
+
+function hostXdgBaseRel(
+  envName: XdgEnvName,
+  defaultRel: string,
+  hostHome: string,
+): string {
+  const configured = process.env[envName];
+  if (!configured || !path.isAbsolute(configured)) return defaultRel;
+  return homeRelativeEntry(configured, hostHome) ?? defaultRel;
+}
+
+function sandboxXdgEnv(
+  hostHome: string,
+  sandboxHomeTarget: string,
+  configuredReadOnlyPaths: string[],
+): SandboxEnvOverrides {
+  const env: SandboxEnvOverrides = {};
+  const configuredRels = new Set(
+    configuredReadOnlyPaths
+      .map((entry) => homeRelativeEntry(entry, hostHome))
+      .filter((entry): entry is string => Boolean(entry)),
+  );
+  for (const base of XDG_BASES) {
+    const baseAllowed =
+      configuredRels.has(base.defaultRel) ||
+      base.subdirs.some((subdir) =>
+        configuredRels.has(path.join(base.defaultRel, subdir)),
+      );
+    if (!baseAllowed) continue;
+    const configured = process.env[base.envName];
+    if (!configured || !path.isAbsolute(configured)) continue;
+    const rel = homeRelativeEntry(configured, hostHome);
+    if (rel) env[base.envName] = path.join(sandboxHomeTarget, rel);
+  }
+  return env;
+}
+
+function addBindCandidate(
+  candidates: ReadOnlyBindCandidate[],
+  seen: Set<string>,
+  source: string,
+  target: string,
+): void {
+  const normalizedSource = path.resolve(source);
+  const normalizedTarget = path.resolve(target);
+  const key = `${normalizedSource}\0${normalizedTarget}`;
+  if (seen.has(key)) return;
+  seen.add(key);
+  candidates.push({ source: normalizedSource, target: normalizedTarget });
+}
+
+function collectAgentConfigBindCandidates(
+  hostHome: string,
+  sandboxHomeTarget: string,
+  configuredReadOnlyPaths: string[],
+  clineEntries: string[],
+): ReadOnlyBindCandidate[] {
+  const candidates: ReadOnlyBindCandidate[] = [];
+  const seen = new Set<string>();
+  const homeEntries = new Set([...configuredReadOnlyPaths, ...clineEntries]);
+  const homeEntryRels = new Set<string>();
+
+  for (const entry of homeEntries) {
+    const rel = homeRelativeEntry(entry, hostHome);
+    if (!rel) continue;
+    homeEntryRels.add(rel);
+    addBindCandidate(
+      candidates,
+      seen,
+      path.join(hostHome, rel),
+      path.join(sandboxHomeTarget, rel),
+    );
+  }
+
+  for (const base of XDG_BASES) {
+    const baseRel = hostXdgBaseRel(base.envName, base.defaultRel, hostHome);
+    const wholeBaseAllowed = homeEntryRels.has(base.defaultRel);
+    for (const subdir of base.subdirs) {
+      const defaultSubdirRel = path.join(base.defaultRel, subdir);
+      if (!wholeBaseAllowed && !homeEntryRels.has(defaultSubdirRel)) {
+        continue;
+      }
+      addBindCandidate(
+        candidates,
+        seen,
+        path.join(hostHome, baseRel, subdir),
+        path.join(sandboxHomeTarget, baseRel, subdir),
+      );
+    }
+  }
+
+  return candidates.sort(
+    (a, b) =>
+      a.target.split("/").length - b.target.split("/").length ||
+      a.target.localeCompare(b.target),
+  );
+}
+
 function skipNestedBind(target: string, boundTargets: string[]): boolean {
   return boundTargets.some((parent) => target.startsWith(`${parent}/`));
 }
@@ -328,7 +501,10 @@ function addDirChain(args: string[], pathname: string): void {
   }
 }
 
-function publicSandboxEnv(homeDir: string): NodeJS.ProcessEnv {
+function publicSandboxEnv(
+  homeDir: string,
+  extraEnv: SandboxEnvOverrides = {},
+): NodeJS.ProcessEnv {
   const uid = typeof process.getuid === "function" ? process.getuid() : 1000;
   const env: NodeJS.ProcessEnv = {
     HOME: homeDir,
@@ -351,7 +527,7 @@ function publicSandboxEnv(homeDir: string): NodeJS.ProcessEnv {
     if (process.env[key]) env[key] = process.env[key];
   }
 
-  return env;
+  return { ...env, ...extraEnv };
 }
 
 function nodePackageRoot(realCliPath: string): string | null {
@@ -366,12 +542,49 @@ function nodePackageRoot(realCliPath: string): string | null {
   return parts.slice(0, packageEnd).join(path.sep) || path.sep;
 }
 
+async function shebangCommand(realPath: string): Promise<string | null> {
+  let text: string;
+  let handle: Awaited<ReturnType<typeof fs.open>> | null = null;
+  try {
+    handle = await fs.open(realPath, "r");
+    const buffer = Buffer.alloc(512);
+    const { bytesRead } = await handle.read(buffer, 0, buffer.length, 0);
+    text = buffer.subarray(0, bytesRead).toString("utf8");
+  } catch {
+    return null;
+  } finally {
+    await handle?.close().catch(() => undefined);
+  }
+  const firstLine = text.split(/\r?\n/, 1)[0] ?? "";
+  if (!firstLine.startsWith("#!")) return null;
+
+  const parts = firstLine.slice(2).trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return null;
+
+  const interpreter = path.basename(parts[0]);
+  if (interpreter === "env") {
+    const command = parts.slice(1).find((part) => !part.startsWith("-"));
+    return command ? path.basename(command) : null;
+  }
+  return interpreter;
+}
+
+async function addShebangRuntimeBinds(
+  args: string[],
+  realPath: string,
+): Promise<void> {
+  const command = await shebangCommand(realPath);
+  if (!command) return;
+  await addCommandRuntimeBinds(args, command);
+}
+
 async function addCliRuntimeBinds(
   args: string[],
   _cli: CliName,
   cliPath: string,
 ): Promise<string> {
   const realCliPath = await fs.realpath(cliPath).catch(() => cliPath);
+  await addShebangRuntimeBinds(args, realCliPath);
   const packageRoot = nodePackageRoot(realCliPath);
   if (packageRoot) {
     addDirChain(args, packageRoot);
@@ -452,49 +665,33 @@ async function addAgentConfigBinds(
   sandboxHomeSource: string,
   sandboxHomeTarget: string,
   configuredReadOnlyPaths: string[],
-): Promise<void> {
+): Promise<SandboxEnvOverrides> {
   const hostHome = process.env.HOME;
-  if (!hostHome) return;
+  if (!hostHome) return {};
 
-  for (const dir of [
-    ".codex",
-    ".claude",
-    ".cline",
-    ".gemini",
-    ".antigravity",
-    ".agents",
-  ]) {
+  for (const dir of AGENT_CONFIG_HOME_DIRS) {
     await fs.mkdir(path.join(sandboxHomeSource, dir), {
       recursive: true,
       mode: 0o700,
     });
   }
 
-  const entries = Array.from(
-    new Set([...configuredReadOnlyPaths, ...(await clinePrefixEntries(hostHome))]),
-  )
-    .map((entry) =>
-      entry.startsWith("~/")
-        ? entry.slice(2)
-        : entry.startsWith(`${hostHome}/`)
-          ? path.relative(hostHome, entry)
-          : entry,
-    )
-    .filter((entry) => entry && !path.isAbsolute(entry) && !entry.startsWith(".."))
-    .sort((a, b) => a.split("/").length - b.split("/").length || a.localeCompare(b));
-
   const boundTargets: string[] = [];
-  for (const rel of entries) {
-    const target = path.join(sandboxHomeTarget, rel);
-    if (skipNestedBind(target, boundTargets)) continue;
-    const source = path.join(hostHome, rel);
-    await addRoBindAtIfExists(
-      args,
-      source,
-      target,
-    );
+  const candidates = collectAgentConfigBindCandidates(
+    hostHome,
+    sandboxHomeTarget,
+    configuredReadOnlyPaths,
+    await clinePrefixEntries(hostHome),
+  );
+  for (const { source, target } of candidates) {
+    if (skipNestedBind(target, boundTargets)) {
+      continue;
+    }
+    await addRoBindAtIfExists(args, source, target);
     if (await exists(source)) boundTargets.push(target);
   }
+
+  return sandboxXdgEnv(hostHome, sandboxHomeTarget, configuredReadOnlyPaths);
 }
 
 async function buildBubblewrapSpawnPlan(input: {
@@ -559,7 +756,7 @@ async function buildBubblewrapSpawnPlan(input: {
   }
   await addResolvedFileBindIfNeeded(args, "/etc/resolv.conf");
 
-  await addAgentConfigBinds(
+  const sandboxEnvOverrides = await addAgentConfigBinds(
     args,
     sandboxHomeSource,
     sandboxHomeTarget,
@@ -577,7 +774,7 @@ async function buildBubblewrapSpawnPlan(input: {
     "--clearenv",
   );
 
-  const env = publicSandboxEnv(sandboxHomeTarget);
+  const env = publicSandboxEnv(sandboxHomeTarget, sandboxEnvOverrides);
   for (const [key, value] of Object.entries(env)) {
     if (value != null) args.push("--setenv", key, value);
   }
@@ -587,7 +784,7 @@ async function buildBubblewrapSpawnPlan(input: {
     command: bwrap,
     args,
     cwd: "/",
-    env: publicSandboxEnv(sandboxHomeTarget),
+    env,
   };
 }
 

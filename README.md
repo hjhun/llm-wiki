@@ -332,15 +332,38 @@ HOME-relative paths are exposed:
       ".config/claude",
       ".config/cline",
       ".config/gemini",
-      ".config/anthropic"
+      ".config/anthropic",
+      ".config/gcloud",
+      ".config/google-cloud",
+      ".local/share/codex",
+      ".local/share/claude",
+      ".local/share/cline",
+      ".local/share/gemini",
+      ".local/share/anthropic",
+      ".local/share/antigravity",
+      ".local/state/codex",
+      ".local/state/claude",
+      ".local/state/cline",
+      ".local/state/gemini",
+      ".local/state/anthropic",
+      ".local/state/antigravity",
+      ".cache/codex",
+      ".cache/claude",
+      ".cache/cline",
+      ".cache/gemini",
+      ".cache/anthropic",
+      ".cache/antigravity"
     ]
   }
 }
 ```
 
 Override that list in `config/local.json` when another CLI keeps its config in
-a different HOME-relative path. Cline variants whose names begin with `.cline`
-are detected and added automatically.
+a different HOME-relative path. When the host uses custom XDG base directories
+such as `XDG_CONFIG_HOME` under the same HOME, CLIO maps the matching allowlist
+entry to that subpath as well, for example `.config/codex` can also expose
+`$XDG_CONFIG_HOME/codex`. Cline variants whose names begin with `.cline` are
+detected and added automatically.
 
 If you do not want to share the host login state, remove the relevant path from
 `sandboxReadOnlyHomePaths` and log in once using the dedicated public CLI home:

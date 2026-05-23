@@ -276,7 +276,7 @@ export const TEXT = {
         "켜면 공개 채팅이 날씨나 최신 정보처럼 wiki 밖의 근거가 필요한 질문에 읽기 전용 검색/브라우저 도구를 사용할 수 있습니다.",
       publicQuerySandbox: "bwrap sandbox 사용",
       publicQuerySandboxDesc:
-        "켜면 public CLI를 격리된 HOME에서 실행합니다. config의 sandboxReadOnlyHomePaths에 지정된 ~/.codex, ~/.claude, ~/.cline*, ~/.gemini, ~/.antigravity, ~/.agents 등과 agent-browser 설치물은 읽기 전용으로 공유합니다.",
+        "켜면 public CLI를 격리된 HOME에서 실행합니다. config의 sandboxReadOnlyHomePaths에 지정된 ~/.codex, ~/.claude, ~/.cline*, ~/.gemini, XDG 하위 상태 경로, ~/.agents 등과 agent-browser 설치물은 읽기 전용으로 공유합니다.",
       password: "Password",
       admin: "admin",
       currentPassword: "Current password",
@@ -673,7 +673,7 @@ export const TEXT = {
         "When on, public chat may use read-only search/browser tools for questions that need evidence outside the wiki, such as weather or current facts.",
       publicQuerySandbox: "Use bwrap sandbox",
       publicQuerySandboxDesc:
-        "When on, public CLI runs with an isolated HOME. Host paths from sandboxReadOnlyHomePaths, such as ~/.codex, ~/.claude, ~/.cline*, ~/.gemini, ~/.antigravity, ~/.agents, and agent-browser installs, are shared read-only.",
+        "When on, public CLI runs with an isolated HOME. Host paths from sandboxReadOnlyHomePaths, such as ~/.codex, ~/.claude, ~/.cline*, ~/.gemini, XDG state subpaths, ~/.agents, and agent-browser installs, are shared read-only.",
       password: "Password",
       admin: "admin",
       currentPassword: "Current password",
