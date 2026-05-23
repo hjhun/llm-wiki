@@ -1,9 +1,15 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import type { CSSProperties } from "react";
 import {
+  AlertTriangle,
   Bot,
+  CheckCircle2,
   CircleDotDashed,
+  LoaderCircle,
+  RadioTower,
+  Sparkles,
   Terminal,
   UserRound,
 } from "lucide-react";
@@ -25,6 +31,38 @@ const ROLE_STYLE: Record<string, string> = {
   system: "chat-message-system",
 };
 
+function formatDuration(ms?: number): string | null {
+  if (ms == null) return null;
+  if (ms < 1000) return `${ms}ms`;
+  const seconds = Math.round(ms / 100) / 10;
+  return `${seconds}s`;
+}
+
+function agentStatusLabel(status: string): string {
+  if (status === "assigned") return "assigned";
+  if (status === "running") return "running";
+  if (status === "done") return "complete";
+  if (status === "error") return "blocked";
+  if (status === "consolidating") return "consolidating";
+  return status;
+}
+
+function AgentStatusIcon({ status }: { status: string }) {
+  if (status === "done") {
+    return <CheckCircle2 aria-hidden className="h-3.5 w-3.5" />;
+  }
+  if (status === "error") {
+    return <AlertTriangle aria-hidden className="h-3.5 w-3.5" />;
+  }
+  if (status === "consolidating") {
+    return <Sparkles aria-hidden className="h-3.5 w-3.5" />;
+  }
+  if (status === "running") {
+    return <LoaderCircle aria-hidden className="h-3.5 w-3.5 animate-spin" />;
+  }
+  return <RadioTower aria-hidden className="h-3.5 w-3.5" />;
+}
+
 export default function MessageList({
   messages,
   pending,
@@ -44,7 +82,9 @@ export default function MessageList({
   const showProgress =
     pending &&
     progress != null &&
-    (progress.summary != null || progress.log.length > 0);
+    (progress.summary != null ||
+      progress.log.length > 0 ||
+      progress.agents.length > 0);
 
   return (
     <div className="flex min-h-full flex-col gap-3 px-6 py-5">
@@ -106,12 +146,67 @@ export default function MessageList({
       })}
       {showProgress ? (
         <article className="chat-progress-card rounded-md border px-4 py-3 text-[12.5px] shadow-[inset_0_1px_0_rgb(255_255_255_/_0.04)]">
-          <header className="chat-progress-title mb-1 flex items-center gap-2 text-[11px]">
-            <CircleDotDashed aria-hidden className="h-3.5 w-3.5 animate-spin" />
-            <span className="font-mono uppercase tracking-widest">
-              {t.chat.progressTitle}
-            </span>
+          <header className="chat-progress-title mb-2 flex items-center justify-between gap-2 text-[11px]">
+            <div className="flex items-center gap-2">
+              <CircleDotDashed aria-hidden className="h-3.5 w-3.5 animate-spin" />
+              <span className="font-mono uppercase tracking-widest">
+                {t.chat.progressTitle}
+              </span>
+            </div>
+            {progress?.agents.length ? (
+              <span className="font-mono text-[10px] uppercase tracking-widest">
+                {progress.agents.filter((agent) => agent.status === "done").length}
+                /{progress.agents.length} complete
+              </span>
+            ) : null}
           </header>
+          {progress?.agents.length ? (
+            <div className="chat-agent-grid mb-3 grid gap-2 md:grid-cols-2">
+              {progress.agents.map((agent) => {
+                const duration = formatDuration(agent.durationMs);
+                return (
+                  <section
+                    key={agent.agentId}
+                    className="chat-agent-card rounded-md border px-3 py-2"
+                    data-status={agent.status}
+                    style={
+                      agent.accent
+                        ? ({ "--agent-accent": agent.accent } as CSSProperties)
+                        : undefined
+                    }
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="chat-agent-orb h-2.5 w-2.5 shrink-0 rounded-full" />
+                          <span className="truncate text-[13px] font-semibold text-ink">
+                            {agent.name}
+                          </span>
+                        </div>
+                        <div className="mt-1 truncate text-[11px] font-medium text-ink-dim">
+                          {agent.role}
+                        </div>
+                      </div>
+                      <div className="chat-agent-status flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-widest">
+                        <AgentStatusIcon status={agent.status} />
+                        <span>{agentStatusLabel(agent.status)}</span>
+                      </div>
+                    </div>
+                    <div className="mt-2 line-clamp-2 text-[11.5px] leading-snug text-ink-dim">
+                      {agent.detail}
+                    </div>
+                    <div className="mt-2 flex items-center justify-between gap-2 font-mono text-[10px] uppercase tracking-widest text-ink-faint">
+                      <span>{agent.cli}</span>
+                      <span>
+                        round {agent.round}
+                        {duration ? ` · ${duration}` : ""}
+                      </span>
+                    </div>
+                  </section>
+                );
+              })}
+            </div>
+          ) : null}
           {progress?.summary ? (
             <div className="chat-progress-summary font-mono text-[11.5px]">
               {progress.summary}

@@ -26,9 +26,30 @@ export type ChatProgressLog = {
   detail: string;
 };
 
+export type ChatAgentProgressStatus =
+  | "assigned"
+  | "running"
+  | "done"
+  | "error"
+  | "consolidating";
+
+export type ChatAgentProgress = {
+  agentId: string;
+  name: string;
+  role: string;
+  detail: string;
+  status: ChatAgentProgressStatus;
+  cli: string;
+  round: number;
+  durationMs?: number;
+  accent?: string;
+  updated: string;
+};
+
 export type ChatProgress = {
   summary: string | null;
   active: string | null;
   log: ChatProgressLog[];
+  agents: ChatAgentProgress[];
   updated: string;
 };

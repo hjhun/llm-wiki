@@ -44,8 +44,8 @@ export const ConfigSchema = z.object({
         /**
          * Upper bound for worker CLI processes the chat orchestrator may run
          * for /ingest, /ingest-loop, and /lint. /query uses a single CLI
-         * agent. The coordinator uses
-         * the selected orchestration CLI and names workers with `namePrefix-N`.
+         * agent. The coordinator uses the selected orchestration CLI and uses
+         * `namePrefix` as a stable seed for live worker callsigns.
          */
         maxConcurrentAgents: z.number().int().min(1).max(16).default(2),
         namePrefix: z.string().min(1).max(40).default("agent"),

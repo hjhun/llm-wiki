@@ -333,6 +333,7 @@ export async function POST(req: Request) {
           progressRef,
           signal: job.abort.signal,
           onChunk: emitChunk,
+          onAgentProgress: (event) => send(event),
         });
         const finalReply = job.cancelled
           ? formatCancelledReply({

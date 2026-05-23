@@ -2,7 +2,7 @@ import "server-only";
 
 import { runCli, type CliName, type RunResult } from "./cli";
 import type { Config } from "./config";
-import type { ChatKind } from "./chat-events";
+import type { ChatKind, ChatSendEvent } from "./chat-events";
 import { appendMessage } from "./sessions";
 import { errorMessage } from "./api";
 import { maybeRefreshQmdIndex } from "./qmd";
@@ -37,9 +37,18 @@ export type MultiAgentResult = {
 
 type Worker = {
   index: number;
+  id: string;
   name: string;
   cli: CliName;
+  role: string;
+  detail: string;
+  accent: string;
 };
+
+export type AgentProgressEvent = Extract<
+  ChatSendEvent,
+  { type: "progress"; phase: "agent" }
+>;
 
 type WorkerRun = {
   worker: Worker;
@@ -83,20 +92,135 @@ function clampAgentCount(cfg: Config): number {
   );
 }
 
+const CALLSIGNS = [
+  "Astra",
+  "Vega",
+  "Orion",
+  "Lyra",
+  "Helix",
+  "Nexus",
+  "Lumen",
+  "Kairo",
+  "Mira",
+  "Pulse",
+  "Arden",
+  "Onyx",
+  "Rune",
+  "Solace",
+  "Vector",
+  "Zephyr",
+];
+
+const AGENT_ACCENTS = [
+  "#0ea5e9",
+  "#10b981",
+  "#f59e0b",
+  "#ef476f",
+  "#6366f1",
+  "#14b8a6",
+  "#f97316",
+  "#8b5cf6",
+];
+
+type MissionProfile = {
+  role: string;
+  detail: string;
+};
+
+function missionProfiles(kind: OrchestratedKind): MissionProfile[] {
+  if (kind === "lint") {
+    return [
+      {
+        role: "Evidence Scout",
+        detail: "wiki pages에서 모순, 깨진 링크, stale claim 증거를 수집합니다.",
+      },
+      {
+        role: "Structure Auditor",
+        detail: "frontmatter, index, orphan page, source 연결 상태를 점검합니다.",
+      },
+      {
+        role: "Risk Reviewer",
+        detail: "수동 검토가 필요한 개인정보, 불확실한 출처, 수정 위험을 분류합니다.",
+      },
+      {
+        role: "Repair Planner",
+        detail: "manager가 한 번에 고칠 수 있는 항목과 보류 항목을 나눕니다.",
+      },
+    ];
+  }
+  return [
+    {
+      role: "Source Scout",
+      detail: "raw leaf와 sub-chunk를 읽고 source page coverage를 확보합니다.",
+    },
+    {
+      role: "Code Cartographer",
+      detail: "Code Wiki 파일/디렉터리 페이지와 code_outputs 누락을 보강합니다.",
+    },
+    {
+      role: "Link Steward",
+      detail: "entity, concept, index, log 연결이 merge pass에 맞는지 확인합니다.",
+    },
+    {
+      role: "Merge Sentinel",
+      detail: "진행 state와 누락 지표를 보고 다음 round 또는 완료 조건을 판정합니다.",
+    },
+  ];
+}
+
+function seedOffset(seed: string): number {
+  let value = 0;
+  for (const char of seed) value = (value * 31 + char.charCodeAt(0)) >>> 0;
+  return value;
+}
+
 function buildWorkers(
   cfg: Config,
   managerCli: CliName,
-  options: { count?: number } = {},
+  options: { count?: number; kind: OrchestratedKind },
 ): Worker[] {
   const cli = cfg.agent.orchestration.cli ?? managerCli;
   const count = options.count ?? clampAgentCount(cfg);
-  const prefix = cfg.agent.orchestration.namePrefix.trim() || "agent";
+  const seed = cfg.agent.orchestration.namePrefix.trim() || "clio";
+  const offset = seedOffset(`${seed}:${options.kind}`);
+  const profiles = missionProfiles(options.kind);
   return Array.from({ length: count }, (_, index) => {
+    const name = CALLSIGNS[(offset + index) % CALLSIGNS.length];
+    const profile = profiles[index % profiles.length];
     return {
       index,
-      name: `${prefix}-${index + 1}`,
+      id: `worker-${index + 1}`,
+      name,
       cli,
+      role: profile.role,
+      detail: profile.detail,
+      accent: AGENT_ACCENTS[(offset + index) % AGENT_ACCENTS.length],
     };
+  });
+}
+
+function emitAgentProgress(
+  emit: ((event: AgentProgressEvent) => void) | undefined,
+  worker: Worker,
+  input: {
+    status: AgentProgressEvent["status"];
+    round: number;
+    detail?: string;
+    durationMs?: number;
+  },
+) {
+  emit?.({
+    type: "progress",
+    phase: "agent",
+    agentId: worker.id,
+    name: worker.name,
+    role: worker.role,
+    detail: input.detail ?? worker.detail,
+    status: input.status,
+    cli: worker.cli,
+    round: input.round,
+    durationMs: input.durationMs,
+    accent: worker.accent,
   });
 }
 
@@ -141,9 +265,10 @@ function wrapWorkerPrompt(input: {
 }): string {
   const lines = [
     "You are operating as a named worker in an LLM Wiki multi-agent run.",
-    `Worker name: ${input.worker.name}`,
+    `Worker callsign: ${input.worker.name}`,
     `Worker CLI: ${input.worker.cli}`,
     `Worker slot: ${input.worker.index + 1}/${input.totalWorkers}`,
+    `Mission focus: ${input.worker.role} — ${input.worker.detail}`,
     `Round: ${input.round}`,
     "A central manager agent will review all worker outputs, decide whether the operation is complete, and report to the user.",
     "The host webapp already created the active chat session. Do not create, rename, delete, or allocate any sessions/*.md file; use the Active session log supplied in the manager task.",
@@ -182,13 +307,9 @@ async function runWorkerBatch(input: {
   timeoutMs?: number;
   signal?: AbortSignal;
   onChunk?: (text: string) => void;
+  onAgentProgress?: (event: AgentProgressEvent) => void;
   rawScope?: string | null;
 }): Promise<WorkerRun[]> {
-  input.onChunk?.(
-    `\n\n---\n[multi-agent round ${input.round}] ${input.workers
-      .map((worker) => `${worker.name}:${worker.cli}`)
-      .join(", ")}\n`,
-  );
   const entityRegistryRef =
     input.kind === "ingest" || input.kind === "ingest-loop"
       ? await buildEntityRegistryReference()
@@ -201,6 +322,12 @@ async function runWorkerBatch(input: {
     input.kind === "ingest" || input.kind === "ingest-loop"
       ? await buildSourcePageStatusReference({ rawScope: input.rawScope })
       : null;
+  for (const worker of input.workers) {
+    emitAgentProgress(input.onAgentProgress, worker, {
+      status: "assigned",
+      round: input.round,
+    });
+  }
   return Promise.all(
     input.workers.map(async (worker): Promise<WorkerRun> => {
       const prompt = wrapWorkerPrompt({
@@ -214,7 +341,10 @@ async function runWorkerBatch(input: {
         codeWikiStatusRef,
       });
       const started = Date.now();
-      input.onChunk?.(`[${worker.name}] start\n`);
+      emitAgentProgress(input.onAgentProgress, worker, {
+        status: "running",
+        round: input.round,
+      });
       try {
         const result = await runCli(worker.cli, prompt, {
           safeMode: input.cfg.agent.safeMode,
@@ -222,15 +352,24 @@ async function runWorkerBatch(input: {
           signal: input.signal,
           killOnAbort: input.signal ? true : input.timeoutMs != null,
         });
-        input.onChunk?.(
-          `[${worker.name}] done exitCode=${result.exitCode} durationMs=${result.durationMs}\n`,
-        );
+        emitAgentProgress(input.onAgentProgress, worker, {
+          status: result.exitCode === 0 ? "done" : "error",
+          round: input.round,
+          detail:
+            result.exitCode === 0
+              ? `${worker.role} 임무를 마치고 manager 검토 대기 중입니다.`
+              : `${worker.role} 임무가 exitCode=${result.exitCode}로 종료되었습니다.`,
+          durationMs: result.durationMs,
+        });
         return { worker, round: input.round, result, error: null };
       } catch (err) {
         const message = errorMessage(err);
-        input.onChunk?.(
-          `[${worker.name}] error after ${Date.now() - started}ms: ${message}\n`,
-        );
+        emitAgentProgress(input.onAgentProgress, worker, {
+          status: "error",
+          round: input.round,
+          detail: message,
+          durationMs: Date.now() - started,
+        });
         return { worker, round: input.round, result: null, error: message };
       }
     }),
@@ -288,10 +427,23 @@ async function runManager(input: {
   timeoutMs?: number;
   signal?: AbortSignal;
   onChunk?: (text: string) => void;
+  onAgentProgress?: (event: AgentProgressEvent) => void;
 }): Promise<RunResult> {
   const managerName = input.cfg.agent.orchestration.managerName.trim() || "manager";
-  input.onChunk?.(`\n\n---\n[${managerName}] consolidating worker results\n`);
-  return runCli(
+  input.onAgentProgress?.({
+    type: "progress",
+    phase: "agent",
+    agentId: "manager",
+    name: managerName,
+    role: "Mission Control",
+    detail: "worker 결과를 합쳐 최종 판단과 사용자 응답을 작성합니다.",
+    status: "consolidating",
+    cli: input.agent,
+    round: Math.max(...input.runs.map((run) => run.round), 1),
+    accent: "#64748b",
+  });
+  const started = Date.now();
+  const result = await runCli(
     input.agent,
     buildManagerPrompt({
       kind: input.kind,
@@ -309,6 +461,23 @@ async function runManager(input: {
       onStdout: (chunk) => input.onChunk?.(chunk),
     },
   );
+  input.onAgentProgress?.({
+    type: "progress",
+    phase: "agent",
+    agentId: "manager",
+    name: managerName,
+    role: "Mission Control",
+    detail:
+      result.exitCode === 0
+        ? "최종 응답 정리를 완료했습니다."
+        : `manager pass가 exitCode=${result.exitCode}로 종료되었습니다.`,
+    status: result.exitCode === 0 ? "done" : "error",
+    cli: input.agent,
+    round: Math.max(...input.runs.map((run) => run.round), 1),
+    durationMs: Date.now() - started,
+    accent: "#64748b",
+  });
+  return result;
 }
 
 function ingestWorkComplete(snapshot: ProgressSnapshot): boolean {
@@ -341,10 +510,12 @@ async function runSingleRoundOperation(input: {
   timeoutMs?: number;
   signal?: AbortSignal;
   onChunk?: (text: string) => void;
+  onAgentProgress?: (event: AgentProgressEvent) => void;
 }): Promise<MultiAgentResult> {
   const orchestrationCli = input.cfg.agent.orchestration.cli ?? input.agent;
   const rawScope = rawScopeFromMessage(input.message);
   const workers = buildWorkers(input.cfg, orchestrationCli, {
+    kind: input.kind,
     count: input.kind === "ingest" ? 1 : undefined,
   });
   const ingestBefore =
@@ -358,6 +529,7 @@ async function runSingleRoundOperation(input: {
     timeoutMs: input.timeoutMs,
     signal: input.signal,
     onChunk: input.onChunk,
+    onAgentProgress: input.onAgentProgress,
     rawScope,
   });
   const workerDuration = runs.reduce(
@@ -427,6 +599,7 @@ async function runSingleRoundOperation(input: {
     timeoutMs: input.timeoutMs,
     signal: input.signal,
     onChunk: input.onChunk,
+    onAgentProgress: input.onAgentProgress,
   });
   const finalReply =
     manager.stdout.trim() ||
@@ -449,11 +622,14 @@ async function runLoopOperation(input: {
   progressRef?: string | null;
   signal?: AbortSignal;
   onChunk?: (text: string) => void;
+  onAgentProgress?: (event: AgentProgressEvent) => void;
 }): Promise<MultiAgentResult> {
   await clearStopFlag(input.sessionPath);
   const orchestrationCli = input.cfg.agent.orchestration.cli ?? input.agent;
   const rawScope = rawScopeFromMessage(input.message);
-  const workers = buildWorkers(input.cfg, orchestrationCli);
+  const workers = buildWorkers(input.cfg, orchestrationCli, {
+    kind: "ingest-loop",
+  });
   const maxRounds = input.cfg.cli.ingestLoop.maxIterations;
   const timeoutMs = input.cfg.cli.timeouts["ingest-loop"] ?? undefined;
   const loopBefore = await readProgressSnapshot({ rawScope });
@@ -512,6 +688,7 @@ async function runLoopOperation(input: {
       timeoutMs,
       signal: input.signal,
       onChunk: input.onChunk,
+      onAgentProgress: input.onAgentProgress,
       rawScope,
     });
     allRuns = allRuns.concat(runs);
@@ -575,8 +752,12 @@ async function runLoopOperation(input: {
       allRuns.push({
         worker: {
           index: workers.length,
+          id: "qmd",
           name: "qmd",
           cli: orchestrationCli,
+          role: "Search Index Refresh",
+          detail: "qmd 검색 인덱스를 최신 wiki 상태로 갱신합니다.",
+          accent: "#0f766e",
         },
         round,
         result: {
@@ -605,8 +786,12 @@ async function runLoopOperation(input: {
       allRuns.push({
         worker: {
           index: workers.length,
+          id: "auto-graph-final",
           name: "auto-graph-final",
           cli: orchestrationCli,
+          role: "Graph Sync",
+          detail: "최종 ingest 결과를 knowledge graph에 반영합니다.",
+          accent: "#7c3aed",
         },
         round,
         result: {
@@ -649,6 +834,7 @@ async function runLoopOperation(input: {
     )}`,
     timeoutMs: input.cfg.cli.timeouts.chat ?? undefined,
     onChunk: input.onChunk,
+    onAgentProgress: input.onAgentProgress,
   });
   totalDurationMs += manager.durationMs;
   await appendMessage(
@@ -678,6 +864,7 @@ export async function runMultiAgentOperation(input: {
   progressRef?: string | null;
   signal?: AbortSignal;
   onChunk?: (text: string) => void;
+  onAgentProgress?: (event: AgentProgressEvent) => void;
 }): Promise<MultiAgentResult> {
   if (input.kind === "ingest-loop") {
     return runLoopOperation(input);

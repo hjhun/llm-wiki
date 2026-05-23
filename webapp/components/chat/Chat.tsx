@@ -16,6 +16,7 @@ import type {
   SequencedChatSendEvent,
 } from "@/lib/chat-events";
 import type {
+  ChatAgentProgress,
   ChatMessage,
   ChatProgress,
   ChatProgressLog,
@@ -378,11 +379,44 @@ export default function Chat() {
         setProgress((current) => {
           if (streamTokenRef.current !== token) return current;
           const log: ChatProgressLog[] = current?.log ?? [];
+          const agents: ChatAgentProgress[] = current?.agents ?? [];
+          if (event.phase === "agent") {
+            const updated = new Date().toISOString();
+            const nextAgent: ChatAgentProgress = {
+              agentId: event.agentId,
+              name: event.name,
+              role: event.role,
+              detail: event.detail,
+              status: event.status,
+              cli: event.cli,
+              round: event.round,
+              durationMs: event.durationMs,
+              accent: event.accent,
+              updated,
+            };
+            const existingIndex = agents.findIndex(
+              (agent) => agent.agentId === event.agentId,
+            );
+            const nextAgents =
+              existingIndex >= 0
+                ? agents.map((agent, index) =>
+                    index === existingIndex ? nextAgent : agent,
+                  )
+                : [...agents, nextAgent];
+            return {
+              summary: current?.summary ?? null,
+              active: current?.active ?? null,
+              log,
+              agents: nextAgents,
+              updated,
+            };
+          }
           if (event.phase === "state") {
             return {
               summary: event.summary,
               active: event.active,
               log,
+              agents,
               updated: new Date().toISOString(),
             };
           }
@@ -395,6 +429,7 @@ export default function Chat() {
             summary: current?.summary ?? null,
             active: current?.active ?? null,
             log: nextLog,
+            agents,
             updated: new Date().toISOString(),
           };
         });

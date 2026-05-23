@@ -21,6 +21,13 @@ export type ChatJobSnapshot = {
   updated: string;
 };
 
+export type ChatAgentProgressStatus =
+  | "assigned"
+  | "running"
+  | "done"
+  | "error"
+  | "consolidating";
+
 export type ChatSendEvent =
   | { type: "start"; sessionPath: string }
   | { type: "chunk"; stream: "stdout" | "stderr"; text: string }
@@ -36,6 +43,19 @@ export type ChatSendEvent =
       ts: string;
       op: string;
       detail: string;
+    }
+  | {
+      type: "progress";
+      phase: "agent";
+      agentId: string;
+      name: string;
+      role: string;
+      detail: string;
+      status: ChatAgentProgressStatus;
+      cli: string;
+      round: number;
+      durationMs?: number;
+      accent?: string;
     }
   | {
       type: "done";
