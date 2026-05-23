@@ -17,6 +17,11 @@ export default async function LoginPage() {
   }
   const cfg = await loadConfig();
   return (
-    <AuthCard mode="login" language={cfg.ui.language} theme={cfg.ui.theme} />
+    <AuthCard
+      mode="login"
+      language={cfg.ui.language}
+      theme={cfg.ui.theme}
+      appSubtitle={cfg.ui.appSubtitle}
+    />
   );
 }

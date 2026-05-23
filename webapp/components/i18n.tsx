@@ -1,5 +1,7 @@
 "use client";
 
+import { BRAND_NAME } from "@/lib/branding";
+
 import {
   createContext,
   useCallback,
@@ -10,8 +12,6 @@ import {
 } from "react";
 
 export type Language = "ko" | "en";
-
-export const BRAND_NAME = "CLIO - LLM WIKI";
 
 export const TEXT = {
   ko: {
@@ -224,6 +224,8 @@ export const TEXT = {
       settingsTabAutomationDesc: "자동 ingest와 자동 lint 트리거, 실행 상태를 관리합니다.",
       settingsTabAccess: "Access",
       settingsTabAccessDesc: "웹 서버 접근, 로그인 세션, 관리자 비밀번호를 설정합니다.",
+      settingsTabUpdates: "Updates",
+      settingsTabUpdatesDesc: "GitHub 릴리즈와 현재 설치 정보를 확인하고 업데이트를 실행합니다.",
       settingsTabDiagnostics: "Diagnostics",
       settingsTabDiagnosticsDesc: "감지된 도구와 실제로 쓰이는 설정 파일 경로를 확인합니다.",
       codingAgent: "Coding Agent",
@@ -239,6 +241,7 @@ export const TEXT = {
         "/ingest, /ingest-loop, /lint는 이름이 붙은 워커들을 실행하고 관리자 에이전트가 결과를 정리합니다. /query는 단일 에이전트로 실행됩니다.",
       runtimeDefaults: "Runtime Defaults",
       wikiOperation: "wiki operation",
+      appSubtitle: "CLIO 서브 이름",
       chunkMaxFiles: "Chunk max files",
       chunkMaxBytes: "Chunk max bytes",
       minCommunitySize: "Min community size",
@@ -288,6 +291,27 @@ export const TEXT = {
       missing: "누락",
       notDetected: "감지 안 됨",
       customPath: "수동 경로",
+      updateCenter: "업데이트",
+      updateAvailable: "업데이트 가능",
+      upToDate: "최신 상태",
+      checkRelease: "릴리즈 확인",
+      updateNow: "업데이트 실행",
+      updatingRelease: "업데이트 중...",
+      updateDoneNotice: "업데이트 명령이 완료되었습니다. 서버 재시작이 필요할 수 있습니다.",
+      currentVersion: "현재 버전",
+      latestVersion: "최신 릴리즈",
+      currentGitRef: "현재 Git 정보",
+      releasePublishedAt: "릴리즈 게시 시각",
+      updateCommand: "실행 명령",
+      releaseCheckPending: "GitHub 릴리즈 정보를 확인하는 중입니다.",
+      releaseSource: "릴리즈 소스",
+      latestReleaseName: "릴리즈 이름",
+      lastChecked: "마지막 확인",
+      openRelease: "GitHub 릴리즈 열기",
+      updateOutput: "업데이트 로그",
+      updateStartedAt: "시작",
+      updateFinishedAt: "종료",
+      updateExitCode: "종료 코드",
       autoIngest: "자동 인제스트",
       autoIngestDesc:
         "raw/ 아래에 자료가 추가되거나 일정 주기가 되면 자동으로 /ingest-loop을 실행합니다.",
@@ -594,6 +618,8 @@ export const TEXT = {
       settingsTabAutomationDesc: "Auto-ingest and auto-lint triggers, controls, and runtime status.",
       settingsTabAccess: "Access",
       settingsTabAccessDesc: "Web server access, login sessions, and administrator password.",
+      settingsTabUpdates: "Updates",
+      settingsTabUpdatesDesc: "Check GitHub releases against this install and run the updater.",
       settingsTabDiagnostics: "Diagnostics",
       settingsTabDiagnosticsDesc: "Detected tools and the config files currently in use.",
       codingAgent: "Coding Agent",
@@ -609,6 +635,7 @@ export const TEXT = {
         "/ingest, /ingest-loop, and /lint run named workers, then a manager agent consolidates the report. /query runs as a single agent.",
       runtimeDefaults: "Runtime Defaults",
       wikiOperation: "wiki operation",
+      appSubtitle: "CLIO subtitle",
       chunkMaxFiles: "Chunk max files",
       chunkMaxBytes: "Chunk max bytes",
       minCommunitySize: "Min community size",
@@ -658,6 +685,27 @@ export const TEXT = {
       missing: "Missing",
       notDetected: "not detected",
       customPath: "Manual path",
+      updateCenter: "Updates",
+      updateAvailable: "Update available",
+      upToDate: "Up to date",
+      checkRelease: "Check release",
+      updateNow: "Run update",
+      updatingRelease: "Updating...",
+      updateDoneNotice: "Update command finished. A server restart may be required.",
+      currentVersion: "Current version",
+      latestVersion: "Latest release",
+      currentGitRef: "Current Git info",
+      releasePublishedAt: "Release published",
+      updateCommand: "Command",
+      releaseCheckPending: "Checking GitHub release information.",
+      releaseSource: "Release source",
+      latestReleaseName: "Release name",
+      lastChecked: "Last checked",
+      openRelease: "Open GitHub release",
+      updateOutput: "Update log",
+      updateStartedAt: "Started",
+      updateFinishedAt: "Finished",
+      updateExitCode: "Exit code",
       autoIngest: "Auto-ingest",
       autoIngestDesc:
         "Run /ingest-loop automatically when raw/ changes or on a schedule.",

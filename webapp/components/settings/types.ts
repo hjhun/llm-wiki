@@ -16,6 +16,29 @@ export type ToolStatus = {
   details?: Record<string, string | number | boolean | null>;
 };
 
+export type ReleaseInfo = {
+  repo: string;
+  installScriptUrl: string;
+  currentVersion: string | null;
+  latestVersion: string | null;
+  latestName: string | null;
+  latestUrl: string | null;
+  latestPublishedAt: string | null;
+  currentRef: string | null;
+  currentCommit: string | null;
+  updateAvailable: boolean;
+  checkedAt: string;
+  note: string;
+};
+
+export type UpdateResult = {
+  exitCode: number | null;
+  output: string;
+  startedAt: string;
+  finishedAt: string;
+  command: string;
+};
+
 export type SettingsConfig = {
   server: {
     port: number;
@@ -59,6 +82,7 @@ export type SettingsConfig = {
   ui: {
     language: "ko" | "en";
     theme: "default" | "light" | "dark";
+    appSubtitle: string;
     defaultTab: "chat" | "explorer" | "graph" | "automations" | "settings";
     agentEdgePanelEnabled: boolean;
   };

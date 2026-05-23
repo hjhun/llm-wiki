@@ -139,7 +139,11 @@ async function asError(res: Response): Promise<Error> {
   return new Error(body?.error ?? `request failed (${res.status})`);
 }
 
-export default function PublicClioChat() {
+export default function PublicClioChat({
+  appSubtitle,
+}: {
+  appSubtitle?: string;
+}) {
   const [conversations, setConversations] = useState<PublicConversation[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
@@ -370,7 +374,7 @@ export default function PublicClioChat() {
         <header className="flex min-h-16 shrink-0 items-center justify-between gap-4 border-b border-line bg-bg-panel/76 px-5 py-3 shadow-sm backdrop-blur-xl">
           <div className="min-w-0">
             <div className="font-mono text-[10px] uppercase tracking-widest text-ink-faint">
-              public clio
+              {appSubtitle ? `public clio · ${appSubtitle}` : "public clio"}
             </div>
             <h1 className="truncate text-base font-semibold text-ink">
               {activeConversation?.title ?? "CLIO Query"}

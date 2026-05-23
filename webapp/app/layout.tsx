@@ -1,11 +1,16 @@
 import type { Metadata } from "next";
+import { formatBrandTitle } from "@/lib/branding";
+import { loadConfig } from "@/lib/config";
 import "./globals.css";
 
-export const metadata: Metadata = {
-  title: "CLIO - LLM WIKI",
-  description:
-    "CLIO - LLM WIKI: chat, explore, graph and configure your personal knowledge base.",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const cfg = await loadConfig();
+  return {
+    title: formatBrandTitle(cfg.ui.appSubtitle),
+    description:
+      "CLIO - LLM WIKI: chat, explore, graph and configure your personal knowledge base.",
+  };
+}
 
 export default function RootLayout({
   children,

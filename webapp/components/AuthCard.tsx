@@ -2,7 +2,8 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState, type FormEvent } from "react";
-import { BRAND_NAME, TEXT, type Language } from "./i18n";
+import { BRAND_NAME } from "@/lib/branding";
+import { TEXT, type Language } from "./i18n";
 import type { Theme } from "./theme";
 
 type Mode = "setup" | "login";
@@ -22,10 +23,12 @@ export default function AuthCard({
   mode,
   language,
   theme,
+  appSubtitle,
 }: {
   mode: Mode;
   language: Language;
   theme: Theme;
+  appSubtitle?: string;
 }) {
   const router = useRouter();
   const config = MODE_CONFIG[mode];
@@ -84,6 +87,11 @@ export default function AuthCard({
         <div className="mb-1 font-mono text-[11px] uppercase tracking-widest text-ink-faint">
           {BRAND_NAME}
         </div>
+        {appSubtitle ? (
+          <div className="mb-2 truncate text-xs font-medium text-ink-dim">
+            {appSubtitle}
+          </div>
+        ) : null}
         <h1 className="text-lg font-semibold">
           {mode === "setup" ? t.setupTitle : t.loginTitle}
         </h1>

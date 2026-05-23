@@ -68,6 +68,7 @@
   "ui": {
     "language": "ko",
     "theme": "default",
+    "appSubtitle": "",
     "defaultTab": "chat"
   },
   "auth": {

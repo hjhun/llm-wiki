@@ -1,6 +1,7 @@
-import PublicClioChat from "@/components/public-clio/PublicClioChat";
 import { LanguageProvider } from "@/components/i18n";
+import PublicClioChat from "@/components/public-clio/PublicClioChat";
 import { ThemeProvider } from "@/components/theme";
+import { BRAND_NAME } from "@/lib/branding";
 import { loadConfig } from "@/lib/config";
 
 export default async function PublicClioEntry() {
@@ -11,13 +12,18 @@ export default async function PublicClioEntry() {
     <ThemeProvider initialTheme={cfg.ui.theme}>
       <LanguageProvider initialLanguage={cfg.ui.language}>
         {cfg.publicQuery.enabled ? (
-          <PublicClioChat />
+          <PublicClioChat appSubtitle={cfg.ui.appSubtitle} />
         ) : (
           <main className="flex h-screen w-screen items-center justify-center bg-bg px-6 text-ink">
             <section className="w-full max-w-lg rounded-md border border-line bg-bg-panel/82 p-6 shadow-sm backdrop-blur-xl">
               <div className="font-mono text-[10px] uppercase tracking-widest text-ink-faint">
-                public clio
+                {BRAND_NAME}
               </div>
+              {cfg.ui.appSubtitle ? (
+                <div className="mt-1 text-xs font-medium text-ink-dim">
+                  {cfg.ui.appSubtitle}
+                </div>
+              ) : null}
               <h1 className="mt-2 text-lg font-semibold text-ink">
                 {isKorean ? "공개 query가 꺼져 있습니다" : "Public query is disabled"}
               </h1>

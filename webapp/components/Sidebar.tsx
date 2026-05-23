@@ -16,7 +16,8 @@ import {
 import { useEffect, useState } from "react";
 import packageJson from "../package.json";
 import AutoLintBadge from "./AutoLintBadge";
-import { BRAND_NAME, type Language, useLanguage } from "./i18n";
+import { BRAND_NAME } from "@/lib/branding";
+import { type Language, useLanguage } from "./i18n";
 import { IconButton, cx } from "./ui";
 import type { LucideIcon } from "lucide-react";
 
@@ -34,7 +35,11 @@ const TABS: Tab[] = [
   { href: "/settings", key: "settings", icon: Settings },
 ];
 
-export default function Sidebar() {
+export default function Sidebar({
+  appSubtitle,
+}: {
+  appSubtitle?: string;
+}) {
   const pathname = usePathname();
   const router = useRouter();
   const { language, setLanguage, savingLanguage, t } = useLanguage();
@@ -84,6 +89,11 @@ export default function Sidebar() {
             <div className="font-mono text-xs uppercase tracking-widest text-ink">
               {BRAND_NAME}
             </div>
+            {appSubtitle ? (
+              <div className="mt-1 truncate text-xs font-medium text-ink-dim">
+                {appSubtitle}
+              </div>
+            ) : null}
             <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-ink-faint">
               <span>{t.sidebar.local}</span>
               <span className="font-mono text-[10px] uppercase tracking-widest text-ink-dim">

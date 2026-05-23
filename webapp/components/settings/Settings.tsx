@@ -4,8 +4,11 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Bot,
+  Download,
+  ExternalLink,
   Gauge,
   KeyRound,
+  Package,
   RefreshCw,
   Save,
   ShieldCheck,
@@ -21,9 +24,11 @@ import { Button, PageHeader, StatusBadge, cx } from "../ui";
 import type {
   CliInfo,
   CliName,
+  ReleaseInfo,
   SettingsConfig,
   SettingsState,
   ToolStatus,
+  UpdateResult,
 } from "./types";
 
 const CLI_NAMES: CliName[] = ["codex", "claude", "gemini", "cline"];
@@ -35,6 +40,7 @@ type SettingsTabId =
   | "runtime"
   | "automation"
   | "access"
+  | "updates"
   | "diagnostics";
 
 async function asError(res: Response): Promise<Error> {
@@ -88,6 +94,8 @@ export default function Settings() {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [releaseInfo, setReleaseInfo] = useState<ReleaseInfo | null>(null);
+  const [updateResult, setUpdateResult] = useState<UpdateResult | null>(null);
   const [password, setPassword] = useState({ current: "", next: "" });
   const [activeTab, setActiveTab] = useState<SettingsTabId>("agent");
 
@@ -111,6 +119,23 @@ export default function Settings() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  const loadReleaseInfo = useCallback(async () => {
+    setError(null);
+    try {
+      const res = await fetch("/api/settings/update", { cache: "no-store" });
+      if (!res.ok) throw await asError(res);
+      setReleaseInfo((await res.json()) as ReleaseInfo);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  }, []);
+
+  useEffect(() => {
+    if (activeTab === "updates") {
+      void loadReleaseInfo();
+    }
+  }, [activeTab, loadReleaseInfo]);
 
   const cliByName = useMemo(() => {
     return new Map(state?.cli.map((info) => [info.name, info]) ?? []);
@@ -142,6 +167,12 @@ export default function Settings() {
           label: t.settings.settingsTabAccess,
           description: t.settings.settingsTabAccessDesc,
           icon: ShieldCheck,
+        },
+        {
+          id: "updates",
+          label: t.settings.settingsTabUpdates,
+          description: t.settings.settingsTabUpdatesDesc,
+          icon: Package,
         },
         {
           id: "diagnostics",
@@ -206,6 +237,37 @@ export default function Settings() {
       });
       setNotice(t.settings.savedNotice);
       router.refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function runUpdate() {
+    setBusy("update");
+    setError(null);
+    setNotice(null);
+    setUpdateResult(null);
+    try {
+      const res = await fetch("/api/settings/update", { method: "POST" });
+      const result = (await res.json().catch(() => null)) as
+        | UpdateResult
+        | { error?: string }
+        | null;
+      if (!res.ok) {
+        if (result && "output" in result) {
+          setUpdateResult(result);
+        }
+        throw new Error(
+          result && "error" in result && result.error
+            ? result.error
+            : `request failed (${res.status})`,
+        );
+      }
+      setUpdateResult(result as UpdateResult);
+      setNotice(t.settings.updateDoneNotice);
+      await loadReleaseInfo();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -438,6 +500,15 @@ export default function Settings() {
                   eyebrow={t.settings.wikiOperation}
                 >
                   <div className="grid gap-3 md:grid-cols-2">
+                    <TextField
+                      label={t.settings.appSubtitle}
+                      value={draft.ui.appSubtitle}
+                      onChange={(value) =>
+                        updateDraft((next) => {
+                          next.ui.appSubtitle = value;
+                        })
+                      }
+                    />
                     <NumberField
                       label={t.settings.chunkMaxFiles}
                       value={draft.chunking.maxFiles}
@@ -787,6 +858,16 @@ export default function Settings() {
                 </div>
               ) : null}
 
+              {activeTab === "updates" ? (
+                <UpdatePanel
+                  releaseInfo={releaseInfo}
+                  updateResult={updateResult}
+                  busy={busy}
+                  onRefresh={() => void loadReleaseInfo()}
+                  onUpdate={() => void runUpdate()}
+                />
+              ) : null}
+
               {activeTab === "diagnostics" ? (
                 <div className="grid gap-4 lg:grid-cols-2">
                   <Panel title={t.settings.tools} eyebrow={t.settings.detected}>
@@ -809,6 +890,157 @@ export default function Settings() {
           </div>
         </main>
       )}
+    </div>
+  );
+}
+
+function UpdatePanel({
+  releaseInfo,
+  updateResult,
+  busy,
+  onRefresh,
+  onUpdate,
+}: {
+  releaseInfo: ReleaseInfo | null;
+  updateResult: UpdateResult | null;
+  busy: string | null;
+  onRefresh: () => void;
+  onUpdate: () => void;
+}) {
+  const { t } = useLanguage();
+  const latestVersion = releaseInfo?.latestVersion ?? "-";
+  const currentVersion = releaseInfo?.currentVersion ?? "-";
+  const releaseTone = releaseInfo?.updateAvailable ? "warning" : "ready";
+  const releaseLabel = releaseInfo?.updateAvailable
+    ? t.settings.updateAvailable
+    : t.settings.upToDate;
+
+  return (
+    <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(320px,420px)]">
+      <Panel title={t.settings.updateCenter} eyebrow="github release">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <StatusBadge tone={releaseTone}>{releaseLabel}</StatusBadge>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              onClick={onRefresh}
+              disabled={busy != null}
+              icon={RefreshCw}
+            >
+              {t.settings.checkRelease}
+            </Button>
+            <Button
+              onClick={onUpdate}
+              disabled={busy != null}
+              variant="primary"
+              icon={Download}
+            >
+              {busy === "update"
+                ? t.settings.updatingRelease
+                : t.settings.updateNow}
+            </Button>
+          </div>
+        </div>
+
+        <div className="mt-4 grid gap-3 md:grid-cols-2">
+          <InfoTile label={t.settings.currentVersion} value={currentVersion} />
+          <InfoTile label={t.settings.latestVersion} value={latestVersion} />
+          <InfoTile
+            label={t.settings.currentGitRef}
+            value={[
+              releaseInfo?.currentRef,
+              releaseInfo?.currentCommit,
+            ].filter(Boolean).join(" @ ") || "-"}
+          />
+          <InfoTile
+            label={t.settings.releasePublishedAt}
+            value={
+              releaseInfo?.latestPublishedAt
+                ? new Date(releaseInfo.latestPublishedAt).toLocaleString()
+                : "-"
+            }
+          />
+        </div>
+
+        <div className="mt-4 rounded border border-line bg-bg px-3 py-2">
+          <div className="font-mono text-[10px] uppercase tracking-widest text-ink-faint">
+            {t.settings.updateCommand}
+          </div>
+          <p className="mt-1 break-all font-mono text-[11px] leading-relaxed text-ink-dim">
+            curl -fsSL {releaseInfo?.installScriptUrl ?? "..."} | bash -s --
+            update --dir {releaseInfo ? "<project-root>" : "..."}
+          </p>
+        </div>
+
+        <p className="mt-3 text-xs leading-relaxed text-ink-faint">
+          {releaseInfo?.note ?? t.settings.releaseCheckPending}
+        </p>
+      </Panel>
+
+      <Panel
+        title={t.settings.releaseSource}
+        eyebrow={releaseInfo?.repo ?? "github"}
+      >
+        <div className="space-y-3">
+          <InfoTile
+            label={t.settings.latestReleaseName}
+            value={releaseInfo?.latestName ?? "-"}
+          />
+          <InfoTile
+            label={t.settings.lastChecked}
+            value={
+              releaseInfo?.checkedAt
+                ? new Date(releaseInfo.checkedAt).toLocaleString()
+                : "-"
+            }
+          />
+          {releaseInfo?.latestUrl ? (
+            <a
+              href={releaseInfo.latestUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-2 rounded border border-line bg-bg-panel px-3 py-2 text-xs font-medium text-ink-dim transition-colors hover:border-accent hover:text-ink"
+            >
+              <ExternalLink aria-hidden className="h-4 w-4" />
+              {t.settings.openRelease}
+            </a>
+          ) : null}
+        </div>
+      </Panel>
+
+      {updateResult ? (
+        <Panel
+          title={t.settings.updateOutput}
+          eyebrow={`exit ${updateResult.exitCode ?? "-"}`}
+          className="xl:col-span-2"
+        >
+          <div className="grid gap-3 md:grid-cols-3">
+            <InfoTile
+              label={t.settings.updateStartedAt}
+              value={new Date(updateResult.startedAt).toLocaleString()}
+            />
+            <InfoTile
+              label={t.settings.updateFinishedAt}
+              value={new Date(updateResult.finishedAt).toLocaleString()}
+            />
+            <InfoTile
+              label={t.settings.updateExitCode}
+              value={String(updateResult.exitCode ?? "-")}
+            />
+          </div>
+          <pre className="mt-3 max-h-96 overflow-auto rounded border border-line bg-bg p-3 text-[11px] leading-relaxed text-ink-dim">
+            {updateResult.output || "(no output)"}
+          </pre>
+        </Panel>
+      ) : null}
+    </div>
+  );
+}
+
+function InfoTile({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded border border-line bg-bg px-3 py-2">
+      <div className="text-[11px] text-ink-faint">{label}</div>
+      <div className="mt-1 break-all font-mono text-xs text-ink">{value}</div>
     </div>
   );
 }
@@ -865,13 +1097,17 @@ function Panel({
   title,
   eyebrow,
   children,
+  className,
 }: {
   title: string;
   eyebrow: string;
   children: React.ReactNode;
+  className?: string;
 }) {
   return (
-    <section className="rounded-md border border-line bg-bg-subtle">
+    <section
+      className={cx("rounded-md border border-line bg-bg-subtle", className)}
+    >
       <header className="border-b border-line px-4 py-3">
         <div className="font-mono text-[10px] uppercase tracking-widest text-ink-faint">
           {eyebrow}

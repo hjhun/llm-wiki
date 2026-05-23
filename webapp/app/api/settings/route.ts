@@ -73,6 +73,7 @@ const Body = z.object({
     .object({
       language: z.enum(["ko", "en"]),
       theme: z.enum(["default", "light", "dark"]),
+      appSubtitle: z.string().max(80).optional(),
       defaultTab: z.enum(["chat", "explorer", "graph", "automations", "settings"]),
       agentEdgePanelEnabled: z.boolean(),
     })
@@ -193,7 +194,16 @@ export async function PUT(req: Request) {
             },
           }
         : undefined,
-      ui: parsed.data.ui,
+      ui: parsed.data.ui
+        ? {
+            ...current.ui,
+            ...parsed.data.ui,
+            appSubtitle:
+              parsed.data.ui.appSubtitle == null
+                ? current.ui.appSubtitle
+                : parsed.data.ui.appSubtitle.trim(),
+          }
+        : undefined,
       auth: parsed.data.auth
         ? {
             ...current.auth,
