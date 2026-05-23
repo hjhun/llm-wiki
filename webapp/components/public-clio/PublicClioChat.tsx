@@ -427,7 +427,7 @@ export default function PublicClioChat({
         ) : null}
 
         <div className="min-h-0 flex-1 overflow-auto">
-          <div className="mx-auto flex min-h-full max-w-4xl flex-col gap-3 px-4 py-5 sm:px-6">
+          <div className="flex min-h-full flex-col gap-3 px-6 py-5">
             {messages.length === 0 ? (
               <div className="flex min-h-40 flex-col justify-end border-b border-line/70 pb-6">
                 <div className="max-w-2xl text-2xl font-semibold leading-tight text-ink sm:text-3xl">
@@ -463,7 +463,7 @@ export default function PublicClioChat({
         </div>
 
         <div className="border-t border-line bg-bg-subtle px-4 py-3">
-          <div className="mx-auto flex max-w-4xl items-end gap-2">
+          <div className="flex items-end gap-2">
             <textarea
               ref={taRef}
               rows={1}
