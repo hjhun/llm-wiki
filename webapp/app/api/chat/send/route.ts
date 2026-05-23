@@ -318,7 +318,7 @@ export async function POST(req: Request) {
         // -------- Multi-agent wiki operations --------
         // /ingest, /ingest-loop, and /lint are dispatched through a small
         // coordinator that starts named workers up to the configured
-        // concurrency limit and then asks a manager agent to consolidate the
+        // concurrency limit and then asks a coordinator agent to consolidate the
         // result. /query intentionally stays on the single-CLI path below for
         // lower latency and more consistent evidence handling. The job
         // AbortSignal is shared by all live worker CLIs so a Stop request

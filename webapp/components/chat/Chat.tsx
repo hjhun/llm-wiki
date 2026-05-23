@@ -387,6 +387,7 @@ export default function Chat() {
               name: event.name,
               role: event.role,
               detail: event.detail,
+              ascii: event.ascii,
               status: event.status,
               cli: event.cli,
               round: event.round,

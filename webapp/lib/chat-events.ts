@@ -51,6 +51,7 @@ export type ChatSendEvent =
       name: string;
       role: string;
       detail: string;
+      ascii?: string;
       status: ChatAgentProgressStatus;
       cli: string;
       round: number;

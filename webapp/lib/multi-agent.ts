@@ -39,9 +39,11 @@ type Worker = {
   index: number;
   id: string;
   name: string;
+  glyph: string[];
   cli: CliName;
   role: string;
   detail: string;
+  asciiTask: string;
   accent: string;
 };
 
@@ -92,23 +94,23 @@ function clampAgentCount(cfg: Config): number {
   );
 }
 
-const CALLSIGNS = [
-  "Astra",
-  "Vega",
-  "Orion",
-  "Lyra",
-  "Helix",
-  "Nexus",
-  "Lumen",
-  "Kairo",
-  "Mira",
-  "Pulse",
-  "Arden",
-  "Onyx",
-  "Rune",
-  "Solace",
-  "Vector",
-  "Zephyr",
+const AGENT_PERSONAS = [
+  { name: "Nikola Tesla", glyph: ["  .-.", " ( T )", "  /|\\", "  / \\"] },
+  { name: "Isaac Newton", glyph: ["  ___", " / N \\", " \\___/", "  /|\\"] },
+  { name: "Albert Einstein", glyph: ["  ___", " ( E )", "  /|\\", "  / \\"] },
+  { name: "Ada Lovelace", glyph: ["  ___", " [ A ]", "  /|\\", "  / \\"] },
+  { name: "Marie Curie", glyph: ["  ___", " ( C )", "  /|\\", "  / \\"] },
+  { name: "Alan Turing", glyph: ["  ___", " [ T ]", "  /|\\", "  / \\"] },
+  { name: "Grace Hopper", glyph: ["  ___", " < H >", "  /|\\", "  / \\"] },
+  { name: "Galileo Galilei", glyph: ["  ___", " ( G )", "  /|\\", "  / \\"] },
+  { name: "Katherine Johnson", glyph: ["  ___", " [ K ]", "  /|\\", "  / \\"] },
+  { name: "Leonardo da Vinci", glyph: ["  ___", " < L >", "  /|\\", "  / \\"] },
+  { name: "Rosalind Franklin", glyph: ["  ___", " ( F )", "  /|\\", "  / \\"] },
+  { name: "Niels Bohr", glyph: ["  ___", " [ B ]", "  /|\\", "  / \\"] },
+  { name: "Richard Feynman", glyph: ["  ___", " ( F )", "  /|\\", "  / \\"] },
+  { name: "Hypatia", glyph: ["  ___", " [ H ]", "  /|\\", "  / \\"] },
+  { name: "Srinivasa Ramanujan", glyph: ["  ___", " ( R )", "  /|\\", "  / \\"] },
+  { name: "Emmy Noether", glyph: ["  ___", " < N >", "  /|\\", "  / \\"] },
 ];
 
 const AGENT_ACCENTS = [
@@ -125,6 +127,7 @@ const AGENT_ACCENTS = [
 type MissionProfile = {
   role: string;
   detail: string;
+  asciiTask: string;
 };
 
 function missionProfiles(kind: OrchestratedKind): MissionProfile[] {
@@ -133,18 +136,22 @@ function missionProfiles(kind: OrchestratedKind): MissionProfile[] {
       {
         role: "Evidence Scout",
         detail: "wiki pages에서 모순, 깨진 링크, stale claim 증거를 수집합니다.",
+        asciiTask: "scan evidence",
       },
       {
         role: "Structure Auditor",
         detail: "frontmatter, index, orphan page, source 연결 상태를 점검합니다.",
+        asciiTask: "audit structure",
       },
       {
         role: "Risk Reviewer",
         detail: "수동 검토가 필요한 개인정보, 불확실한 출처, 수정 위험을 분류합니다.",
+        asciiTask: "rank risks",
       },
       {
         role: "Repair Planner",
-        detail: "manager가 한 번에 고칠 수 있는 항목과 보류 항목을 나눕니다.",
+        detail: "Coordinator가 한 번에 고칠 수 있는 항목과 보류 항목을 나눕니다.",
+        asciiTask: "plan repairs",
       },
     ];
   }
@@ -152,18 +159,22 @@ function missionProfiles(kind: OrchestratedKind): MissionProfile[] {
     {
       role: "Source Scout",
       detail: "raw leaf와 sub-chunk를 읽고 source page coverage를 확보합니다.",
+      asciiTask: "raw -> sources",
     },
     {
       role: "Code Cartographer",
       detail: "Code Wiki 파일/디렉터리 페이지와 code_outputs 누락을 보강합니다.",
+      asciiTask: "map code wiki",
     },
     {
       role: "Link Steward",
       detail: "entity, concept, index, log 연결이 merge pass에 맞는지 확인합니다.",
+      asciiTask: "link wiki pages",
     },
     {
       role: "Merge Sentinel",
       detail: "진행 state와 누락 지표를 보고 다음 round 또는 완료 조건을 판정합니다.",
+      asciiTask: "guard merge",
     },
   ];
 }
@@ -172,6 +183,38 @@ function seedOffset(seed: string): number {
   let value = 0;
   for (const char of seed) value = (value * 31 + char.charCodeAt(0)) >>> 0;
   return value;
+}
+
+function displayManagerName(name?: string | null): string {
+  const trimmed = name?.trim();
+  if (!trimmed || trimmed.toLowerCase() === "manager") return "Coordinator";
+  return trimmed;
+}
+
+function fitAsciiCell(value: string, width: number): string {
+  const trimmed = value.replace(/\s+/g, " ").trim();
+  const text =
+    trimmed.length > width
+      ? `${trimmed.slice(0, Math.max(0, width - 1))}>`
+      : trimmed;
+  return text.padEnd(width, " ");
+}
+
+function buildAsciiBrief(worker: Worker): string {
+  const name = fitAsciiCell(worker.name, 22);
+  const role = fitAsciiCell(worker.role, 22);
+  const task = fitAsciiCell(worker.asciiTask, 22);
+  const handoff =
+    worker.id === "manager" ? "   -> Close run" : "   -> Coordinator";
+  return [
+    "+------------------------+",
+    `| ${name} |`,
+    `| ${role} |`,
+    `| ${task} |`,
+    "+------------------------+",
+    ...worker.glyph,
+    handoff,
+  ].join("\n");
 }
 
 function buildWorkers(
@@ -185,15 +228,17 @@ function buildWorkers(
   const offset = seedOffset(`${seed}:${options.kind}`);
   const profiles = missionProfiles(options.kind);
   return Array.from({ length: count }, (_, index) => {
-    const name = CALLSIGNS[(offset + index) % CALLSIGNS.length];
+    const persona = AGENT_PERSONAS[(offset + index) % AGENT_PERSONAS.length];
     const profile = profiles[index % profiles.length];
     return {
       index,
       id: `worker-${index + 1}`,
-      name,
+      name: persona.name,
+      glyph: persona.glyph,
       cli,
       role: profile.role,
       detail: profile.detail,
+      asciiTask: profile.asciiTask,
       accent: AGENT_ACCENTS[(offset + index) % AGENT_ACCENTS.length],
     };
   });
@@ -216,6 +261,7 @@ function emitAgentProgress(
     name: worker.name,
     role: worker.role,
     detail: input.detail ?? worker.detail,
+    ascii: buildAsciiBrief(worker),
     status: input.status,
     cli: worker.cli,
     round: input.round,
@@ -228,7 +274,7 @@ function operationPolicy(kind: OrchestratedKind): string {
   if (kind === "lint") {
     return [
       "You are a read-only lint worker. Inspect the wiki for the wiki-lint categories and return findings with file paths and evidence.",
-      "Do not write wiki/lint reports, do not edit wiki/index.md, and do not apply --fix. The manager will consolidate and perform the single write pass.",
+      "Do not write wiki/lint reports, do not edit wiki/index.md, and do not apply --fix. The Coordinator will consolidate and perform the single write pass.",
     ].join("\n");
   }
   if (kind === "ingest-loop") {
@@ -238,7 +284,7 @@ function operationPolicy(kind: OrchestratedKind): string {
       "Code Wiki is part of ingest, not a separate command. During enumeration, classify leaves as prose/code/mixed/ignore. For code or mixed leaves, run scripts/code-index.mjs when applicable, mirror the source tree under wiki/code/<project>/, create one index.md per represented source directory with directory in tags, create one wiki/code/<project>/<relative-file-path>.md page per code file with file in tags, and record those paths in code_outputs.",
       "If the progress state shows a done code/mixed leaf with missing valid wiki/code outputs, missing file-level Code Wiki pages, or missing directory index pages, treat that as the next unit of work and repair the Code Wiki outputs before reporting that ingest is complete.",
       "A symlink located under raw/ is a valid source entry: follow it read-only even if its real target is outside the repository, preserve logical raw/... paths in state/citations, and reject only broken links or loops.",
-      "If wiki/.progress/ingest/.lock is held by another live process, report that you are standing by and exit successfully. The manager will launch the next round.",
+      "If wiki/.progress/ingest/.lock is held by another live process, report that you are standing by and exit successfully. The Coordinator will launch the next round.",
       "Do NOT run wiki-graphify and do NOT write anything under wiki/graph/. The backend triggers graph updates as separate invocations only after all ingest work and merge passes are complete.",
     ].join("\n");
   }
@@ -265,12 +311,12 @@ function wrapWorkerPrompt(input: {
 }): string {
   const lines = [
     "You are operating as a named worker in an LLM Wiki multi-agent run.",
-    `Worker callsign: ${input.worker.name}`,
+    `Worker persona: ${input.worker.name}`,
     `Worker CLI: ${input.worker.cli}`,
     `Worker slot: ${input.worker.index + 1}/${input.totalWorkers}`,
     `Mission focus: ${input.worker.role} — ${input.worker.detail}`,
     `Round: ${input.round}`,
-    "A central manager agent will review all worker outputs, decide whether the operation is complete, and report to the user.",
+    "A central Supervisor / Coordinator agent will receive worker handoffs, decide whether the operation is complete, close the run, and report to the user.",
     "The host webapp already created the active chat session. Do not create, rename, delete, or allocate any sessions/*.md file; use the Active session log supplied in the manager task.",
     operationPolicy(input.kind),
   ];
@@ -284,7 +330,7 @@ function wrapWorkerPrompt(input: {
   if (input.codeWikiStatusRef) {
     lines.push(input.codeWikiStatusRef);
   }
-  lines.push("", "===== MANAGER-PROVIDED TASK =====", input.basePrompt);
+  lines.push("", "===== COORDINATOR-PROVIDED TASK =====", input.basePrompt);
   return lines.join("\n");
 }
 
@@ -357,7 +403,7 @@ async function runWorkerBatch(input: {
           round: input.round,
           detail:
             result.exitCode === 0
-              ? `${worker.role} 임무를 마치고 manager 검토 대기 중입니다.`
+              ? `${worker.role} mission complete. Handoff queued for Coordinator review.`
               : `${worker.role} 임무가 exitCode=${result.exitCode}로 종료되었습니다.`,
           durationMs: result.durationMs,
         });
@@ -392,12 +438,12 @@ function buildManagerPrompt(input: {
   );
   const writePolicy =
     input.kind === "lint"
-      ? "For /lint, use worker findings as inspection input, then perform exactly one manager write pass following wiki-lint, including report/log/index updates and --fix only if requested."
-      : "For ingest operations, do not re-run ingest work in this manager pass. Review progress and worker outputs, and do not call the run complete when done leaves still lack source_pages_written coverage or detected code/mixed leaves still lack valid wiki/code file pages recorded in code_outputs.";
+      ? "For /lint, use worker findings as inspection input, then perform exactly one Coordinator write pass following wiki-lint, including report/log/index updates and --fix only if requested."
+      : "For ingest operations, do not re-run ingest work in this Coordinator pass. Review progress and worker outputs, and do not call the run complete when done leaves still lack source_pages_written coverage or detected code/mixed leaves still lack valid wiki/code file pages recorded in code_outputs.";
 
   return [
-    "You are the central manager agent for an LLM Wiki multi-agent run.",
-    `Manager name: ${input.managerName}`,
+    "You are the central Supervisor / Coordinator agent for an LLM Wiki multi-agent run.",
+    `Coordinator name: ${input.managerName}`,
     `Active session log: sessions/${input.sessionPath}`,
     "Read CLAUDE.md/AGENTS.md and follow the operation-specific wiki skills. Project .agents/skills takes priority.",
     writePolicy,
@@ -410,7 +456,7 @@ function buildManagerPrompt(input: {
     "===== WORKER RESULTS =====",
     workerSections.join("\n\n---\n\n"),
     "",
-    "Respond now as the manager. Summarize what each named worker contributed, whether the operation is complete or needs another run, and the final user-facing result.",
+    "Respond now as the Coordinator. Summarize what each named worker handed off, whether the operation is complete or needs another run, and the final user-facing result.",
   ]
     .filter(Boolean)
     .join("\n");
@@ -429,14 +475,28 @@ async function runManager(input: {
   onChunk?: (text: string) => void;
   onAgentProgress?: (event: AgentProgressEvent) => void;
 }): Promise<RunResult> {
-  const managerName = input.cfg.agent.orchestration.managerName.trim() || "manager";
+  const managerName = displayManagerName(
+    input.cfg.agent.orchestration.managerName,
+  );
+  const managerWorker: Worker = {
+    index: input.runs.length,
+    id: "manager",
+    name: managerName,
+    glyph: ["  ___", " [ C ]", "  /|\\", "  / \\"],
+    cli: input.agent,
+    role: "Supervisor / Coordinator",
+    detail: "Worker handoffs를 받아 최종 판단을 내리고 실행을 종료합니다.",
+    asciiTask: "receive & close",
+    accent: "#64748b",
+  };
   input.onAgentProgress?.({
     type: "progress",
     phase: "agent",
     agentId: "manager",
     name: managerName,
-    role: "Mission Control",
-    detail: "worker 결과를 합쳐 최종 판단과 사용자 응답을 작성합니다.",
+    role: managerWorker.role,
+    detail: managerWorker.detail,
+    ascii: buildAsciiBrief(managerWorker),
     status: "consolidating",
     cli: input.agent,
     round: Math.max(...input.runs.map((run) => run.round), 1),
@@ -466,11 +526,12 @@ async function runManager(input: {
     phase: "agent",
     agentId: "manager",
     name: managerName,
-    role: "Mission Control",
+    role: managerWorker.role,
     detail:
       result.exitCode === 0
-        ? "최종 응답 정리를 완료했습니다."
-        : `manager pass가 exitCode=${result.exitCode}로 종료되었습니다.`,
+        ? "Coordinator received every handoff, delivered the final response, and closed the run."
+        : `Coordinator pass가 exitCode=${result.exitCode}로 종료되었습니다.`,
+    ascii: buildAsciiBrief(managerWorker),
     status: result.exitCode === 0 ? "done" : "error",
     cli: input.agent,
     round: Math.max(...input.runs.map((run) => run.round), 1),
@@ -539,7 +600,7 @@ async function runSingleRoundOperation(input: {
   if (signalAborted(input.signal)) {
     return cancellationResult({
       kind: input.kind,
-      assistantAgent: input.cfg.agent.orchestration.managerName || "manager",
+      assistantAgent: displayManagerName(input.cfg.agent.orchestration.managerName),
       durationMs: workerDuration,
       exitCode: runs.find((run) => run.result)?.result?.exitCode ?? -1,
     });
@@ -582,7 +643,7 @@ async function runSingleRoundOperation(input: {
   if (signalAborted(input.signal)) {
     return cancellationResult({
       kind: input.kind,
-      assistantAgent: input.cfg.agent.orchestration.managerName || "manager",
+      assistantAgent: displayManagerName(input.cfg.agent.orchestration.managerName),
       durationMs: workerDuration,
       exitCode: runs.find((run) => run.result)?.result?.exitCode ?? -1,
     });
@@ -609,7 +670,7 @@ async function runSingleRoundOperation(input: {
     finalReply,
     lastExitCode: manager.exitCode,
     totalDurationMs: workerDuration + manager.durationMs,
-    assistantAgent: input.cfg.agent.orchestration.managerName || "manager",
+    assistantAgent: displayManagerName(input.cfg.agent.orchestration.managerName),
   };
 }
 
@@ -754,9 +815,11 @@ async function runLoopOperation(input: {
           index: workers.length,
           id: "qmd",
           name: "qmd",
+          glyph: ["  ___", " [ Q ]", "  /|\\", "  / \\"],
           cli: orchestrationCli,
           role: "Search Index Refresh",
           detail: "qmd 검색 인덱스를 최신 wiki 상태로 갱신합니다.",
+          asciiTask: "refresh search",
           accent: "#0f766e",
         },
         round,
@@ -788,9 +851,11 @@ async function runLoopOperation(input: {
           index: workers.length,
           id: "auto-graph-final",
           name: "auto-graph-final",
+          glyph: ["  ___", " [ G ]", "  /|\\", "  / \\"],
           cli: orchestrationCli,
           role: "Graph Sync",
           detail: "최종 ingest 결과를 knowledge graph에 반영합니다.",
+          asciiTask: "sync graph",
           accent: "#7c3aed",
         },
         round,
@@ -815,7 +880,7 @@ async function runLoopOperation(input: {
     ).catch(() => undefined);
     return cancellationResult({
       kind: "ingest-loop",
-      assistantAgent: input.cfg.agent.orchestration.managerName || "manager",
+      assistantAgent: displayManagerName(input.cfg.agent.orchestration.managerName),
       durationMs: totalDurationMs,
       exitCode: lastExitCode,
     });
@@ -850,7 +915,7 @@ async function runLoopOperation(input: {
       `(manager returned empty output. exitCode=${manager.exitCode})`,
     lastExitCode: manager.exitCode,
     totalDurationMs,
-    assistantAgent: input.cfg.agent.orchestration.managerName || "manager",
+    assistantAgent: displayManagerName(input.cfg.agent.orchestration.managerName),
   };
 }
 

@@ -195,6 +195,14 @@ select {
   color: var(--agent-accent);
 }
 
+.chat-agent-ascii {
+  border-color: color-mix(in srgb, var(--agent-accent) 26%, rgb(var(--color-line)));
+  background:
+    linear-gradient(180deg, rgb(var(--color-bg)) 0%, rgb(var(--color-bg-subtle)) 100%);
+  color: rgb(var(--color-ink-dim));
+  white-space: pre;
+}
+
 .chat-agent-card[data-status="running"] .chat-agent-orb,
 .chat-agent-card[data-status="consolidating"] .chat-agent-orb {
   animation: chat-agent-pulse 1.2s ease-in-out infinite;
