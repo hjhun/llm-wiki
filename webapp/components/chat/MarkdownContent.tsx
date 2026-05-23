@@ -111,7 +111,7 @@ function parseCodeBlock(children: ReactNode): CodeBlock | null {
   const child = Children.toArray(children).find(isValidElement) as
     | ReactElement<CodeElementProps>
     | undefined;
-  if (!child || child.type !== "code") return null;
+  if (!child) return null;
 
   const className =
     typeof child.props.className === "string" ? child.props.className : "";
