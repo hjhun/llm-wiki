@@ -18,7 +18,12 @@ import {
   ClipboardCheck,
   Download,
   ExternalLink,
+  Maximize2,
+  RotateCcw,
   Workflow,
+  X,
+  ZoomIn,
+  ZoomOut,
 } from "lucide-react";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -181,9 +186,12 @@ function MermaidDiagram({
   const [copied, setCopied] = useState(false);
   const [downloadError, setDownloadError] = useState<string | null>(null);
   const [rendering, setRendering] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+  const [zoom, setZoom] = useState(1);
   const idRef = useRef<string | null>(null);
   const renderCountRef = useRef(0);
   const renderTokenRef = useRef(0);
+  const svgSize = useMemo(() => (svg ? getSvgSize(svg) : null), [svg]);
 
   if (!idRef.current) {
     idRef.current = `chat-mermaid-${Math.random().toString(36).slice(2)}`;
@@ -259,6 +267,32 @@ function MermaidDiagram({
     return () => window.clearTimeout(timer);
   }, [copied]);
 
+  useEffect(() => {
+    if (!expanded) return;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setExpanded(false);
+      }
+    }
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [expanded]);
+
+  useEffect(() => {
+    if (!svg) {
+      setExpanded(false);
+    }
+    setZoom(1);
+  }, [svg]);
+
   async function copySource() {
     await writeClipboard(source);
     setCopied(true);
@@ -282,6 +316,10 @@ function MermaidDiagram({
     } catch (err) {
       setDownloadError(err instanceof Error ? err.message : String(err));
     }
+  }
+
+  function adjustZoom(delta: number) {
+    setZoom((current) => Math.min(3, Math.max(0.5, current + delta)));
   }
 
   const toolbar = (
@@ -345,6 +383,16 @@ function MermaidDiagram({
             PNG
           </button>
         </div>
+        <button
+          type="button"
+          onClick={() => setExpanded(true)}
+          disabled={!svg || mode !== "diagram"}
+          title="Expand diagram"
+          className="inline-flex h-7 shrink-0 items-center gap-1.5 rounded border border-line bg-bg-subtle px-2 font-mono text-[10px] font-medium uppercase tracking-wide text-ink-dim transition hover:border-accent/60 hover:text-ink disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          <Maximize2 aria-hidden className="h-3.5 w-3.5" />
+          Expand
+        </button>
         <button
           type="button"
           onClick={() => void copySource()}
@@ -441,6 +489,83 @@ function MermaidDiagram({
         className="overflow-auto p-3 [&_svg]:h-auto [&_svg]:max-w-full"
         dangerouslySetInnerHTML={{ __html: svg }}
       />
+      {expanded && svg && svgSize ? (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Expanded Mermaid diagram"
+          className="fixed inset-0 z-50 flex flex-col bg-bg/96 text-ink backdrop-blur-xl"
+        >
+          <div className="flex min-h-12 shrink-0 items-center justify-between gap-3 border-b border-line bg-bg-panel/90 px-4 py-2 shadow-sm">
+            <div className="flex min-w-0 items-center gap-2">
+              <Workflow aria-hidden className="h-4 w-4 shrink-0 text-accent" />
+              <span className="truncate font-mono text-[11px] uppercase tracking-widest text-ink-faint">
+                mermaid diagram
+              </span>
+            </div>
+            <div className="flex shrink-0 items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => adjustZoom(-0.25)}
+                disabled={zoom <= 0.5}
+                title="Zoom out"
+                aria-label="Zoom out"
+                className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-line bg-bg-subtle text-ink-dim transition hover:border-accent/60 hover:text-ink disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <ZoomOut aria-hidden className="h-4 w-4" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setZoom(1)}
+                title="Reset zoom"
+                aria-label="Reset zoom"
+                className="inline-flex h-8 items-center gap-1.5 rounded-md border border-line bg-bg-subtle px-2 font-mono text-[10px] font-medium uppercase tracking-wide text-ink-dim transition hover:border-accent/60 hover:text-ink"
+              >
+                <RotateCcw aria-hidden className="h-3.5 w-3.5" />
+                {Math.round(zoom * 100)}%
+              </button>
+              <button
+                type="button"
+                onClick={() => adjustZoom(0.25)}
+                disabled={zoom >= 3}
+                title="Zoom in"
+                aria-label="Zoom in"
+                className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-line bg-bg-subtle text-ink-dim transition hover:border-accent/60 hover:text-ink disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <ZoomIn aria-hidden className="h-4 w-4" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setExpanded(false)}
+                title="Close"
+                aria-label="Close expanded diagram"
+                className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-line bg-bg-subtle text-ink-dim transition hover:border-danger/60 hover:text-danger"
+              >
+                <X aria-hidden className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+          <div className="min-h-0 flex-1 overflow-auto p-4">
+            <div
+              className="mx-auto origin-top-left rounded-md border border-line bg-bg-panel p-4 shadow-sm [&_svg]:h-auto [&_svg]:max-w-none"
+              style={{
+                width: Math.ceil(svgSize.width * zoom) + 32,
+                minHeight: Math.ceil(svgSize.height * zoom) + 32,
+              }}
+            >
+              <div
+                className="origin-top-left [&_svg]:block [&_svg]:h-auto [&_svg]:max-w-none"
+                style={{
+                  width: svgSize.width,
+                  height: svgSize.height,
+                  transform: `scale(${zoom})`,
+                }}
+                dangerouslySetInnerHTML={{ __html: svg }}
+              />
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
