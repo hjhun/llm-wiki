@@ -35,7 +35,8 @@
 | `raw/chat/` | User via Chat UI | Append-only capture | User-approved external captures from Chat, such as browser/search/tool findings. These are source candidates for later `/ingest`, not full conversation logs. |
 | `raw/.trash/` | LLM via `/preprocess`, UI soft-delete | Append-only quarantine | Files moved out of `raw/` by `/preprocess` or by the Explorer's delete button. Filename is `<ISO8601>_<basename>`; recoverable. |
 | `wiki/` | LLM | LLM may freely write/update | Main wiki body. All generated artifacts go here. |
-| `wiki/sources/` | LLM | LLM | One summary page per original source. |
+| `wiki/sources/` | LLM | LLM | Provenance ledger: one dated summary page per original source plus a generated `wiki/sources/index.md` catalog for topic/entity/source-kind lookup. |
+| `wiki/maps/` | LLM | LLM | Optional associative trails and topic maps that connect sources, entities, concepts, answers, and open questions. |
 | `wiki/code/` | LLM | LLM | Code Wiki pages derived from code in `raw/`: project overviews, mirrored source-directory pages with per-directory `index.md`, file pages, APIs, architecture, testing, and debug notes. |
 | `wiki/answers/` | LLM | LLM | Pages fed back from query answers. |
 | `wiki/lint/` | LLM | LLM | Lint reports (`<date>.md`). |
@@ -59,6 +60,8 @@ Each operation maps to one or more project skills. If these rules conflict with 
 - Trigger: manual (`/ingest`, `/ingest-loop`) or **automatic** via the Settings → Auto Ingest panel (`raw/` file events or interval schedule). Manual Chat/API runs may wrap the same per-unit `wiki-ingest` contract in the multi-agent coordinator; targeted `/ingest-loop <raw-path>` must keep that raw scope across all rounds. The auto trigger is driven by the manager in `webapp/lib/auto-ingest/`, which calls `runIngestLoop()` directly; by default (`skipIfBusy: true`) it is skipped while `.lock` exists.
 - Outputs:
   - `wiki/sources/<YYYY>/<YYYY-MM>/<slug>.md` summary page with YAML frontmatter
+  - Updated `wiki/sources/index.md` source catalog when source pages are added or changed
+  - Optional `wiki/maps/<topic>.md` associative trail pages when a source belongs to an ongoing research thread
   - New or updated related entity/concept pages
   - Updated `wiki/index.md` and `wiki/log.md`
   - `wiki-graphify update` when needed
@@ -115,17 +118,19 @@ Each operation maps to one or more project skills. If these rules conflict with 
 - **Entity**: individual people, places, organizations, products, works, and similar targets.
 - **Concept**: topics, theories, patterns.
 - **Source**: one page per original source (`wiki/sources/<YYYY>/<YYYY-MM>/`).
+- **Map**: associative trail or topic map under `wiki/maps/` that links sources, entities, concepts, answers, and open questions.
 - **Answer**: fed-back query answer (`wiki/answers/`).
 - **Comparison/Analysis**: synthesis page comparing or analyzing two or more targets.
 - **Code**: project, module, API, CLI, route, schema, test, or runbook pages under `wiki/code/`.
 - **Architecture**: system/component structure and decisions, especially Code Wiki architecture pages.
+- **Index/Log**: special navigation and operation-history pages such as `wiki/index.md`, `wiki/sources/index.md`, `wiki/maps/index.md`, and `wiki/log.md`.
 
 ### 4.2 Required YAML Frontmatter
 
 ```yaml
 ---
 title: <page title>
-type: entity | concept | source | answer | comparison | analysis | code | architecture
+type: entity | concept | source | answer | comparison | analysis | code | architecture | map | index | log
 tags: [tag1, tag2]
 sources: [wiki/sources/<YYYY>/<YYYY-MM>/<slug>.md, ...]
 updated: YYYY-MM-DD
@@ -133,12 +138,43 @@ source_date: YYYY-MM-DD | YYYY-MM        # optional, source pages only
 ---
 ```
 
-Source pages should be stored under `wiki/sources/<YYYY>/<YYYY-MM>/`. Choose
-the date by this priority: explicit `source_date` or source text date -> raw
+Source pages should be stored under `wiki/sources/<YYYY>/<YYYY-MM>/` as a
+stable provenance ledger, not as the primary knowledge taxonomy. Choose the
+date by this priority: explicit `source_date` or source text date -> raw
 path/metadata date -> raw file mtime -> ingest date. If only the year is known,
 use that year with the fallback month from the next available source.
 
-### 4.3 Writing Rules
+For source pages, add source-specific frontmatter when knowable:
+
+```yaml
+source_kind: article | paper | book | note | web_capture | chat_capture | code | log | dataset | image | other
+raw_path: raw/<logical-source-path>
+language: ko | en | other
+topics: [topic-a, topic-b]
+entities: [Entity Name]
+concepts: [Concept Name]
+projects: [project-name]        # code sources only, when relevant
+claims: [short claim summary]   # important factual assertions, not every detail
+status: summarized | partial | needs_review
+```
+
+Use these facets for retrieval and cataloging. Do not move source pages into
+topic folders just because a source is about a topic; one source can belong to
+many topics, entities, concepts, and maps.
+
+### 4.3 Source Catalog and Maps
+
+- `wiki/sources/index.md` is a generated catalog over source page metadata.
+  Keep it compact and organized by useful facets such as topic, entity,
+  source_kind, source_date, raw_path prefix, status, and recently updated
+  sources. It complements `wiki/index.md`; it does not replace it.
+- `wiki/maps/<topic>.md` pages are optional associative trails for ongoing
+  research threads. Use them when a set of sources, concepts, entities, answers,
+  contradictions, and open questions should be navigable together.
+- Source pages are evidence cards. Entity, concept, comparison, answer, code,
+  and map pages are the synthesized knowledge layer.
+
+### 4.4 Writing Rules
 - Use **wikilinks** `[[Page Name]]` or relative Markdown links for all internal links.
 - Use external URLs only when the user provided them or they exist in `raw/`. **Do not guess URLs.**
 - When citing, put the source on the same line or in a footnote. Example: `... according to the source ([[wiki/sources/2026/2026-05/foo]]).`
@@ -152,7 +188,7 @@ use that year with the fallback month from the next available source.
 
 ### 5.1 `wiki/index.md`
 - Category catalog. Each item is one line: `- [[Page Name]] — One-line summary`.
-- Categories: `Entities`, `Concepts`, `Code`, `Sources`, `Answers`, `Comparisons`, `Lint Reports`, `Graph`.
+- Categories: `Entities`, `Concepts`, `Code`, `Sources`, `Maps`, `Answers`, `Comparisons`, `Lint Reports`, `Graph`.
 - At the final step of each ingest/query/lint merge pass, sort and deduplicate the index in bulk.
 
 ### 5.2 `wiki/log.md`
@@ -192,7 +228,7 @@ This applies to ingest, Code Wiki ingest, preprocess planning, and graphify. Nev
    - ingest: immediately save chunk-level summaries/entity pages.
    - graphify: save partial graphs to `wiki/graph/parts/<path-hash>.json`.
 4. **Merge pass as a separate step**:
-   - ingest: update parent-level pages -> root synthesis page -> reorder `index.md`.
+   - ingest: update parent-level pages -> root synthesis page -> refresh `wiki/sources/index.md` and useful `wiki/maps/` pages -> reorder `index.md`.
    - graphify: merge all partial graphs with node normalization and community recomputation, then finalize `wiki/graph/graph.json`.
 5. **Persist state**:
    - ingest: record chunk checklists in `sessions/<date>/<time>_ingest.md`.
@@ -265,7 +301,7 @@ Mental checklist for one ingest run:
 - [ ] Is the chunk within the file-count and byte limits?
 - [ ] Did you write `wiki/sources/<YYYY>/<YYYY-MM>/<slug>.md` for each chunk?
 - [ ] Did you append one line to `wiki/log.md` for each chunk?
-- [ ] Did you organize parent pages and `index.md` in the merge pass?
+- [ ] Did you organize parent pages, `wiki/sources/index.md`, useful `wiki/maps/` pages, and `wiki/index.md` in the merge pass?
 - [ ] Optional: did you call `wiki-graphify update`?
 - [ ] Did you record progress in the session Markdown?
 
@@ -279,4 +315,5 @@ Mental checklist for one Code Wiki run:
 - [ ] Did every code file get its own mirrored `wiki/code/<project>/<relative-file-path>.md` page, rather than being represented only inside a parent `index.md`?
 - [ ] Did you connect directories/modules/APIs/tests to existing concepts with wikilinks?
 - [ ] Did you update `wiki/index.md` under the `Code` category?
+- [ ] Did you update `wiki/sources/index.md` and any relevant `wiki/maps/` trails?
 - [ ] Did you append a `wiki/log.md` entry without editing old entries?

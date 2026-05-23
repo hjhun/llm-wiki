@@ -19,11 +19,13 @@ Code Wiki output, graph updates, and Korean wiki writing.
 
 Read material newly dropped by the user into `raw/` and perform the following.
 
-1. Write one `wiki/sources/<YYYY>/<YYYY-MM>/<slug>.md` summary page per original source.
+1. Write one `wiki/sources/<YYYY>/<YYYY-MM>/<slug>.md` summary page per original source, treating `wiki/sources/` as a dated provenance ledger rather than the main topic taxonomy.
 2. Create or update related entity/concept pages, reusing existing pages instead of creating near-duplicates (see Step 2.3).
 3. If a leaf is code-heavy, create or update Code Wiki pages under `wiki/code/<project>/` by mirroring the source directory structure, writing one file-level page per code file beside a per-directory `index.md`, plus architecture/testing/debug notes, code locations, and Mermaid diagrams.
-4. Keep `wiki/index.md` and `wiki/log.md` consistent.
-5. Graph synchronization is **not** performed by this skill. The webapp triggers `wiki-graphify` as separate invocations after ingest progress is detected. Ingest workers must not run graphify or write anything under `wiki/graph/`.
+4. Refresh `wiki/sources/index.md` as a compact source catalog organized by metadata facets such as topic, entity, source kind, source date, raw path prefix, status, and recent updates.
+5. Create or update `wiki/maps/<topic>.md` associative trail pages when a source belongs to an ongoing research thread that benefits from a navigable source/concept/entity map.
+6. Keep `wiki/index.md` and `wiki/log.md` consistent.
+7. Graph synchronization is **not** performed by this skill. The webapp triggers `wiki-graphify` as separate invocations after ingest progress is detected. Ingest workers must not run graphify or write anything under `wiki/graph/`.
 
 This skill **always follows the leaf-first + merge pass** principle, and is built
 to survive interruption (OOM, SIGTERM, manual cancel) because progress is
@@ -64,6 +66,8 @@ externalized to `wiki/.progress/ingest/`.
 - For code-heavy inputs, graph-ready Code Wiki pages under `wiki/code/<project>/`, including one mirrored file page for each code file and an `index.md` summary in every mirrored source directory.
 - Session Markdown with chat log: `sessions/<date>/<time>_ingest.md` (conversation only).
 - Externalized progress: `wiki/.progress/ingest/.state.json` + `wiki/.progress/ingest/leaves/<hash>.json` + human-readable `wiki/.progress/ingest/DASHBOARD.md`.
+- `wiki/sources/index.md` refreshed during the merge pass when source pages changed.
+- Optional `wiki/maps/<topic>.md` associative trails for active research threads.
 - Ingest entries appended to `wiki/log.md`.
 - Optional updates under `wiki/graph/`.
 
@@ -197,8 +201,9 @@ For exactly **one** sub-chunk whose `status === "pending"`:
      cite/store only the logical `raw/...` path.
    - If the file is larger than `chunking.maxBytesPerFile`, read only `head (N/2)` + a marker + `tail (N/2)` bytes. Record `truncated: true` in the per-leaf JSON.
    - Write `wiki/sources/<YYYY>/<YYYY-MM>/<slug>.md` for that file with the required frontmatter (`title`, `type: source`, `tags`, `sources: [raw/...]`, `updated`) and optional source-page field `source_date: YYYY-MM-DD | YYYY-MM`.
+   - Add source facets when knowable: `source_kind`, `raw_path`, `language`, `topics`, `entities`, `concepts`, `projects`, `claims`, and `status`. These fields drive retrieval and cataloging; do not encode topic taxonomy in the source file path.
    - Choose `<YYYY>/<YYYY-MM>` by this priority: explicit `source_date` or source text date -> raw path/metadata date -> raw file mtime -> ingest date. If only the year is known, use that year with the fallback month from the next available source.
-   - Body: one-line gist → key points (max 12 bullets) → quotes → wiki connections (`[[Entity]]`, `[[Concept]]`) → source path/URL.
+   - Body: one-line gist → key points (max 12 bullets) → quotes → wiki connections (`[[Entity]]`, `[[Concept]]`, and useful `[[wiki/maps/<topic>]]` trails) → source path/URL.
    - For code files, include these additional sections in the source summary:
      `## Code inventory`, `## Symbols`, `## Dependencies`, `## Locations`.
      Locations use `raw/...:L<line>` or `raw/...:L<start>-L<end>` when line
@@ -284,6 +289,8 @@ Only run when **every** leaf in the input scope has `status === "done"` and `mer
 2. If `merge_pass.pending_parents` is empty there is nothing to merge: set `merge_pass.status = "done"`, regenerate `DASHBOARD.md`, release the lock, and return. Otherwise pick **one** parent directory from `merge_pass.pending_parents`. For that parent:
    - Combine child-leaf summaries into or onto `wiki/concepts/<topic>.md` (or wherever appropriate).
    - If useful, write/append the root synthesis note at `wiki/synthesis/<batch>.md`.
+   - Refresh `wiki/sources/index.md` from source page frontmatter. Keep it compact and facet-oriented: recent sources, topic, entity, source_kind, source_date, raw_path prefix, status, and needs-review items.
+   - Create or update `wiki/maps/<topic>.md` only when there is a durable research thread or associative trail worth navigating. Map pages should link to source summaries, entity/concept pages, answers, contradictions, and open questions; they should not duplicate every source summary.
    - If the parent contains code leaves, consolidate `wiki/code/<project>/`
      pages, refresh parent directory `index.md` summaries so they accurately
      roll up child directories, and refresh `diagrams.md` so dependencies
@@ -294,7 +301,7 @@ Only run when **every** leaf in the input scope has `status === "done"` and `mer
    - Integrated pages: `wiki/concepts/foo.md`
    ```
 4. Remove that parent from `merge_pass.pending_parents`. If empty, set `merge_pass.status = "done"` and reorder `wiki/index.md` in bulk now:
-   - Category order: Entities → Concepts → Code → Sources → Answers → Comparisons → Lint Reports → Graph.
+   - Category order: Entities → Concepts → Code → Sources → Maps → Answers → Comparisons → Lint Reports → Graph.
    - Sort alphabetically within each category.
    - Item format: `- [[Page Name]] — One-line summary`.
 5. Regenerate `DASHBOARD.md`. Release lock. Return.

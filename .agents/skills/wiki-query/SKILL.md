@@ -21,10 +21,11 @@ Answer the user's question in this order.
 1. Narrow candidate pages from `wiki/index.md`, including the `Code` category
    when the question mentions code, functions, files, APIs, dependencies,
    tests, errors, modules, or implementation details.
-2. Optionally use helper tools to improve candidate selection: `wiki-search-qmd` for search/reranking, and `wiki-graphify` for graph relationships, communities, and 1-hop neighbor clues.
-3. Read candidate pages and write an answer **with citations**.
-4. If the wiki is insufficient, use `raw/` original sources as supplementary context. **Only cite external URLs that the user provided or that already exist in the wiki/source material**; do not guess.
-5. With user consent, feed the answer back into `wiki/answers/<slug>.md`.
+2. When the question asks about sources, evidence, provenance, a topic's reading trail, or "where did this come from?", read `wiki/sources/index.md` and relevant `wiki/maps/**` pages as additional candidate catalogs.
+3. Optionally use helper tools to improve candidate selection: `wiki-search-qmd` for search/reranking, and `wiki-graphify` for graph relationships, communities, and 1-hop neighbor clues.
+4. Read candidate pages and write an answer **with citations**.
+5. If the wiki is insufficient, use `raw/` original sources as supplementary context. **Only cite external URLs that the user provided or that already exist in the wiki/source material**; do not guess.
+6. With user consent, feed the answer back into `wiki/answers/<slug>.md`.
 
 ## Triggers
 
@@ -64,9 +65,11 @@ Answer the user's question in this order.
    - Treat words like "함수", "클래스", "라인", "파일", "API", "route",
      "dependency", "의존성", "구조", "call flow", "stack trace", and
      "어디" as code-candidate signals.
-3. If `wiki-search-qmd` is active, delegate the same question and receive additional candidates via BM25 + vector + reranking.
-4. If graph context is active, inspect `wiki/graph/graph.json` and `wiki/graph/GRAPH_REPORT.md` or ask `wiki-graphify query "<question>"` for related nodes, 1-hop neighbors, communities, and cited pages. Treat these as candidate/context clues, not final evidence.
-5. If there are too many candidates (>20), filter by the one-line summaries in the index, qmd scores when present, and graph relationship clues when present; keep the top 10.
+3. If the question needs evidence discovery, source audit, provenance, reading history, or broad topic exploration, read `wiki/sources/index.md` when it exists and use its facets (`topics`, `entities`, `source_kind`, `source_date`, `raw_path`, `status`) to pick source-summary candidates.
+4. If relevant `wiki/maps/**` pages exist, read the best matching maps as associative trails. Treat maps as navigation and synthesis, then follow their links to source/entity/concept pages before making factual claims.
+5. If `wiki-search-qmd` is active, delegate the same question and receive additional candidates via BM25 + vector + reranking.
+6. If graph context is active, inspect `wiki/graph/graph.json` and `wiki/graph/GRAPH_REPORT.md` or ask `wiki-graphify query "<question>"` for related nodes, 1-hop neighbors, communities, and cited pages. Treat these as candidate/context clues, not final evidence.
+7. If there are too many candidates (>20), filter by the one-line summaries in the index, source catalog facets, qmd scores when present, and graph relationship clues when present; keep the top 10.
 
 ### Step 2 - Read Pages
 1. Read candidate pages. Use frontmatter `sources:` to drill down one level into original summary pages.

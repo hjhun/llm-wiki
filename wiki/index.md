@@ -1,7 +1,7 @@
 ---
 title: LLM Wiki — Index
 type: index
-updated: 2026-05-16
+updated: 2026-05-24
 ---
 
 # Index
@@ -19,7 +19,11 @@ Rule: each item is one line in the format `- [[Page Name]] — One-line summary`
 
 ## Sources
 
-(empty for now)
+- [[wiki/sources/index]] — Source catalog organized by source metadata facets
+
+## Maps
+
+- [[wiki/maps/index]] — Topic-map catalog for durable associative trails
 
 ## Answers
 
