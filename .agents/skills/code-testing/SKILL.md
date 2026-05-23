@@ -6,6 +6,13 @@ allowed-cli: [codex, claude, gemini, cline]
 
 # code-testing
 
+## LLM Wiki Pattern Reference
+
+This skill extends [`llm-wiki.md`](../../../llm-wiki.md)'s compounding wiki
+pattern to test knowledge: summarize test evidence once, keep it current under
+`wiki/code/`, and cite source summaries or logical `raw/...` paths so future
+agents can reason from the maintained wiki first.
+
 ## Purpose
 
 Document the test posture of a codebase so future agents and humans know what
@@ -15,7 +22,8 @@ is covered, what is risky, and how to verify changes.
 
 - Test files and test directories under logical `raw/...` paths.
 - CI config, package scripts, Makefiles, task runners, coverage reports.
-- Code pages and source summaries from `wiki-ingest`.
+- Mirrored Code Wiki directory/file pages and source summaries from
+  `wiki-ingest`.
 
 ## Workflow
 

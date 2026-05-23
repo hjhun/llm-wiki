@@ -6,6 +6,13 @@ allowed-cli: [codex, claude, gemini, cline]
 
 # code-architecture
 
+## LLM Wiki Pattern Reference
+
+Code architecture pages extend the persistent-wiki idea in
+[`llm-wiki.md`](../../../llm-wiki.md) to software structure. They should compile
+evidence from source summaries and raw code into maintained `wiki/code/`
+architecture knowledge, with uncertainties marked instead of inferred.
+
 ## Purpose
 
 Explain how a codebase is structured and why it behaves that way. This is not a
@@ -15,7 +22,8 @@ pages, or source summaries.
 ## Inputs
 
 - `wiki/code/<project>/overview.md`
-- `wiki/code/<project>/modules/*.md`
+- Mirrored directory indexes such as `wiki/code/<project>/src/index.md`
+- Mirrored file pages such as `wiki/code/<project>/src/server.ts.md`
 - `wiki/sources/...` pages
 - Read-only `raw/...` files only when needed
 

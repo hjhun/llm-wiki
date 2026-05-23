@@ -1,10 +1,19 @@
 ---
 name: wiki-ingest
-description: Read new material in raw/ as leaf-directory chunks and incrementally build wiki/. Automatically detects prose, code repositories, logs, and test output; code-heavy leaves produce Code Wiki pages under wiki/code/ with module/API docs, source locations, and Mermaid diagrams. Responds to /ingest, /ingest-loop, "summarize this material", and chat + -> ingest triggers.
+description: Read new material in raw/ as leaf-directory chunks and incrementally build wiki/. Automatically detects prose, code repositories, logs, and test output; code-heavy leaves produce directory-mirrored Code Wiki pages under wiki/code/ with per-directory index.md summaries, source locations, and Mermaid diagrams. Responds to /ingest, /ingest-loop, "summarize this material", and chat + -> ingest triggers.
 allowed-cli: [codex, claude, gemini, cline]
 ---
 
 # wiki-ingest
+
+## LLM Wiki Pattern Reference
+
+This skill instantiates the repository-root [`llm-wiki.md`](../../../llm-wiki.md)
+pattern: the user curates immutable `raw/` sources, and the LLM incrementally
+builds a persistent, interlinked Markdown wiki instead of re-deriving knowledge
+from raw documents at query time. The concrete CLIO rules in `AGENTS.md`,
+`CLAUDE.md`, and this skill specialize that pattern for resumable chunking,
+Code Wiki output, graph updates, and Korean wiki writing.
 
 ## Purpose
 
@@ -12,7 +21,7 @@ Read material newly dropped by the user into `raw/` and perform the following.
 
 1. Write one `wiki/sources/<YYYY>/<YYYY-MM>/<slug>.md` summary page per original source.
 2. Create or update related entity/concept pages, reusing existing pages instead of creating near-duplicates (see Step 2.3).
-3. If a leaf is code-heavy, create or update Code Wiki pages under `wiki/code/<project>/` with one file-level page per code file plus module/API documentation, architecture/testing/debug notes, code locations, and Mermaid diagrams.
+3. If a leaf is code-heavy, create or update Code Wiki pages under `wiki/code/<project>/` by mirroring the source directory structure, writing one file-level page per code file beside a per-directory `index.md`, plus architecture/testing/debug notes, code locations, and Mermaid diagrams.
 4. Keep `wiki/index.md` and `wiki/log.md` consistent.
 5. Graph synchronization is **not** performed by this skill. The webapp triggers `wiki-graphify` as separate invocations after ingest progress is detected. Ingest workers must not run graphify or write anything under `wiki/graph/`.
 
@@ -52,7 +61,7 @@ externalized to `wiki/.progress/ingest/`.
 ## Output
 
 - List of new/updated `wiki/**` Markdown files.
-- For code-heavy inputs, graph-ready Code Wiki pages under `wiki/code/<project>/`, including `wiki/code/<project>/files/*.md` pages for each code file.
+- For code-heavy inputs, graph-ready Code Wiki pages under `wiki/code/<project>/`, including one mirrored file page for each code file and an `index.md` summary in every mirrored source directory.
 - Session Markdown with chat log: `sessions/<date>/<time>_ingest.md` (conversation only).
 - Externalized progress: `wiki/.progress/ingest/.state.json` + `wiki/.progress/ingest/leaves/<hash>.json` + human-readable `wiki/.progress/ingest/DASHBOARD.md`.
 - Ingest entries appended to `wiki/log.md`.
@@ -198,17 +207,29 @@ For exactly **one** sub-chunk whose `status === "pending"`:
    - **Discard the file body from working memory** before opening the next file. Do not keep two file bodies in context simultaneously.
 3. If the sub-chunk is code-heavy, update Code Wiki pages **from source summaries and symbol/dependency takeaways**:
    - `wiki/code/<project>/overview.md` — project purpose, entry points,
-     directories, build/test commands, and links to modules/APIs.
-   - `wiki/code/<project>/files/<file-slug>.md` — one page per code file in
-     the sub-chunk. Include the file role, key symbols, dependencies,
-     important line locations, tests touching it, risks, and links to its
-     `wiki/sources/...` source summary. The page must have required
-     frontmatter with `type: code` and must mention the logical `raw/...` path
-     so the backend can verify file-level coverage.
-   - `wiki/code/<project>/modules/<module>.md` — module role, key files,
-     public symbols, dependencies, tests, risks, and code locations.
-   - `wiki/code/<project>/apis/<api>.md` — public routes, CLIs, functions,
-     schemas, inputs/outputs, error behavior, implementation locations.
+     directories, build/test commands, and links to the mirrored directory
+     indexes plus architecture/testing/API pages.
+   - `wiki/code/<project>/<relative-dir>/index.md` — one page for every
+     source directory represented by the sub-chunk, including the project root.
+     Summarize that directory's purpose, direct files, child
+     directories, important symbols, dependencies, tests, and risks. Parent
+     directory indexes must summarize and link to their child directory
+     indexes, so a reader can navigate top-down through the codebase. The
+     page must have `type: code` frontmatter and include `directory` in
+     `tags` so the backend can verify directory-index coverage.
+   - `wiki/code/<project>/<relative-file-path>.md` — one page per code file in
+     the sub-chunk, preserving the raw project-relative path and appending
+     `.md` to the source filename. Example: `raw/repos/foo/src/server.ts`
+     becomes `wiki/code/foo/src/server.ts.md`; `raw/repos/foo/src/index.md`
+     becomes `wiki/code/foo/src/index.md.md`. Include the file role, key
+     symbols, dependencies, important line locations, tests touching it, risks,
+     and links to its `wiki/sources/...` source summary. The page must have
+     required frontmatter with `type: code`, include `file` in `tags`, and
+     mention the logical `raw/...` path so the backend can verify file-level
+     coverage.
+   - API/CLI/configuration/runbook pages stay near the directory that owns the
+     implementation when that is clear, or at `wiki/code/<project>/apis/` for
+     cross-cutting public surfaces.
    - `wiki/code/<project>/architecture.md` — system boundary, components,
      data/control flow, external dependencies, design decisions supported by
      evidence.
@@ -224,8 +245,8 @@ For exactly **one** sub-chunk whose `status === "pending"`:
      instead of inventing them.
    Record every file-level page and any other Code Wiki pages written in the
    sub-chunk's `code_outputs`; do not mark a code/mixed leaf complete until
-   each code file in that leaf has a valid `wiki/code/<project>/files/*.md`
-   page.
+   each code file in that leaf has a valid mirrored file page under
+   `wiki/code/<project>/...` and every represented directory has an `index.md`.
    Use the internal helper skills `code-documentation`, `code-architecture`,
    `code-testing`, and `code-debug` as needed. They are implementation helpers,
    not separate user-facing commands.
@@ -259,7 +280,9 @@ Only run when **every** leaf in the input scope has `status === "done"` and `mer
    - Combine child-leaf summaries into or onto `wiki/concepts/<topic>.md` (or wherever appropriate).
    - If useful, write/append the root synthesis note at `wiki/synthesis/<batch>.md`.
    - If the parent contains code leaves, consolidate `wiki/code/<project>/`
-     pages and refresh `diagrams.md` so dependencies across leaves are shown.
+     pages, refresh parent directory `index.md` summaries so they accurately
+     roll up child directories, and refresh `diagrams.md` so dependencies
+     across leaves are shown.
 3. Append a merge entry to `wiki/log.md`:
    ```markdown
    ## [YYYY-MM-DD HH:MM] ingest | merge pass | <parent>
@@ -299,6 +322,22 @@ stale graph artifacts.
 
 Code Wiki pages use the same frontmatter rules as normal wiki pages, with
 `type: code` or `type: architecture`.
+
+### Directory-Mirrored Layout
+
+Mirror the source tree under `wiki/code/<project>/` instead of flattening code
+files into a global `files/` directory. Keep these conventions:
+
+- `wiki/code/<project>/overview.md` is the project-level orientation page.
+- `wiki/code/<project>/<relative-dir>/index.md` summarizes one source
+  directory. It links to direct file pages and child directory `index.md` pages.
+- Parent `index.md` pages summarize the purpose and notable contents of child
+  directories, not just list them.
+- `wiki/code/<project>/<relative-file-path>.md` documents one source file by
+  appending `.md` to the raw filename. This avoids collisions with directory
+  `index.md` pages and preserves recognizability.
+- Legacy pages under `wiki/code/<project>/files/` may be kept and updated when
+  they already exist, but new Code Wiki output should use the mirrored layout.
 
 Every Code Wiki page should include code location links when known:
 

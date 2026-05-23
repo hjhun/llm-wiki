@@ -6,6 +6,14 @@ allowed-cli: [codex, claude, gemini, cline]
 
 # wiki-search-qmd
 
+## LLM Wiki Pattern Reference
+
+This skill implements the optional search-tool idea from
+[`llm-wiki.md`](../../../llm-wiki.md): at small scale `wiki/index.md` may be
+enough, while larger wikis can use qmd as an auxiliary candidate finder. qmd
+never replaces the persistent wiki or citation workflow; `wiki-query` still
+reads candidate pages before answering.
+
 ## Purpose
 
 When `wiki-query` is narrowing candidate pages before answering a question, this skill assists search if qmd is installed.

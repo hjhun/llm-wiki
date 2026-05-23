@@ -6,6 +6,14 @@ allowed-cli: [codex, claude, gemini, cline]
 
 # wiki-query
 
+## LLM Wiki Pattern Reference
+
+This skill follows the repository-root [`llm-wiki.md`](../../../llm-wiki.md)
+query pattern: answer from the persistent wiki first, use `wiki/index.md` as the
+primary catalog, consult raw sources only when the wiki is insufficient, and
+offer to feed valuable answers back into `wiki/answers/` so exploration
+compounds into the knowledge base.
+
 ## Purpose
 
 Answer the user's question in this order.

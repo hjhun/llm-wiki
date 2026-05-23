@@ -6,6 +6,13 @@ allowed-cli: [codex, claude, gemini, cline]
 
 # wiki-marp
 
+## LLM Wiki Pattern Reference
+
+This skill extends the answer-feedback idea in
+[`llm-wiki.md`](../../../llm-wiki.md): useful query results can become durable
+wiki artifacts, including slide decks, as long as they remain cited back to
+wiki/source evidence and are indexed/logged like other generated pages.
+
 ## Purpose
 
 Respond to `wiki-query --format=marp` or a user request such as "turn this answer into slides" by writing Marp Markdown slides backed by wiki evidence.

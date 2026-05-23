@@ -23,7 +23,7 @@
 - The user gathers source material in `raw/`. They decide what to read and what to ask. Source material may be prose, PDFs, web captures, logs, or software codebases.
 - You incrementally **build and maintain** the Markdown wiki under `wiki/`.
   - Create summary pages, update entity/concept pages, fill indexes and logs, and flag contradictions.
-  - For code inputs, create Code Wiki pages for projects, modules, APIs, architecture, testing, and debug knowledge under `wiki/code/`.
+  - For code inputs, create Code Wiki pages for projects, mirrored source directories, files, APIs, architecture, testing, and debug knowledge under `wiki/code/`.
   - You handle the maintenance work: summarizing, cross-referencing, organizing, and preserving consistency.
 - The wiki should be searchable and understandable as a coherent work that another person can read.
 
@@ -36,7 +36,7 @@
 | `raw/.trash/` | LLM via `/preprocess`, UI soft-delete | Append-only quarantine | Files moved out of `raw/` by `/preprocess` or by the Explorer's delete button. Filename is `<ISO8601>_<basename>`; recoverable. |
 | `wiki/` | LLM | LLM may freely write/update | Main wiki body. All generated artifacts go here. |
 | `wiki/sources/` | LLM | LLM | One summary page per original source. |
-| `wiki/code/` | LLM | LLM | Code Wiki pages: project overviews, modules, APIs, architecture, testing, and debug notes derived from code in `raw/`. |
+| `wiki/code/` | LLM | LLM | Code Wiki pages derived from code in `raw/`: project overviews, mirrored source-directory pages with per-directory `index.md`, file pages, APIs, architecture, testing, and debug notes. |
 | `wiki/answers/` | LLM | LLM | Pages fed back from query answers. |
 | `wiki/lint/` | LLM | LLM | Lint reports (`<date>.md`). |
 | `wiki/graph/` | LLM (graphify) | LLM | Knowledge graph artifacts: `graph.json`, `GRAPH_REPORT.md`, `parts/`, `.state.json`. |
@@ -92,10 +92,9 @@ Each operation maps to one or more project skills. If these rules conflict with 
 - Outputs:
   - `wiki/sources/<YYYY>/<YYYY-MM>/<slug>.md` source summaries for code files or code groups
   - `wiki/code/<project>/overview.md`
-  - `wiki/code/<project>/files/*.md` — one page per code file, linked to the
-    matching source summary and logical `raw/...` path
-  - `wiki/code/<project>/modules/*.md`
-  - `wiki/code/<project>/apis/*.md`
+  - `wiki/code/<project>/<relative-dir>/index.md` — one page per source directory, summarizing direct files and child directories
+  - `wiki/code/<project>/<relative-file-path>.md` — one page per code file, preserving the source-relative path by appending `.md`, linked to the matching source summary and logical `raw/...` path
+  - `wiki/code/<project>/apis/*.md` or API pages near the owning source directory
   - optional `wiki/code/<project>/architecture.md`, `testing.md`, and `debug-notes.md`
   - updated `wiki/index.md` and appended `wiki/log.md` entries
 - Use specialized Code Wiki skills as needed:
@@ -204,7 +203,7 @@ This applies to ingest, Code Wiki ingest, preprocess planning, and graphify. Nev
 ## 8. Graph Integration
 
 - Graph creation, update, and query operations must go through the [`wiki-graphify`](.agents/skills/wiki-graphify/SKILL.md) skill.
-- Code Wiki pages under `wiki/code/` are graph inputs. Graph nodes should connect code pages to implemented concepts, APIs, modules, and source summaries.
+- Code Wiki pages under `wiki/code/` are graph inputs. Graph nodes should connect code pages to implemented concepts, APIs, directories/modules, and source summaries.
 - The web app Graph tab does not execute graphify directly. It sends `wiki-graphify build/update` requests to the coding agent CLI selected in Settings, and the coding agent follows this repository's rules and skills to run graphify, chunk processing, and the merge pass.
 - Wiki pages must not call the `graphify` binary directly. The coding agent running `wiki-graphify` chooses the execution path: global `graphify`, or `python3 -m graphify` when needed.
 - `wiki-query` may optionally use graph context from `wiki/graph/GRAPH_REPORT.md`, node adjacency, or `wiki-graphify query` as an auxiliary candidate/context source; it must still ground final answers in wiki/source pages.
@@ -274,7 +273,8 @@ Mental checklist for one Code Wiki run:
 
 - [ ] Did you process only code-looking leaves under `raw/` or the requested target?
 - [ ] Did you skip generated/vendor/build directories unless requested?
-- [ ] Did you write source summaries and `wiki/code/<project>/` pages?
-- [ ] Did you connect modules/APIs/tests to existing concepts with wikilinks?
+- [ ] Did you write source summaries and mirrored `wiki/code/<project>/` pages?
+- [ ] Did every represented Code Wiki directory get an `index.md` summarizing direct files and child directories?
+- [ ] Did you connect directories/modules/APIs/tests to existing concepts with wikilinks?
 - [ ] Did you update `wiki/index.md` under the `Code` category?
 - [ ] Did you append a `wiki/log.md` entry without editing old entries?

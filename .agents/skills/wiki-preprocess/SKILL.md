@@ -6,6 +6,14 @@ allowed-cli: [codex, claude, gemini, cline]
 
 # wiki-preprocess
 
+## LLM Wiki Pattern Reference
+
+This skill is a CLIO-specific preparation step around the
+[`llm-wiki.md`](../../../llm-wiki.md) raw-source layer. `llm-wiki.md` treats raw
+sources as the user's source of truth; therefore preprocess is the only
+controlled workflow that may mutate `raw/`, and it must preserve recoverability
+through dry-run plans and `raw/.trash/` backups.
+
 ## Purpose
 
 Remove obvious noise from material under `raw/` so that downstream `/ingest`

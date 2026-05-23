@@ -111,8 +111,8 @@ function operationPolicy(kind: OrchestratedKind): string {
     return [
       "You are an ingest worker in a backend-managed loop. Follow wiki-ingest and process at most one sub-chunk or one merge-pass parent, then exit.",
       "Every non-ignored leaf must have one wiki/sources page per original raw file recorded in source_pages_written. Repair missing source pages before reporting completion.",
-      "Code Wiki is part of ingest, not a separate command. During enumeration, classify leaves as prose/code/mixed/ignore. For code or mixed leaves, run scripts/code-index.mjs when applicable, write/update wiki/code/<project>/ pages, create one wiki/code/<project>/files/*.md page per code file, and record those paths in code_outputs.",
-      "If the progress state shows a done code/mixed leaf with missing valid wiki/code outputs or missing file-level Code Wiki pages, treat that as the next unit of work and repair the Code Wiki outputs before reporting that ingest is complete.",
+      "Code Wiki is part of ingest, not a separate command. During enumeration, classify leaves as prose/code/mixed/ignore. For code or mixed leaves, run scripts/code-index.mjs when applicable, mirror the source tree under wiki/code/<project>/, create one index.md per represented source directory with directory in tags, create one wiki/code/<project>/<relative-file-path>.md page per code file with file in tags, and record those paths in code_outputs.",
+      "If the progress state shows a done code/mixed leaf with missing valid wiki/code outputs, missing file-level Code Wiki pages, or missing directory index pages, treat that as the next unit of work and repair the Code Wiki outputs before reporting that ingest is complete.",
       "A symlink located under raw/ is a valid source entry: follow it read-only even if its real target is outside the repository, preserve logical raw/... paths in state/citations, and reject only broken links or loops.",
       "If wiki/.progress/ingest/.lock is held by another live process, report that you are standing by and exit successfully. The manager will launch the next round.",
       "Do NOT run wiki-graphify and do NOT write anything under wiki/graph/. The backend triggers graph updates as separate invocations only after all ingest work and merge passes are complete.",
@@ -121,8 +121,8 @@ function operationPolicy(kind: OrchestratedKind): string {
   return [
     "You are an ingest worker. Follow wiki-ingest and process exactly one sub-chunk or one merge-pass parent, then exit.",
     "Every non-ignored leaf must have one wiki/sources page per original raw file recorded in source_pages_written. Repair missing source pages before reporting completion.",
-    "Code Wiki is part of ingest, not a separate command. During enumeration, classify leaves as prose/code/mixed/ignore. For code or mixed leaves, run scripts/code-index.mjs when applicable, write/update wiki/code/<project>/ pages, create one wiki/code/<project>/files/*.md page per code file, and record those paths in code_outputs.",
-    "If the progress state shows a done code/mixed leaf with missing valid wiki/code outputs or missing file-level Code Wiki pages, treat that as the next unit of work and repair the Code Wiki outputs before reporting that ingest is complete.",
+    "Code Wiki is part of ingest, not a separate command. During enumeration, classify leaves as prose/code/mixed/ignore. For code or mixed leaves, run scripts/code-index.mjs when applicable, mirror the source tree under wiki/code/<project>/, create one index.md per represented source directory with directory in tags, create one wiki/code/<project>/<relative-file-path>.md page per code file with file in tags, and record those paths in code_outputs.",
+    "If the progress state shows a done code/mixed leaf with missing valid wiki/code outputs, missing file-level Code Wiki pages, or missing directory index pages, treat that as the next unit of work and repair the Code Wiki outputs before reporting that ingest is complete.",
     "A symlink located under raw/ is a valid source entry: follow it read-only even if its real target is outside the repository, preserve logical raw/... paths in state/citations, and reject only broken links or loops.",
     "If wiki/.progress/ingest/.lock is held by another live process, report that you are standing by and exit successfully.",
     "Do NOT run wiki-graphify and do NOT write anything under wiki/graph/. The backend triggers graph updates as separate invocations only after all ingest work and merge passes are complete.",
@@ -318,7 +318,8 @@ function ingestWorkComplete(snapshot: ProgressSnapshot): boolean {
     snapshot.mergePendingParents === 0 &&
     snapshot.sourcePagesMissing === 0 &&
     snapshot.codeLeavesMissingOutputs === 0 &&
-    snapshot.codeFilePagesMissing === 0
+    snapshot.codeFilePagesMissing === 0 &&
+    snapshot.codeDirectoryIndexesMissing === 0
   );
 }
 
@@ -542,6 +543,7 @@ async function runLoopOperation(input: {
       sourcePagesMissing: snap.sourcePagesMissing,
       codeLeavesMissingOutputs: snap.codeLeavesMissingOutputs,
       codeFilePagesMissing: snap.codeFilePagesMissing,
+      codeDirectoryIndexesMissing: snap.codeDirectoryIndexesMissing,
     });
     if (decision.halt) {
       haltKind = decision.kind;

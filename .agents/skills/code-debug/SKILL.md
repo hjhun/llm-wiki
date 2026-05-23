@@ -6,6 +6,13 @@ allowed-cli: [codex, claude, gemini, cline]
 
 # code-debug
 
+## LLM Wiki Pattern Reference
+
+This skill applies the [`llm-wiki.md`](../../../llm-wiki.md) pattern to failure
+evidence: logs and stack traces under `raw/` are immutable sources, while
+debug notes under `wiki/code/` preserve the interpreted diagnosis, affected
+boundaries, and verification guidance for future queries.
+
 ## Purpose
 
 Preserve debugging knowledge in the Code Wiki: what failed, where the evidence

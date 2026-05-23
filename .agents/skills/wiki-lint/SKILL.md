@@ -6,6 +6,14 @@ allowed-cli: [codex, claude, gemini, cline]
 
 # wiki-lint
 
+## LLM Wiki Pattern Reference
+
+This skill implements the health-check loop described by
+[`llm-wiki.md`](../../../llm-wiki.md): as the LLM-maintained wiki compounds over
+time, periodically detect contradictions, stale claims, orphan pages, missing
+cross-references, and metadata drift so the persistent wiki remains coherent
+instead of becoming another unmaintained note pile.
+
 ## Purpose
 
 Periodically clean up decay that naturally accumulates as the wiki grows: contradictions, broken links, orphan pages, and missing metadata. This skill runs in four stages: **inspect -> classify -> apply some automatic fixes -> report**.

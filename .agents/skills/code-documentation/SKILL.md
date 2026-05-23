@@ -6,6 +6,14 @@ allowed-cli: [codex, claude, gemini, cline]
 
 # code-documentation
 
+## LLM Wiki Pattern Reference
+
+Code Wiki is CLIO's source-code extension of the repository-root
+[`llm-wiki.md`](../../../llm-wiki.md) pattern. Treat code under `raw/` as
+immutable source evidence, and write durable, cited Markdown pages under
+`wiki/code/` so future queries use accumulated documentation instead of
+rediscovering the codebase from scratch.
+
 ## Purpose
 
 Produce useful Markdown documentation from code without changing the code.
@@ -15,8 +23,9 @@ summarized.
 ## Inputs
 
 - Existing `wiki/sources/...` source summaries.
-- Existing `wiki/code/<project>/...` pages, including file-level pages under
-  `wiki/code/<project>/files/`.
+- Existing `wiki/code/<project>/...` pages, including mirrored directory
+  `index.md` pages and mirrored file-level pages such as
+  `wiki/code/<project>/src/server.ts.md`.
 - Read-only code evidence under `raw/...` when the summaries are insufficient.
 
 ## Documentation Types
@@ -24,6 +33,8 @@ summarized.
 Choose the smallest useful type:
 
 - **Overview**: project/module purpose, entry points, main flows.
+- **Directory Index**: one source directory's purpose, direct files, child
+  directories, dependencies, tests, risks, and top-down navigation links.
 - **File Page**: one code file's role, symbols, dependencies, important
   locations, tests, risks, and related module/API pages.
 - **API Reference**: exported functions, routes, CLI commands, schemas.
@@ -40,10 +51,38 @@ Choose the smallest useful type:
 4. Do not paste long code. Use short snippets only when they clarify an
    interface or invariant.
 5. Mark unknowns explicitly instead of guessing.
-6. For file-level pages, mention the logical `raw/...` path in the body and
-   use `type: code` frontmatter so ingest coverage checks can verify them.
+6. Mirror the source tree under `wiki/code/<project>/`: write
+   `wiki/code/<project>/<relative-dir>/index.md` for each documented source
+   directory and `wiki/code/<project>/<relative-file-path>.md` for each source
+   file by appending `.md` to the raw filename.
+7. For file-level pages, mention the logical `raw/...` path in the body, use
+   `type: code` frontmatter, and include `file` in `tags` so ingest coverage
+   checks can verify them.
 
 ## Templates
+
+### Directory Index
+
+```markdown
+---
+title: <Project> / <relative directory>
+type: code
+tags: [code, directory, <project>]
+sources: [...]
+updated: YYYY-MM-DD
+---
+
+# <relative directory>
+
+## 역할
+## 직접 파일
+## 하위 디렉토리
+## 주요 흐름
+## 의존성
+## 테스트/검증
+## 리스크
+## 관련 페이지
+```
 
 ### File Documentation
 

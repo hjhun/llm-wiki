@@ -6,6 +6,13 @@ allowed-cli: [codex, claude, gemini, cline]
 
 # browser-capture
 
+## LLM Wiki Pattern Reference
+
+This skill feeds the raw-source layer described by
+[`llm-wiki.md`](../../../llm-wiki.md). Browser captures are source candidates,
+not finished synthesis: save the evidence under `raw/chat/` or
+`raw/automation/`, then let `/ingest` integrate it into the persistent wiki.
+
 ## Purpose
 
 Use browser automation as a source-capture step for the LLM Wiki and Code Wiki.

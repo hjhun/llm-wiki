@@ -6,6 +6,15 @@ allowed-cli: [codex, claude, gemini, cline]
 
 # skill-maintenance
 
+## LLM Wiki Pattern Reference
+
+When maintaining CLIO skills, preserve the repository-root
+[`llm-wiki.md`](../../../llm-wiki.md) pattern as the conceptual baseline:
+immutable user-curated raw sources, an LLM-maintained persistent Markdown wiki,
+schema-driven workflows, index-first query, append-only logging, and periodic
+linting. `AGENTS.md`, `CLAUDE.md`, and individual skills may specialize the
+pattern, but should not silently contradict it.
+
 ## Purpose
 
 Keep CLIO's project-local skills coherent, small, and compatible with the

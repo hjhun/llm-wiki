@@ -6,6 +6,14 @@ allowed-cli: [codex, claude, gemini, cline]
 
 # wiki-graphify
 
+## LLM Wiki Pattern Reference
+
+This skill supports the persistent, interlinked wiki described in
+[`llm-wiki.md`](../../../llm-wiki.md) by materializing graph artifacts from
+`wiki/` and optionally `raw/`. Graph output is auxiliary navigation/context:
+it helps agents find relationships, but final answers and wiki updates still
+ground claims in wiki pages, source summaries, and read-only raw sources.
+
 ## Purpose
 
 Use the wiki and original sources as input to produce the following artifacts.

@@ -44,6 +44,10 @@ export type ProgressSnapshot = {
   codeFilePagesWithOutputs: number;
   codeFilePagesMissing: number;
   missingCodeFiles: string[];
+  codeDirectoryIndexesTotal: number;
+  codeDirectoryIndexesWithOutputs: number;
+  codeDirectoryIndexesMissing: number;
+  missingCodeDirectories: string[];
   codeOutputsWritten: number;
   subChunksTotal: number;
   subChunksDone: number;
@@ -74,6 +78,10 @@ export const EMPTY_SNAPSHOT: ProgressSnapshot = {
   codeFilePagesWithOutputs: 0,
   codeFilePagesMissing: 0,
   missingCodeFiles: [],
+  codeDirectoryIndexesTotal: 0,
+  codeDirectoryIndexesWithOutputs: 0,
+  codeDirectoryIndexesMissing: 0,
+  missingCodeDirectories: [],
   codeOutputsWritten: 0,
   subChunksTotal: 0,
   subChunksDone: 0,
@@ -321,6 +329,23 @@ async function validMarkdownFrontmatterType(
   }
 }
 
+function frontmatterHasTag(markdown: string, expected: string): boolean {
+  if (!markdown.startsWith("---")) return false;
+  const end = markdown.indexOf("\n---", 3);
+  const frontmatter = end >= 0 ? markdown.slice(0, end) : markdown.slice(0, 4096);
+  const inline = /\ntags:\s*\[([^\]]*)\]/m.exec(frontmatter);
+  const inlineHasTag =
+    inline?.[1]
+      .split(",")
+      .map((tag) => tag.trim().replace(/^["']|["']$/g, ""))
+      .includes(expected) ?? false;
+  const blockTagPattern = new RegExp(
+    `^\\s*-\\s*["']?${expected.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}["']?\\s*$`,
+    "m",
+  );
+  return inlineHasTag || blockTagPattern.test(frontmatter);
+}
+
 async function collectValidSourcePages(
   leaf: Record<string, unknown>,
 ): Promise<string[]> {
@@ -360,10 +385,36 @@ async function collectValidCodeFileOutputs(
   const covered = new Set<string>();
   for (const output of collectCodeOutputs(leaf)) {
     const rel = normalizePosixPath(output);
+    if (!rel.startsWith("wiki/code/") || !rel.endsWith(".md")) {
+      continue;
+    }
+    const checked = await validMarkdownFrontmatterType(
+      rel,
+      /\ntype:\s*["']?code["']?\b/,
+    );
+    if (!checked) continue;
+    const abs = path.resolve(PROJECT_ROOT, checked);
+    const body = await fs.readFile(abs, "utf8").catch(() => "");
+    const isLegacyFilePage = rel.includes("/files/");
+    const isMirroredFilePage =
+      !rel.endsWith("/index.md") && frontmatterHasTag(body, "file");
+    if (!isLegacyFilePage && !isMirroredFilePage) continue;
+    for (const file of codeFiles) {
+      if (body.includes(file)) covered.add(file);
+    }
+  }
+  return covered;
+}
+
+async function collectValidCodeDirectoryIndexOutputs(
+  leaf: Record<string, unknown>,
+): Promise<Set<string>> {
+  const covered = new Set<string>();
+  for (const output of collectCodeOutputs(leaf)) {
+    const rel = normalizePosixPath(output);
     if (
       !rel.startsWith("wiki/code/") ||
-      !rel.includes("/files/") ||
-      !rel.endsWith(".md")
+      !rel.endsWith("/index.md")
     ) {
       continue;
     }
@@ -374,11 +425,58 @@ async function collectValidCodeFileOutputs(
     if (!checked) continue;
     const abs = path.resolve(PROJECT_ROOT, checked);
     const body = await fs.readFile(abs, "utf8").catch(() => "");
-    for (const file of codeFiles) {
-      if (body.includes(file)) covered.add(file);
-    }
+    if (!frontmatterHasTag(body, "directory")) continue;
+    covered.add(checked);
   }
   return covered;
+}
+
+function projectNameForCodeFile(rawFile: string): string {
+  const parts = normalizePosixPath(rawFile).split("/").filter(Boolean);
+  if (parts[0] === "raw" && parts[1] === "repos" && parts[2]) return parts[2];
+  if (parts[0] === "raw" && parts[1]) return parts[1];
+  return "code";
+}
+
+function projectRelativeCodeFile(rawFile: string, project: string): string {
+  const parts = normalizePosixPath(rawFile).split("/").filter(Boolean);
+  if (parts[0] === "raw" && parts[1] === "repos" && parts[2] === project) {
+    return parts.slice(3).join("/");
+  }
+  if (parts[0] === "raw" && parts[1] === project) {
+    return parts.slice(2).join("/");
+  }
+  if (parts[0] === "raw" && parts[1] === "repos" && parts[2]) {
+    return parts.slice(3).join("/");
+  }
+  if (parts[0] === "raw" && parts[1]) {
+    return parts.slice(2).join("/");
+  }
+  return parts.join("/");
+}
+
+function expectedCodeDirectoryIndexPaths(
+  leaf: Record<string, unknown>,
+  codeFiles: string[],
+): string[] {
+  const expected = new Set<string>();
+  const leafProject =
+    typeof leaf.project === "string" && leaf.project.trim()
+      ? normalizePosixPath(leaf.project.trim())
+      : null;
+  for (const file of codeFiles) {
+    const project = leafProject ?? projectNameForCodeFile(file);
+    const relFile = projectRelativeCodeFile(file, project);
+    const dir = path.posix.dirname(relFile);
+    expected.add(`wiki/code/${project}/index.md`);
+    if (dir && dir !== ".") {
+      const parts = dir.split("/").filter(Boolean);
+      for (let i = 1; i <= parts.length; i += 1) {
+        expected.add(`wiki/code/${project}/${parts.slice(0, i).join("/")}/index.md`);
+      }
+    }
+  }
+  return [...expected].sort();
 }
 
 function leafMatchesScope(
@@ -467,11 +565,15 @@ export async function buildCodeWikiStatusReference(
   return [
     `Code Wiki status${scopeLabel}: ${snap.codeLeavesWithOutputs}/${snap.codeLeavesTotal} code/mixed leaves have valid wiki/code outputs.`,
     missingLine,
-    `File-level Code Wiki coverage${scopeLabel}: ${snap.codeFilePagesWithOutputs}/${snap.codeFilePagesTotal} code files have valid \`wiki/code/<project>/files/*.md\` pages.`,
+    `File-level Code Wiki coverage${scopeLabel}: ${snap.codeFilePagesWithOutputs}/${snap.codeFilePagesTotal} code files have valid mirrored \`wiki/code/<project>/<relative-file-path>.md\` pages (legacy \`files/*.md\` pages are still accepted).`,
     snap.missingCodeFiles.length > 0
       ? `Missing file-level Code Wiki pages for: ${snap.missingCodeFiles.slice(0, CODE_STATUS_MAX).join(", ")}${snap.missingCodeFiles.length > CODE_STATUS_MAX ? ` … (+${snap.missingCodeFiles.length - CODE_STATUS_MAX} more)` : ""}`
       : "All detected code files have file-level Code Wiki pages.",
-    "For a done code/mixed leaf with missing valid outputs, treat the next unit of work as a Code Wiki repair: run `node scripts/code-index.mjs raw/<project-or-leaf> --format=json` and `--format=markdown` when applicable, write/update Markdown files under `wiki/code/<project>/`, create one file page under `wiki/code/<project>/files/` for each code file, and record those paths in `code_outputs` before reporting completion.",
+    `Directory-index Code Wiki coverage${scopeLabel}: ${snap.codeDirectoryIndexesWithOutputs}/${snap.codeDirectoryIndexesTotal} source directories have valid mirrored \`index.md\` pages.`,
+    snap.missingCodeDirectories.length > 0
+      ? `Missing Code Wiki directory indexes for: ${snap.missingCodeDirectories.slice(0, CODE_STATUS_MAX).join(", ")}${snap.missingCodeDirectories.length > CODE_STATUS_MAX ? ` … (+${snap.missingCodeDirectories.length - CODE_STATUS_MAX} more)` : ""}`
+      : "All represented source directories have Code Wiki index pages.",
+    "For a done code/mixed leaf with missing valid outputs, treat the next unit of work as a Code Wiki repair: run `node scripts/code-index.mjs raw/<project-or-leaf> --format=json` and `--format=markdown` when applicable, mirror the source tree under `wiki/code/<project>/`, create one `index.md` with `directory` in `tags` for each represented directory, create one file page as `wiki/code/<project>/<relative-file-path>.md` with `file` in `tags` for each code file, and record those paths in `code_outputs` before reporting completion.",
   ].join("\n");
 }
 
@@ -529,6 +631,10 @@ export async function readProgressSnapshot(
       codeFilePagesWithOutputs: 0,
       codeFilePagesMissing: 0,
       missingCodeFiles: [],
+      codeDirectoryIndexesTotal: 0,
+      codeDirectoryIndexesWithOutputs: 0,
+      codeDirectoryIndexesMissing: 0,
+      missingCodeDirectories: [],
       codeOutputsWritten: 0,
       subChunksTotal: 0,
       subChunksDone: 0,
@@ -562,6 +668,12 @@ export async function readProgressSnapshot(
           leaf,
           codeFiles,
         );
+        const expectedCodeDirectoryIndexes = expectedCodeDirectoryIndexPaths(
+          leaf,
+          codeFiles,
+        );
+        const coveredCodeDirectoryIndexes =
+          await collectValidCodeDirectoryIndexOutputs(leaf);
         snap.sourcePagesWritten += validSourcePages.length;
         const isCodeLeaf = leafKind === "code" || leafKind === "mixed";
         const sourceCoverageMissing =
@@ -578,12 +690,23 @@ export async function readProgressSnapshot(
           snap.codeOutputsWritten += codeOutputs.length;
           snap.codeFilePagesTotal += codeFiles.length;
           snap.codeFilePagesWithOutputs += coveredCodeFiles.size;
+          snap.codeDirectoryIndexesTotal += expectedCodeDirectoryIndexes.length;
+          snap.codeDirectoryIndexesWithOutputs += expectedCodeDirectoryIndexes.filter(
+            (indexPath) => coveredCodeDirectoryIndexes.has(indexPath),
+          ).length;
           const missingCodeFiles = codeFiles.filter(
             (file) => !coveredCodeFiles.has(file),
+          );
+          const missingCodeDirectories = expectedCodeDirectoryIndexes.filter(
+            (indexPath) => !coveredCodeDirectoryIndexes.has(indexPath),
           );
           if (leaf.status === "done" && missingCodeFiles.length > 0) {
             snap.codeFilePagesMissing += missingCodeFiles.length;
             snap.missingCodeFiles.push(...missingCodeFiles);
+          }
+          if (leaf.status === "done" && missingCodeDirectories.length > 0) {
+            snap.codeDirectoryIndexesMissing += missingCodeDirectories.length;
+            snap.missingCodeDirectories.push(...missingCodeDirectories);
           }
           if (codeOutputs.length > 0) {
             snap.codeLeavesWithOutputs += 1;
@@ -622,6 +745,7 @@ export async function readProgressSnapshot(
     doneLeaves.sort();
     snap.missingCodeLeaves.sort();
     snap.missingCodeFiles.sort();
+    snap.missingCodeDirectories.sort();
     snap.missingSourceLeaves.sort();
     snap.filesTotal = filePaths.size;
     snap.bytesTotal = await totalRelativeFileBytes(filePaths);
@@ -661,6 +785,7 @@ export function ingestMadeProgress(
     after.codeOutputsWritten > before.codeOutputsWritten ||
     after.codeLeavesMissingOutputs < before.codeLeavesMissingOutputs ||
     after.codeFilePagesMissing < before.codeFilePagesMissing ||
+    after.codeDirectoryIndexesMissing < before.codeDirectoryIndexesMissing ||
     (after.mergeDone && !before.mergeDone) ||
     // A merge pass drained a parent from merge_pass.pending_parents — real
     // progress even though no sub-chunk or leaf counter moved.
@@ -768,6 +893,7 @@ export function decideLoopHalt(input: {
   sourcePagesMissing?: number;
   codeLeavesMissingOutputs?: number;
   codeFilePagesMissing?: number;
+  codeDirectoryIndexesMissing?: number;
 }): LoopDecision {
   if (input.exitCode !== 0) {
     return {
@@ -807,6 +933,7 @@ export function decideLoopHalt(input: {
     (input.sourcePagesMissing ?? 0) === 0 &&
     (input.codeLeavesMissingOutputs ?? 0) === 0 &&
     (input.codeFilePagesMissing ?? 0) === 0 &&
+    (input.codeDirectoryIndexesMissing ?? 0) === 0 &&
     (input.mergeDone || !input.mergePending)
   ) {
     return {
@@ -821,7 +948,8 @@ export function decideLoopHalt(input: {
     input.idleRounds >= LOOP_STAGNATION_LIMIT &&
     ((input.sourcePagesMissing ?? 0) > 0 ||
       (input.codeLeavesMissingOutputs ?? 0) > 0 ||
-      (input.codeFilePagesMissing ?? 0) > 0)
+      (input.codeFilePagesMissing ?? 0) > 0 ||
+      (input.codeDirectoryIndexesMissing ?? 0) > 0)
   ) {
     return {
       halt: true,
@@ -830,7 +958,8 @@ export function decideLoopHalt(input: {
         `ingest 산출물 누락 ` +
         `(source leaves=${input.sourcePagesMissing ?? 0}, ` +
         `code leaves=${input.codeLeavesMissingOutputs ?? 0}, ` +
-        `code files=${input.codeFilePagesMissing ?? 0})이 ` +
+        `code files=${input.codeFilePagesMissing ?? 0}, ` +
+        `code directories=${input.codeDirectoryIndexesMissing ?? 0})이 ` +
         `연속 ${input.idleRounds}개 라운드에서 해결되지 않아 중단`,
     };
   }
@@ -1536,6 +1665,7 @@ export async function runIngestLoop(
       sourcePagesMissing: snap.sourcePagesMissing,
       codeLeavesMissingOutputs: snap.codeLeavesMissingOutputs,
       codeFilePagesMissing: snap.codeFilePagesMissing,
+      codeDirectoryIndexesMissing: snap.codeDirectoryIndexesMissing,
     });
     if (decision.halt) {
       haltKind = decision.kind;
