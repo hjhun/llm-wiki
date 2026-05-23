@@ -316,7 +316,7 @@ function buildAutoTriggerPrompt(input: {
     "Read CLAUDE.md/AGENTS.md and follow .agents/skills/wiki-ingest/SKILL.md. If additional skills are needed, project .agents/skills takes priority, then ~/.agents/skills, then host-specific global skill directories such as ~/.codex/skills or ~/.claude/skills.",
     `Active session log: sessions/${input.sessionPath}`,
     `This run was triggered automatically (source=${input.source}, reason=${input.reason}).`,
-    "Start exactly like a normal `/ingest` with no path: enumerate `raw/`, classify leaves as prose/code/mixed/ignore, update wiki/.progress/ingest/.state.json for new, changed, or stale leaves, then process exactly one pending sub-chunk, merge-pass unit, or missing Code Wiki output repair per the wiki-ingest skill. For code/mixed leaves, write/update wiki/code/<project>/ pages and record those paths in code_outputs before completion. Exit after that single unit; the backend driver will spawn the next iteration.",
+    "Start exactly like a normal `/ingest` with no path: enumerate `raw/`, classify leaves as prose/code/mixed/ignore, include direct-file pseudo-leaves for code files in non-leaf directories, update wiki/.progress/ingest/.state.json for new, changed, or stale leaves, then process exactly one pending sub-chunk, merge-pass unit, missing direct-file pseudo-leaf enumeration, or missing Code Wiki output repair per the wiki-ingest skill. For code/mixed leaves, write/update wiki/code/<project>/ pages, create file-level pages rather than only parent index.md summaries, and record those paths in code_outputs before completion. Exit after that single unit; the backend driver will spawn the next iteration.",
     "",
     "===== CONVERSATION =====",
     "User: /ingest",

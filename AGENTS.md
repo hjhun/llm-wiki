@@ -186,7 +186,7 @@ use that year with the fallback month from the next available source.
 
 This applies to ingest, Code Wiki ingest, preprocess planning, and graphify. Never start by throwing the whole root into one operation.
 
-1. **Find leaf directories**: in the target tree (`raw/`, `wiki/`), find directories with no child directories. For graphify, also treat direct files in a non-leaf directory as a pseudo-leaf so root files such as `wiki/index.md` and `wiki/log.md` are included. For `raw/`, follow symlinked files/directories that are themselves located under `raw/`, keep their logical `raw/...` paths in state and citations, and track visited real paths/inodes to avoid symlink loops.
+1. **Find leaf directories and direct-file pseudo-leaves**: in the target tree (`raw/`, `wiki/`), find directories with no child directories. Also treat direct files in a non-leaf directory as a pseudo-leaf so parent-level files are included; this is mandatory for Code Wiki ingest because source files, manifests, routes, and configs often live in parent directories alongside child directories. For `raw/`, follow symlinked files/directories that are themselves located under `raw/`, keep their logical `raw/...` paths in state and citations, and track visited real paths/inodes to avoid symlink loops.
 2. **Process by chunk**: group only the files in each leaf and process them once.
 3. **Preserve partial outputs**:
    - ingest: immediately save chunk-level summaries/entity pages.
@@ -261,7 +261,7 @@ If this file is updated, synchronize the counterpart file as well.
 
 Mental checklist for one ingest run:
 
-- [ ] Did you list leaf directories from the input tree?
+- [ ] Did you list leaf directories and direct-file pseudo-leaves from the input tree?
 - [ ] Is the chunk within the file-count and byte limits?
 - [ ] Did you write `wiki/sources/<YYYY>/<YYYY-MM>/<slug>.md` for each chunk?
 - [ ] Did you append one line to `wiki/log.md` for each chunk?
@@ -272,9 +272,11 @@ Mental checklist for one ingest run:
 Mental checklist for one Code Wiki run:
 
 - [ ] Did you process only code-looking leaves under `raw/` or the requested target?
+- [ ] Did you include direct source files in non-leaf directories as their own pseudo-leaf chunks?
 - [ ] Did you skip generated/vendor/build directories unless requested?
 - [ ] Did you write source summaries and mirrored `wiki/code/<project>/` pages?
 - [ ] Did every represented Code Wiki directory get an `index.md` summarizing direct files and child directories?
+- [ ] Did every code file get its own mirrored `wiki/code/<project>/<relative-file-path>.md` page, rather than being represented only inside a parent `index.md`?
 - [ ] Did you connect directories/modules/APIs/tests to existing concepts with wikilinks?
 - [ ] Did you update `wiki/index.md` under the `Code` category?
 - [ ] Did you append a `wiki/log.md` entry without editing old entries?

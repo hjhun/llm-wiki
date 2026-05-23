@@ -108,6 +108,7 @@ export async function buildProgressReference(): Promise<string | null> {
 
 const ENTITY_REGISTRY_MAX = 400;
 const CODE_STATUS_MAX = 20;
+const RAW_CODE_SCAN_MAX_FILES = 5000;
 
 const CODE_EXTS = new Set([
   ".ts",
@@ -148,6 +149,7 @@ const CODE_MANIFESTS = new Set([
 
 const IGNORE_CODE_DIRS = new Set([
   ".git",
+  ".trash",
   "node_modules",
   "dist",
   "build",
@@ -455,6 +457,67 @@ function projectRelativeCodeFile(rawFile: string, project: string): string {
   return parts.join("/");
 }
 
+async function collectRawCodeFilesInScope(
+  rawScope?: string | null,
+): Promise<string[]> {
+  const scope = normalizeRawScope(rawScope) ?? "raw";
+  const rawRoot = path.resolve(PROJECT_ROOT, "raw");
+  const startAbs = path.resolve(PROJECT_ROOT, scope);
+  if (startAbs !== rawRoot && !startAbs.startsWith(`${rawRoot}${path.sep}`)) {
+    return [];
+  }
+
+  const out = new Set<string>();
+  const visitedDirs = new Set<string>();
+
+  const walk = async (abs: string, rel: string): Promise<void> => {
+    if (out.size >= RAW_CODE_SCAN_MAX_FILES) return;
+    let st: Awaited<ReturnType<typeof fs.stat>>;
+    try {
+      st = await fs.stat(abs);
+    } catch {
+      return;
+    }
+    if (st.isFile()) {
+      const normalized = normalizePosixPath(rel);
+      if (
+        fileLooksLikeCode(normalized) ||
+        fileLooksLikeRuntimeEvidence(normalized)
+      ) {
+        out.add(normalized);
+      }
+      return;
+    }
+    if (!st.isDirectory()) return;
+
+    const dirName = path.posix.basename(normalizePosixPath(rel));
+    if (IGNORE_CODE_DIRS.has(dirName)) return;
+
+    try {
+      const real = await fs.realpath(abs);
+      if (visitedDirs.has(real)) return;
+      visitedDirs.add(real);
+    } catch {
+      return;
+    }
+
+    let entries: Array<{ name: string; isDirectory(): boolean }>;
+    try {
+      entries = await fs.readdir(abs, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      if (out.size >= RAW_CODE_SCAN_MAX_FILES) break;
+      if (entry.isDirectory() && IGNORE_CODE_DIRS.has(entry.name)) continue;
+      await walk(path.join(abs, entry.name), `${rel}/${entry.name}`);
+    }
+  };
+
+  await walk(startAbs, scope);
+  return [...out].sort();
+}
+
 function expectedCodeDirectoryIndexPaths(
   leaf: Record<string, unknown>,
   codeFiles: string[],
@@ -547,6 +610,13 @@ export async function buildCodeWikiStatusReference(
   const snap = await readProgressSnapshot(options);
   const scopeLabel = options.rawScope ? ` for ${options.rawScope}` : "";
   if (snap.codeLeavesTotal === 0) {
+    if (snap.missingCodeFiles.length > 0) {
+      return [
+        `Code Wiki status${scopeLabel}: ${snap.missingCodeFiles.length} code-looking raw files are not represented in ${PROGRESS_STATE_PATH}.`,
+        `Missing state/file-level coverage for: ${snap.missingCodeFiles.slice(0, CODE_STATUS_MAX).join(", ")}${snap.missingCodeFiles.length > CODE_STATUS_MAX ? ` … (+${snap.missingCodeFiles.length - CODE_STATUS_MAX} more)` : ""}`,
+        "During enumeration, create leaf units for direct files in non-leaf directories as well as true leaf directories, then create one mirrored Code Wiki file page per code file. A parent directory `index.md` is navigation/synthesis only and does not substitute for file-level pages.",
+      ].join("\n");
+    }
     return (
       `Code Wiki status${scopeLabel}: no code/mixed leaves are currently detected in ` +
       `${PROGRESS_STATE_PATH}. During enumeration, classify code leaves by ` +
@@ -573,7 +643,7 @@ export async function buildCodeWikiStatusReference(
     snap.missingCodeDirectories.length > 0
       ? `Missing Code Wiki directory indexes for: ${snap.missingCodeDirectories.slice(0, CODE_STATUS_MAX).join(", ")}${snap.missingCodeDirectories.length > CODE_STATUS_MAX ? ` … (+${snap.missingCodeDirectories.length - CODE_STATUS_MAX} more)` : ""}`
       : "All represented source directories have Code Wiki index pages.",
-    "For a done code/mixed leaf with missing valid outputs, treat the next unit of work as a Code Wiki repair: run `node scripts/code-index.mjs raw/<project-or-leaf> --format=json` and `--format=markdown` when applicable, mirror the source tree under `wiki/code/<project>/`, create one `index.md` with `directory` in `tags` for each represented directory, create one file page as `wiki/code/<project>/<relative-file-path>.md` with `file` in `tags` for each code file, and record those paths in `code_outputs` before reporting completion.",
+    "For a done code/mixed leaf with missing valid outputs, or for code-looking raw files not represented in progress state, treat the next unit of work as a Code Wiki repair: enumerate direct-file pseudo-leaves plus true leaf directories, run `node scripts/code-index.mjs raw/<project-or-leaf> --format=json` and `--format=markdown` when applicable, mirror the source tree under `wiki/code/<project>/`, create one `index.md` with `directory` in `tags` for each represented directory, create one file page as `wiki/code/<project>/<relative-file-path>.md` with `file` in `tags` for each code file, and record those paths in `code_outputs` before reporting completion. A parent `index.md` does not substitute for file-level Code Wiki pages.",
   ].join("\n");
 }
 
@@ -651,6 +721,7 @@ export async function readProgressSnapshot(
       doneLeaves,
     };
     if (parsed.leaves && typeof parsed.leaves === "object") {
+      const stateCodeFiles = new Set<string>();
       for (const [leafPath, value] of Object.entries(parsed.leaves)) {
         const leaf = (value ?? {}) as Record<string, unknown>;
         if (leaf.status === "stale") continue;
@@ -664,6 +735,7 @@ export async function readProgressSnapshot(
         const codeFiles = leafFiles.filter(
           (file) => fileLooksLikeCode(file) || fileLooksLikeRuntimeEvidence(file),
         );
+        for (const file of codeFiles) stateCodeFiles.add(file);
         const coveredCodeFiles = await collectValidCodeFileOutputs(
           leaf,
           codeFiles,
@@ -740,6 +812,14 @@ export async function readProgressSnapshot(
             }
           }
         }
+      }
+      const rawCodeFiles = await collectRawCodeFilesInScope(options.rawScope);
+      for (const file of rawCodeFiles) {
+        filePaths.add(file);
+        if (stateCodeFiles.has(file)) continue;
+        snap.codeFilePagesTotal += 1;
+        snap.codeFilePagesMissing += 1;
+        snap.missingCodeFiles.push(file);
       }
     }
     doneLeaves.sort();
@@ -1003,7 +1083,7 @@ export function buildLoopContinuationPrompt(input: {
   if (input.sourcePageStatusRef) lines.push(input.sourcePageStatusRef);
   if (input.codeWikiStatusRef) lines.push(input.codeWikiStatusRef);
   lines.push(
-    `This is /ingest-loop iteration ${input.iteration}. Pick the next pending sub-chunk, merge-pass parent, or missing Code Wiki output repair from wiki/.progress/ingest/.state.json${rawScope ? ` within ${rawScope}` : ""} and process exactly one unit per the wiki-ingest skill, then exit. Do not loop yourself — the backend will spawn the next iteration.`,
+    `This is /ingest-loop iteration ${input.iteration}. Pick the next pending sub-chunk, merge-pass parent, missing direct-file pseudo-leaf enumeration, or missing Code Wiki output repair from wiki/.progress/ingest/.state.json${rawScope ? ` within ${rawScope}` : ""} and process exactly one unit per the wiki-ingest skill, then exit. Do not loop yourself — the backend will spawn the next iteration.`,
     "",
     "===== CONVERSATION =====",
     rawScope ? `User: /ingest-loop ${rawScope}` : "User: /ingest",

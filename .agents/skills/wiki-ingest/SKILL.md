@@ -172,7 +172,7 @@ Use the nearest project manifest or the first directory under `raw/` as the
 
 ### Step 1 — Enumerate Leaves (idempotent)
 
-1. From the requested input root (default `raw/`), list every leaf directory (no child directories). A single file or URL counts as a virtual leaf whose path is its parent directory. Follow symlinked files/directories that are located under `raw/`, but track visited real paths/inodes to avoid cycles and do not traverse the same real directory twice under one target.
+1. From the requested input root (default `raw/`), list every leaf directory (no child directories) **and every direct-file pseudo-leaf**: if a directory has source files directly inside it as well as child directories, create a separate leaf unit for those direct files using that directory's logical `raw/.../` path. This is required for code repositories whose project root or parent modules contain files such as `package.json`, `src/index.ts`, route files, or config files alongside child directories. A single file or URL counts as a virtual leaf whose path is its parent directory. Follow symlinked files/directories that are located under `raw/`, but track visited real paths/inodes to avoid cycles and do not traverse the same real directory twice under one target.
 2. For each leaf compute a stable identity:
    - `leafPath` = POSIX-style relative path (always ends with `/`), using the
      logical `raw/...` path even when the leaf is reached through a symlink.
@@ -206,6 +206,9 @@ For exactly **one** sub-chunk whose `status === "pending"`:
    - Update the per-leaf JSON entry: `processed: true`, `summary_page: "wiki/sources/<YYYY>/<YYYY-MM>/<slug>.md"`.
    - **Discard the file body from working memory** before opening the next file. Do not keep two file bodies in context simultaneously.
 3. If the sub-chunk is code-heavy, update Code Wiki pages **from source summaries and symbol/dependency takeaways**:
+   - A directory `index.md` is navigation and synthesis only. It never
+     substitutes for file-level analysis: every code file represented in the
+     sub-chunk still needs its own mirrored file page.
    - `wiki/code/<project>/overview.md` — project purpose, entry points,
      directories, build/test commands, and links to the mirrored directory
      indexes plus architecture/testing/API pages.
@@ -246,7 +249,9 @@ For exactly **one** sub-chunk whose `status === "pending"`:
    Record every file-level page and any other Code Wiki pages written in the
    sub-chunk's `code_outputs`; do not mark a code/mixed leaf complete until
    each code file in that leaf has a valid mirrored file page under
-   `wiki/code/<project>/...` and every represented directory has an `index.md`.
+   `wiki/code/<project>/...`, every direct source file in non-leaf directories
+   has been covered by a direct-file pseudo-leaf, and every represented
+   directory has an `index.md`.
    Use the internal helper skills `code-documentation`, `code-architecture`,
    `code-testing`, and `code-debug` as needed. They are implementation helpers,
    not separate user-facing commands.
