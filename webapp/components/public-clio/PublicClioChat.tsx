@@ -43,6 +43,7 @@ type PublicQueryResponse = {
 
 const LEGACY_MESSAGES_KEY = "clio.public.messages.v1";
 const CONVERSATIONS_KEY = "clio.public.conversations.v1";
+const VISITOR_ID_KEY = "clio.public.visitorId.v1";
 
 function nowStamp(): string {
   return new Date().toTimeString().slice(0, 8);
@@ -50,6 +51,18 @@ function nowStamp(): string {
 
 function newId(): string {
   return globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
+}
+
+function getVisitorId(): string {
+  try {
+    const existing = localStorage.getItem(VISITOR_ID_KEY);
+    if (existing) return existing;
+    const next = newId();
+    localStorage.setItem(VISITOR_ID_KEY, next);
+    return next;
+  } catch {
+    return newId();
+  }
 }
 
 function isPublicMessage(item: unknown): item is PublicMessage {
@@ -226,7 +239,11 @@ export default function PublicClioChat() {
       const res = await fetch("/api/public/query", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ message }),
+        body: JSON.stringify({
+          message,
+          visitorId: getVisitorId(),
+          conversationId,
+        }),
       });
       if (!res.ok) throw await asError(res);
       const data = (await res.json()) as PublicQueryResponse;
