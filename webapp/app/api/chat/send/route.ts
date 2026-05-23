@@ -10,8 +10,8 @@ import { CLI_NAMES, runCli, type CliName } from "@/lib/cli";
 import { PROJECT_ROOT } from "@/lib/paths";
 import {
   appendMessage,
+  buildSessionPromptContext,
   newSession,
-  readSessionTail,
 } from "@/lib/sessions";
 import {
   PROGRESS_STATE_PATH,
@@ -31,9 +31,9 @@ const Body = z.object({
   agent: z.enum(["codex", "claude", "gemini", "cline"]).nullable().optional(),
   /**
    * "full" re-injects the entire session history into the prompt. The default
-   * "slim" mode injects only the most recent config.chat.contextTurns turns
-   * plus a one-line progress dashboard reference, which keeps prompt size
-   * bounded so long ingest jobs do not OOM the host CLI.
+   * "slim" mode injects the full session while it fits under
+   * config.chat.contextMaxBytes, then compacts older turns into an `이전대화`
+   * block and keeps the newest config.chat.contextTurns turns verbatim.
    */
   context: z.enum(["slim", "full"]).optional(),
   /**
@@ -235,39 +235,40 @@ export async function POST(req: Request) {
     return jsonError(errorMessage(err), 400);
   }
 
-  // Slim prompt builder — keeps prompt size from growing linearly with turn
-  // count on stateless CLI calls by injecting only the most recent
-  // chat.contextTurns turns. Joining the whole session happens only when the
-  // caller explicitly asks for context=full.
+  // Slim prompt builder — preserves full session continuity until the chat
+  // context crosses the configured byte cap. After that it compacts older
+  // turns into an `이전대화` block and keeps recent turns verbatim.
   const wantFull = parsed.data.context === "full";
   const contextTurns = Math.max(1, cfg.chat.contextTurns);
+  const contextMaxBytes = Math.max(16 * 1024, cfg.chat.contextMaxBytes);
   let promptBody: string;
   let totalMessages = 0;
   let injectedMessages = 0;
+  let compactedMessages = 0;
+  let fullContextBytes = 0;
+  let promptContextBytes = 0;
   try {
-    const tail = await readSessionTail(
+    const context = await buildSessionPromptContext(
       sessionPath,
-      wantFull ? Number.MAX_SAFE_INTEGER : contextTurns,
+      {
+        recentMessages: contextTurns,
+        maxBytes: contextMaxBytes,
+        forceFull: wantFull,
+      },
     );
-    totalMessages = tail.total;
-    injectedMessages = tail.messages.length;
-    const lines = tail.messages.map((m) => {
-      const tag =
-        m.role === "user"
-          ? "User"
-          : m.role === "assistant"
-            ? `Assistant${m.agent ? ` (${m.agent})` : ""}`
-            : "System";
-      return `${tag} [${m.ts}]:\n${m.content}`;
-    });
-    promptBody = lines.join("\n\n----\n\n");
+    totalMessages = context.totalMessages;
+    injectedMessages = context.injectedMessages;
+    compactedMessages = context.compactedMessages;
+    fullContextBytes = context.fullContextBytes;
+    promptContextBytes = context.promptContextBytes;
+    promptBody = context.body;
   } catch (err) {
     return jsonError(errorMessage(err), 500);
   }
 
-  const elidedNote =
-    !wantFull && totalMessages > injectedMessages
-      ? `(Showing the last ${injectedMessages} of ${totalMessages} messages. Older turns live in sessions/${sessionPath}; re-read that file only if you truly need them.)`
+  const contextNote =
+    !wantFull && compactedMessages > 0
+      ? `(Previous chat context was compacted because the full session conversation was ${fullContextBytes} bytes, over the ${contextMaxBytes} byte budget. The prompt now includes an "이전대화" compacted memory block plus the latest ${injectedMessages} of ${totalMessages} messages verbatim; compacted prompt conversation bytes=${promptContextBytes}. The complete source of truth remains sessions/${sessionPath}.)`
       : null;
 
   const progressRef = cfg.chat.includeProgressDashboard
@@ -282,9 +283,9 @@ export async function POST(req: Request) {
   ];
   if (progressRef) promptLines.push(progressRef);
   if (kind === "query") promptLines.push(querySingleAgentPolicy());
-  if (elidedNote) promptLines.push(elidedNote);
+  if (contextNote) promptLines.push(contextNote);
   promptLines.push(
-    "Below is the running conversation. Continue it by writing the assistant's next reply only — no preamble, no markdown frontmatter.",
+    "Below is the running conversation. If an `이전대화` compacted block appears, treat it as prior-session continuity memory, then continue from the latest verbatim turns. Write the assistant's next reply only — no preamble, no markdown frontmatter.",
     "",
     "===== CONVERSATION =====",
     promptBody,

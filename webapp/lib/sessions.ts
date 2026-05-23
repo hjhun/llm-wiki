@@ -27,6 +27,16 @@ export type SessionRef = {
   meta: SessionMeta;
 };
 
+export type SessionPromptContext = {
+  body: string;
+  totalMessages: number;
+  injectedMessages: number;
+  compactedMessages: number;
+  fullContextBytes: number;
+  promptContextBytes: number;
+  maxBytes: number;
+};
+
 const FRONTMATTER_RE = /^---\n([\s\S]*?)\n---\n?/;
 /**
  * 메시지 헤더는 끝에 `<!-- lw-msg -->` 마커가 붙은 라인만 인식.
@@ -141,6 +151,82 @@ function renderFrontmatter(meta: SessionMeta): string {
 
 function normalizeTitle(input: string): string {
   return input.trim().replace(/\s+/g, " ").slice(0, 120) || "untitled";
+}
+
+function byteLength(input: string): number {
+  return Buffer.byteLength(input, "utf8");
+}
+
+function messageTag(m: ChatMessage): string {
+  if (m.role === "user") return "User";
+  if (m.role === "assistant") {
+    return `Assistant${m.agent ? ` (${m.agent})` : ""}`;
+  }
+  return "System";
+}
+
+function renderPromptMessage(m: ChatMessage): string {
+  return `${messageTag(m)} [${m.ts}]:\n${m.content}`;
+}
+
+function renderPromptMessages(messages: ChatMessage[]): string {
+  return messages.map(renderPromptMessage).join("\n\n----\n\n");
+}
+
+function compactOneLine(input: string, maxChars: number): string {
+  const clean = input.trim().replace(/\s+/g, " ");
+  if (clean.length <= maxChars) return clean;
+  return `${clean.slice(0, Math.max(0, maxChars - 1))}…`;
+}
+
+function renderCompactedPreviousConversation(
+  messages: ChatMessage[],
+  budgetBytes: number,
+): string {
+  if (messages.length === 0) return "";
+
+  const heading = [
+    "===== 이전대화 (compacted) =====",
+    `Full earlier chat history exceeded the prompt context budget, so ${messages.length} older messages are represented as compact continuity memory.`,
+    "Use this block to preserve user intent and decisions. Read the Active session log only if an exact old detail is essential.",
+    "",
+  ].join("\n");
+  const footer = "\n===== 최근대화 (원문) =====";
+  const entryBudget = Math.max(
+    120,
+    Math.min(2000, Math.floor(budgetBytes / messages.length) - 80),
+  );
+  const entries = messages.map((m) => {
+    const compacted = compactOneLine(m.content, entryBudget);
+    const suffix =
+      compacted.length < m.content.trim().length
+        ? ` (compacted from ${m.content.length} chars)`
+        : "";
+    return `- ${messageTag(m)} [${m.ts}]${suffix}: ${compacted}`;
+  });
+
+  const selected: string[] = [];
+  let used = byteLength(heading) + byteLength(footer);
+  let omitted = 0;
+  for (let i = entries.length - 1; i >= 0; i -= 1) {
+    const entryBytes = byteLength(entries[i]) + 1;
+    if (used + entryBytes > budgetBytes && selected.length > 0) {
+      omitted = i + 1;
+      break;
+    }
+    if (used + entryBytes > budgetBytes) {
+      omitted = i + 1;
+      break;
+    }
+    selected.unshift(entries[i]);
+    used += entryBytes;
+  }
+
+  const omittedLine =
+    omitted > 0
+      ? `- (${omitted} older messages omitted from compacted memory to stay under budget.)\n`
+      : "";
+  return `${heading}${omittedLine}${selected.join("\n")}${footer}`;
 }
 
 async function allocateSessionPath(date: string, time: string, slug: string): Promise<{
@@ -317,20 +403,66 @@ export async function renameSession(
 }
 
 /**
- * Returns only the last n messages from a session markdown file. Re-injecting
- * the full history into the prompt on every stateless CLI call makes prompt
- * size grow linearly with turn count and risks OOM, so the slim prompt builder
- * uses this helper. The implementation delegates to readSession — the file
- * itself is usually small (tens of KB), so the memory cost is negligible, and
- * full parsing keeps message-aligned slicing deterministic.
+ * Builds the conversation block passed to stateless coding-agent CLIs.
+ *
+ * In slim mode we preserve the whole session verbatim while it fits inside
+ * `maxBytes`. Only after crossing that threshold do we compact older turns
+ * into an `이전대화` continuity block and keep the newest turns verbatim.
  */
-export async function readSessionTail(
+export async function buildSessionPromptContext(
   rel: string,
-  n: number,
-): Promise<{ meta: SessionMeta; messages: ChatMessage[]; total: number }> {
-  const { meta, messages } = await readSession(rel);
-  const tail = n >= messages.length ? messages : messages.slice(-n);
-  return { meta, messages: tail, total: messages.length };
+  opts: {
+    recentMessages: number;
+    maxBytes: number;
+    forceFull?: boolean;
+  },
+): Promise<SessionPromptContext> {
+  const { messages } = await readSession(rel);
+  const maxBytes = Math.max(16 * 1024, opts.maxBytes);
+  const fullBody = renderPromptMessages(messages);
+  const fullContextBytes = byteLength(fullBody);
+  if (opts.forceFull || fullContextBytes <= maxBytes) {
+    return {
+      body: fullBody,
+      totalMessages: messages.length,
+      injectedMessages: messages.length,
+      compactedMessages: 0,
+      fullContextBytes,
+      promptContextBytes: fullContextBytes,
+      maxBytes,
+    };
+  }
+
+  const compactBudget = Math.max(
+    16 * 1024,
+    Math.min(64 * 1024, Math.floor(maxBytes / 4)),
+  );
+  const maxRecent = Math.max(1, Math.min(opts.recentMessages, messages.length));
+  let bestBody = "";
+  let bestRecentCount = 1;
+  for (let recentCount = maxRecent; recentCount >= 1; recentCount -= 1) {
+    const previous = messages.slice(0, -recentCount);
+    const recent = messages.slice(-recentCount);
+    const compacted = renderCompactedPreviousConversation(
+      previous,
+      compactBudget,
+    );
+    const recentBody = renderPromptMessages(recent);
+    const body = compacted ? `${compacted}\n\n${recentBody}` : recentBody;
+    bestBody = body;
+    bestRecentCount = recentCount;
+    if (byteLength(body) <= maxBytes) break;
+  }
+
+  return {
+    body: bestBody,
+    totalMessages: messages.length,
+    injectedMessages: bestRecentCount,
+    compactedMessages: Math.max(0, messages.length - bestRecentCount),
+    fullContextBytes,
+    promptContextBytes: byteLength(bestBody),
+    maxBytes,
+  };
 }
 
 export async function appendMessage(

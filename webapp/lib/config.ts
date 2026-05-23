@@ -137,11 +137,20 @@ export const ConfigSchema = z.object({
     }),
   chat: z.object({
     /**
-     * Number of recent turns re-injected into the prompt for stateless CLI
-     * calls. Avoids joining the entire history so prompt size does not grow
-     * linearly with turn count.
+     * Number of recent turns kept verbatim once the full session conversation
+     * exceeds contextMaxBytes and older turns are compacted.
      */
     contextTurns: z.number().int().min(1).default(6),
+    /**
+     * UTF-8 byte threshold for chat-session context injection. Slim chat calls
+     * include the full conversation up to this size; above it, older turns are
+     * represented as an `이전대화` compacted memory block.
+     */
+    contextMaxBytes: z
+      .number()
+      .int()
+      .min(16 * 1024)
+      .default(256 * 1024),
     /**
      * When true, a short reference to wiki/.progress/ingest/DASHBOARD.md is
      * prepended to the prompt if the dashboard exists.

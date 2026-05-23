@@ -43,6 +43,7 @@
   },
   "chat": {
     "contextTurns": 6,
+    "contextMaxBytes": 262144,
     "includeProgressDashboard": true
   },
   "cli": {
