@@ -316,8 +316,8 @@ app's HTTP API, they use the coding agent configured in **Settings** and
 produce the same session logs, progress dashboard, and graph updates as the
 Chat tab.
 
-The CLI finds its project automatically: it checks `$CLIO_HOME`, then
-`~/.clio`, then walks up from the current directory. It reads the web app
+The CLI finds its project automatically: it checks `$CLIO_HOME`, then walks up
+from the current directory, then falls back to `~/.clio`. It reads the web app
 port and the bearer token (`auth.cliToken`) from `config/local.json`, which
 `setup.sh` generates. Override any of these with `--home`, `--base-url`, or
 `--token` (or the matching `CLIO_HOME` / `CLIO_BASE_URL` / `CLIO_TOKEN`

@@ -311,8 +311,9 @@ clio status                                   # 프로젝트, 웹앱 URL, 토큰
 Settings에서 설정한 코딩 에이전트를 그대로 사용하고, Chat 탭과 동일한
 세션 로그·진행 대시보드·그래프 업데이트를 생성합니다.
 
-CLI는 프로젝트를 자동으로 찾습니다. `$CLIO_HOME`, 그다음 `~/.clio`,
-마지막으로 현재 디렉터리에서 위로 거슬러 올라가며 탐색합니다. 웹앱 포트와
+CLI는 프로젝트를 자동으로 찾습니다. `$CLIO_HOME`, 그다음 현재
+디렉터리에서 위로 거슬러 올라가며 탐색하고, 마지막으로 `~/.clio`를
+사용합니다. 웹앱 포트와
 베어러 토큰(`auth.cliToken`)은 `setup.sh`가 생성하는 `config/local.json`에서
 읽습니다. `--home`, `--base-url`, `--token` 옵션(또는 대응하는 `CLIO_HOME` /
 `CLIO_BASE_URL` / `CLIO_TOKEN` 환경 변수)으로 각 값을 덮어쓸 수 있습니다.

@@ -1,8 +1,8 @@
 //! CLIO CLI entry point.
 //!
 //! Sub-commands are dispatched by `clap`. Every command resolves the active
-//! CLIO project home (env `CLIO_HOME`, then `~/.clio`, then walk-up from
-//! `cwd`) and reads `config/local.json` to discover the webapp port and the
+//! CLIO project home (env `CLIO_HOME`, then walk-up from `cwd`, then
+//! `~/.clio`) and reads `config/local.json` to discover the webapp port and the
 //! `auth.cliToken` it sends in `Authorization: Bearer …` headers.
 
 #![deny(rust_2018_idioms)]
@@ -25,8 +25,8 @@ mod stream;
     long_about = "Manage raw/ and drive ingest/query/lint against a running CLIO webapp."
 )]
 struct Cli {
-    /// Override the CLIO project directory. Falls back to $CLIO_HOME, ~/.clio,
-    /// or a walk-up search from the current directory.
+    /// Override the CLIO project directory. Falls back to $CLIO_HOME, a
+    /// walk-up search from the current directory, or ~/.clio.
     #[arg(long, global = true, env = "CLIO_HOME")]
     home: Option<std::path::PathBuf>,
 

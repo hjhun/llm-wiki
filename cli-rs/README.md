@@ -36,8 +36,8 @@ touch the filesystem.
 Each invocation resolves a CLIO project root in this order:
 
 1. `--home` flag / `CLIO_HOME` env var.
-2. `~/.clio` if it is a CLIO project (the install default).
-3. Walk up from the current directory looking for `llm-wiki.md` / `CLAUDE.md`.
+2. Walk up from the current directory looking for `llm-wiki.md` / `CLAUDE.md`.
+3. `~/.clio` if it is a CLIO project (the install default).
 
 It then reads `config/default.json` + `config/local.json` for:
 

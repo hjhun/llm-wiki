@@ -244,8 +244,8 @@ ingest-loop orchestration, same session logs. Start the webapp first
 (`./setup.sh --start`). `raw` subcommands work offline; they only touch the
 filesystem.
 
-The CLI finds its project by checking `$CLIO_HOME`, then `~/.clio`, then
-walking up from the current directory. It reads the webapp port and the
+The CLI finds its project by checking `$CLIO_HOME`, then walking up from the
+current directory, then falling back to `~/.clio`. It reads the webapp port and the
 `auth.cliToken` from `config/local.json`. Override any of these with
 `--home`, `--base-url`, or `--token` (or the matching `CLIO_*` env vars).
 

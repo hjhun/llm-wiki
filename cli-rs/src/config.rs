@@ -4,10 +4,9 @@
 //! Lookup order, mirrored from `webapp/lib/paths.ts` and extended for the
 //! Rust CLI:
 //!   1. Explicit `--home`/`$CLIO_HOME`.
-//!   2. `$HOME/.clio` if it looks like a CLIO project (matches the new
-//!      install default).
-//!   3. Walk up from `cwd` searching for the project markers
+//!   2. Walk up from `cwd` searching for the project markers
 //!      (`llm-wiki.md` or `CLAUDE.md`).
+//!   3. `$HOME/.clio` if it looks like a CLIO project (the install default).
 //!
 //! Once the root is known we read `config/default.json` first, overlay
 //! `config/local.json` shallowly, and expose only the bits the CLI needs:
@@ -72,6 +71,11 @@ async fn resolve_project_root(home_override: Option<PathBuf>) -> Result<PathBuf>
         return Ok(path);
     }
 
+    let cwd = std::env::current_dir().context("failed to read current directory")?;
+    if let Some(project) = find_project_ancestor(&cwd).await {
+        return Ok(canonicalize_or_self(&project).await);
+    }
+
     if let Some(home_dir) = dirs::home_dir() {
         let candidate = home_dir.join(".clio");
         if looks_like_project(&candidate).await {
@@ -79,22 +83,24 @@ async fn resolve_project_root(home_override: Option<PathBuf>) -> Result<PathBuf>
         }
     }
 
-    let cwd = std::env::current_dir().context("failed to read current directory")?;
-    let mut cur: &Path = &cwd;
+    Err(anyhow!(
+        "could not find a CLIO project. Tried $CLIO_HOME, walking up from {}, and ~/.clio.",
+        cwd.display(),
+    ))
+}
+
+async fn find_project_ancestor(cwd: &Path) -> Option<PathBuf> {
+    let mut cur = cwd;
     loop {
         if looks_like_project(cur).await {
-            return Ok(canonicalize_or_self(cur).await);
+            return Some(cur.to_path_buf());
         }
         match cur.parent() {
             Some(parent) if parent != cur => cur = parent,
             _ => break,
         }
     }
-
-    Err(anyhow!(
-        "could not find a CLIO project. Tried $CLIO_HOME, ~/.clio, and walking up from {}.",
-        cwd.display(),
-    ))
+    None
 }
 
 async fn looks_like_project(path: &Path) -> bool {
@@ -211,5 +217,19 @@ mod tests {
             ..Default::default()
         };
         assert_eq!(build_base_url(&cfg), "http://10.0.0.4:1234");
+    }
+
+    #[tokio::test]
+    async fn find_project_ancestor_prefers_current_checkout() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let project = tmp.path().join("project");
+        let nested = project.join("a").join("b");
+        tokio::fs::create_dir_all(&nested).await.unwrap();
+        tokio::fs::write(project.join("llm-wiki.md"), "# clio\n")
+            .await
+            .unwrap();
+
+        let found = find_project_ancestor(&nested).await.unwrap();
+        assert_eq!(found, project);
     }
 }
