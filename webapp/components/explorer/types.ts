@@ -16,5 +16,6 @@ export type ExplorerAction =
   | "new-dir"
   | "rename"
   | "delete"
+  | "empty-trash"
   | "upload-file"
   | "upload-dir";

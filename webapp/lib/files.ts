@@ -276,6 +276,39 @@ export async function moveToTrash(ws: WsKey, rel: string): Promise<string> {
   return trashRel;
 }
 
+export async function emptyTrash(
+  ws: WsKey,
+  rel: string = ".trash",
+): Promise<{ deleted: number }> {
+  if (isReadOnlyWorkspace(ws)) {
+    throw new Error(`workspace is read-only via UI: ${ws}`);
+  }
+
+  const normalized = rel.replace(/^\/+/, "").replace(/\/+$/, "") || ".trash";
+  if (normalized !== ".trash" && !normalized.startsWith(".trash/")) {
+    throw new Error("empty-trash is only allowed inside .trash");
+  }
+
+  const abs = resolveEntry(ws, normalized);
+  const ls = await lstatSafe(abs);
+  if (!ls) return { deleted: 0 };
+  if (ls.isSymbolicLink()) {
+    throw new Error("refusing to empty a symlinked trash directory");
+  }
+  if (!ls.isDirectory()) throw new Error("trash path is not a directory");
+  await assertRawWriteDoesNotCrossSymlink(ws, abs, true);
+
+  const names = await fs.readdir(abs);
+  let deleted = 0;
+  for (const name of names) {
+    const childRel = toPosix(path.join(normalized, name));
+    if (isSensitive(childRel)) continue;
+    await fs.rm(path.join(abs, name), { recursive: true, force: true });
+    deleted += 1;
+  }
+  return { deleted };
+}
+
 export function getWorkspaceRoot(ws: WsKey): string {
   return WORKSPACE_ROOTS[ws];
 }

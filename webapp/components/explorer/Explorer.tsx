@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { FolderUp, RefreshCw, Upload } from "lucide-react";
 import { useLanguage } from "../i18n";
+import DirectoryView from "./DirectoryView";
 import Editor from "./Editor";
 import FileTree from "./FileTree";
 import { Button, PageHeader, SegmentControl, Toolbar, cx } from "../ui";
@@ -60,6 +61,15 @@ export default function Explorer() {
     }
     if (kind === "upload-file" || kind === "upload-dir") {
       triggerUpload(kind, target);
+      return;
+    }
+    if (kind === "empty-trash") {
+      if (target?.kind !== "dir" || target.path !== ".trash") return;
+      setDialog({ kind, target, value: target.path });
+      return;
+    }
+    if ((kind === "delete" || kind === "rename") && target?.path === ".trash") {
+      setError(t.explorer.trashRootActionBlocked);
       return;
     }
 
@@ -122,6 +132,14 @@ export default function Explorer() {
         });
         if (!res.ok) throw await asError(res);
         if (selected?.path === dialog.target.path) setSelected(null);
+      } else if (dialog.kind === "empty-trash" && dialog.target) {
+        setBusy(dialog.kind);
+        const res = await fetch("/api/files/empty-trash", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ ws, path: dialog.target.path }),
+        });
+        if (!res.ok) throw await asError(res);
       }
       setDialog(null);
       refresh();
@@ -272,13 +290,26 @@ export default function Explorer() {
           />
         </aside>
         <div className="min-w-0 flex-1">
-        <Editor
-          ws={ws}
-          entry={selected}
-          readOnly={isReadOnly}
-          targetLine={linkedWs === ws && selected?.path === linkedPath ? linkedLine : null}
-          onSaved={refresh}
-        />
+          {selected?.kind === "file" ? (
+            <Editor
+              ws={ws}
+              entry={selected}
+              readOnly={isReadOnly}
+              targetLine={linkedWs === ws && selected.path === linkedPath ? linkedLine : null}
+              onSaved={refresh}
+            />
+          ) : (
+            <DirectoryView
+              ws={ws}
+              entry={selected}
+              refreshKey={refreshKey}
+              readOnly={isReadOnly}
+              busy={busy !== null}
+              onSelect={setSelected}
+              onClearSelection={() => setSelected(null)}
+              onContextAction={action}
+            />
+          )}
         </div>
       </section>
       {dialog ? (
@@ -302,7 +333,7 @@ function parseLine(value: string | null): number | null {
 }
 
 type DialogState = {
-  kind: "new-file" | "new-dir" | "rename" | "delete";
+  kind: "new-file" | "new-dir" | "rename" | "delete" | "empty-trash";
   target: Entry | null;
   value: string;
 };
@@ -322,6 +353,7 @@ function ActionDialog({
 }) {
   const { t } = useLanguage();
   const isDelete = dialog.kind === "delete";
+  const isEmptyTrash = dialog.kind === "empty-trash";
   const title =
     dialog.kind === "new-file"
       ? t.explorer.newFilePath
@@ -329,7 +361,9 @@ function ActionDialog({
         ? t.explorer.newFolderPath
         : dialog.kind === "rename"
           ? t.explorer.newPath
-          : t.explorer.deleteTitle;
+          : isEmptyTrash
+            ? t.explorer.emptyTrashTitle
+            : t.explorer.deleteTitle;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 px-4">
@@ -343,9 +377,11 @@ function ActionDialog({
           ) : null}
         </div>
         <div className="px-4 py-4">
-          {isDelete ? (
+          {isDelete || isEmptyTrash ? (
             <p className="text-sm text-ink-dim">
-              {t.explorer.deleteConfirm(dialog.target?.path ?? "")}
+              {isEmptyTrash
+                ? t.explorer.emptyTrashConfirm(dialog.target?.path ?? "")
+                : t.explorer.deleteConfirm(dialog.target?.path ?? "")}
             </p>
           ) : (
             <input
@@ -369,11 +405,11 @@ function ActionDialog({
           </Button>
           <Button
             onClick={onSubmit}
-            disabled={busy || (!isDelete && dialog.value.trim().length === 0)}
-            variant={isDelete ? "danger" : "primary"}
-            className={cx(isDelete ? "border-danger/60" : "")}
+            disabled={busy || (!isDelete && !isEmptyTrash && dialog.value.trim().length === 0)}
+            variant={isDelete || isEmptyTrash ? "danger" : "primary"}
+            className={cx(isDelete || isEmptyTrash ? "border-danger/60" : "")}
           >
-            {isDelete ? t.common.delete : t.common.save}
+            {isDelete || isEmptyTrash ? t.common.delete : t.common.save}
           </Button>
         </div>
       </div>
