@@ -116,7 +116,13 @@ export const TEXT = {
       newFolderPath: "새 폴더 경로",
       newPath: "새 경로",
       deleteConfirm: (path: string) => `${path}를 .trash/로 이동할까요?`,
+      deletePermanentConfirm: (path: string) =>
+        `${path}를 완전히 삭제할까요? 이 작업은 되돌릴 수 없습니다.`,
+      deleteManyConfirm: (count: number) =>
+        `선택한 ${count.toLocaleString()}개 항목을 삭제할까요? .trash 안의 항목은 완전히 삭제됩니다.`,
       deleteTitle: "삭제",
+      deleteSelected: (count: number) =>
+        count > 0 ? `선택 삭제 ${count.toLocaleString()}` : "선택 삭제",
       emptyTrash: "비우기",
       emptyTrashTitle: ".trash 비우기",
       emptyTrashConfirm: (path: string) =>
@@ -140,6 +146,8 @@ export const TEXT = {
         delete: "삭제",
       },
       searchPlaceholder: "현재 폴더에서 검색",
+      selectVisible: "현재 목록 전체 선택",
+      selectItem: (name: string) => `${name} 선택`,
       itemCount: (count: number) => `${count.toLocaleString()}개 항목`,
       columns: {
         name: "이름",
@@ -534,7 +542,13 @@ export const TEXT = {
       newFolderPath: "New folder path",
       newPath: "New path",
       deleteConfirm: (path: string) => `Move ${path} to .trash/?`,
+      deletePermanentConfirm: (path: string) =>
+        `Permanently delete ${path}? This cannot be undone.`,
+      deleteManyConfirm: (count: number) =>
+        `Delete ${count.toLocaleString()} selected items? Items already in .trash will be permanently deleted.`,
       deleteTitle: "Delete",
+      deleteSelected: (count: number) =>
+        count > 0 ? `Delete ${count.toLocaleString()}` : "Delete selected",
       emptyTrash: "Empty",
       emptyTrashTitle: "Empty .trash",
       emptyTrashConfirm: (path: string) =>
@@ -558,6 +572,8 @@ export const TEXT = {
         delete: "Delete",
       },
       searchPlaceholder: "Search current folder",
+      selectVisible: "Select all visible items",
+      selectItem: (name: string) => `Select ${name}`,
       itemCount: (count: number) => `${count.toLocaleString()} items`,
       columns: {
         name: "Name",

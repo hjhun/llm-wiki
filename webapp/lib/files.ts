@@ -253,27 +253,75 @@ export async function renameEntry(
   await fs.rename(fromAbs, toAbs);
 }
 
-/**
- * UI 삭제 = 워크스페이스 안의 `.trash/<timestamp>_<basename>`으로 이동.
- * (위키의 `archive/`는 LLM 운영 의미상 폐기 폴더로 별도 사용.)
- */
-export async function moveToTrash(ws: WsKey, rel: string): Promise<string> {
-  if (isReadOnlyWorkspace(ws)) {
-    throw new Error(`workspace is read-only via UI: ${ws}`);
-  }
-  const abs = resolveEntry(ws, rel);
-  if (!(await lstatSafe(abs))) throw new Error("not found");
-  await assertRawWriteDoesNotCrossSymlink(ws, abs, false);
+function isTrashPath(rel: string): boolean {
+  const normalized = rel.replace(/^\/+/, "").replace(/\/+$/, "");
+  return normalized === ".trash" || normalized.startsWith(".trash/");
+}
 
+async function uniqueTrashRel(ws: WsKey, rel: string): Promise<string> {
   const stamp = new Date()
     .toISOString()
     .replace(/[:.]/g, "-")
     .replace(/Z$/, "");
-  const trashRel = `.trash/${stamp}_${path.basename(rel)}`;
+  const basename = path.basename(rel);
+  let candidate = `.trash/${stamp}_${basename}`;
+  let suffix = 1;
+  while (await lstatSafe(resolveEntry(ws, candidate))) {
+    candidate = `.trash/${stamp}_${basename}_${suffix}`;
+    suffix += 1;
+  }
+  return candidate;
+}
+
+/**
+ * UI 삭제:
+ * - 일반 경로는 워크스페이스 안의 `.trash/<timestamp>_<basename>`으로 이동.
+ * - 이미 `.trash/` 안에 있는 항목은 영구 삭제.
+ * (위키의 `archive/`는 LLM 운영 의미상 폐기 폴더로 별도 사용.)
+ */
+export async function deleteEntry(
+  ws: WsKey,
+  rel: string,
+): Promise<{ action: "trashed" | "deleted"; trashPath?: string; path: string }> {
+  if (isReadOnlyWorkspace(ws)) {
+    throw new Error(`workspace is read-only via UI: ${ws}`);
+  }
+  const normalized = rel.replace(/^\/+/, "").replace(/\/+$/, "");
+  const trashPath = isTrashPath(normalized);
+  if (trashPath && normalized === ".trash") {
+    throw new Error("the .trash folder itself cannot be deleted");
+  }
+  const abs = resolveEntry(ws, rel);
+  if (!(await lstatSafe(abs))) throw new Error("not found");
+  await assertRawWriteDoesNotCrossSymlink(ws, abs, trashPath);
+
+  if (trashPath) {
+    await fs.rm(abs, { recursive: true, force: true });
+    return { action: "deleted", path: rel };
+  }
+
+  await assertRawWriteDoesNotCrossSymlink(ws, abs, false);
+  const trashRel = await uniqueTrashRel(ws, rel);
   const trashAbs = resolveEntry(ws, trashRel);
   await ensureDirForFile(trashAbs);
   await fs.rename(abs, trashAbs);
-  return trashRel;
+  return { action: "trashed", path: rel, trashPath: trashRel };
+}
+
+export async function deleteEntries(
+  ws: WsKey,
+  rels: string[],
+): Promise<{
+  results: Array<{ action: "trashed" | "deleted"; trashPath?: string; path: string }>;
+}> {
+  const uniqueRels = Array.from(
+    new Set(rels.map((rel) => rel.trim()).filter(Boolean)),
+  );
+  const results = [];
+  for (const rel of uniqueRels) {
+    results.push(await deleteEntry(ws, rel));
+  }
+  return { results };
 }
 
 export async function emptyTrash(

@@ -23,6 +23,10 @@ function parseWs(value: string | null): WsKey | null {
   return null;
 }
 
+function isTrashPath(path: string): boolean {
+  return path === ".trash" || path.startsWith(".trash/");
+}
+
 export default function Explorer() {
   const { t } = useLanguage();
   const router = useRouter();
@@ -90,9 +94,26 @@ export default function Explorer() {
       setDialog({
         kind,
         target,
+        targets: target ? [target] : undefined,
         value: target.path,
       });
     }
+  }
+
+  function deleteEntries(targets: Entry[]) {
+    if (isReadOnly) {
+      setError(t.explorer.readOnlyError);
+      return;
+    }
+    const removable = targets.filter((target) => target.path !== ".trash");
+    if (removable.length === 0) return;
+    setError(null);
+    setDialog({
+      kind: "delete",
+      target: removable[0] ?? null,
+      targets: removable,
+      value: removable.map((target) => target.path).join("\n"),
+    });
   }
 
   async function submitDialog() {
@@ -124,14 +145,17 @@ export default function Explorer() {
         if (!res.ok) throw await asError(res);
         if (selected?.path === dialog.target.path) setSelected(null);
       } else if (dialog.kind === "delete" && dialog.target) {
+        const targets = dialog.targets?.length ? dialog.targets : [dialog.target];
         setBusy(dialog.kind);
         const res = await fetch("/api/files/delete", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ ws, path: dialog.target.path }),
+          body: JSON.stringify({ ws, paths: targets.map((target) => target.path) }),
         });
         if (!res.ok) throw await asError(res);
-        if (selected?.path === dialog.target.path) setSelected(null);
+        if (selected && targets.some((target) => target.path === selected.path)) {
+          setSelected(null);
+        }
       } else if (dialog.kind === "empty-trash" && dialog.target) {
         setBusy(dialog.kind);
         const res = await fetch("/api/files/empty-trash", {
@@ -308,6 +332,7 @@ export default function Explorer() {
               onSelect={setSelected}
               onClearSelection={() => setSelected(null)}
               onContextAction={action}
+              onDeleteEntries={deleteEntries}
             />
           )}
         </div>
@@ -335,6 +360,7 @@ function parseLine(value: string | null): number | null {
 type DialogState = {
   kind: "new-file" | "new-dir" | "rename" | "delete" | "empty-trash";
   target: Entry | null;
+  targets?: Entry[];
   value: string;
 };
 
@@ -354,6 +380,11 @@ function ActionDialog({
   const { t } = useLanguage();
   const isDelete = dialog.kind === "delete";
   const isEmptyTrash = dialog.kind === "empty-trash";
+  const deleteTargets = dialog.targets?.length
+    ? dialog.targets
+    : dialog.target
+      ? [dialog.target]
+      : [];
   const title =
     dialog.kind === "new-file"
       ? t.explorer.newFilePath
@@ -381,7 +412,11 @@ function ActionDialog({
             <p className="text-sm text-ink-dim">
               {isEmptyTrash
                 ? t.explorer.emptyTrashConfirm(dialog.target?.path ?? "")
-                : t.explorer.deleteConfirm(dialog.target?.path ?? "")}
+                : deleteTargets.length > 1
+                  ? t.explorer.deleteManyConfirm(deleteTargets.length)
+                  : isTrashPath(deleteTargets[0]?.path ?? "")
+                    ? t.explorer.deletePermanentConfirm(deleteTargets[0]?.path ?? "")
+                    : t.explorer.deleteConfirm(deleteTargets[0]?.path ?? "")}
             </p>
           ) : (
             <input

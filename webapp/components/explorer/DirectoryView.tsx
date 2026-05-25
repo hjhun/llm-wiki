@@ -49,6 +49,7 @@ export default function DirectoryView({
   onSelect,
   onClearSelection,
   onContextAction,
+  onDeleteEntries,
 }: {
   ws: WsKey;
   entry: Entry | null;
@@ -58,6 +59,7 @@ export default function DirectoryView({
   onSelect: (entry: Entry) => void;
   onClearSelection: () => void;
   onContextAction: (action: ExplorerAction, target: Entry | null) => void;
+  onDeleteEntries: (entries: Entry[]) => void;
 }) {
   const { t } = useLanguage();
   const currentPath = entry?.kind === "dir" ? entry.path : "";
@@ -67,11 +69,13 @@ export default function DirectoryView({
   const [query, setQuery] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("name");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
+  const [selectedPaths, setSelectedPaths] = useState<Set<string>>(() => new Set());
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
     setError(null);
+    setSelectedPaths(new Set());
     (async () => {
       try {
         const next = await fetchList(ws, currentPath);
@@ -86,6 +90,15 @@ export default function DirectoryView({
       cancelled = true;
     };
   }, [currentPath, refreshKey, ws]);
+
+  useEffect(() => {
+    setSelectedPaths((current) => {
+      if (current.size === 0) return current;
+      const available = new Set(entries.map((item) => item.path));
+      const next = new Set(Array.from(current).filter((p) => available.has(p)));
+      return next.size === current.size ? current : next;
+    });
+  }, [entries]);
 
   const filtered = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -105,6 +118,38 @@ export default function DirectoryView({
   }
 
   const canEmptyTrash = !readOnly && currentPath === ".trash";
+  const selectableEntries = filtered.filter((item) => item.path !== ".trash");
+  const selectedEntries = entries.filter((item) => selectedPaths.has(item.path));
+  const selectedCount = selectedPaths.size;
+  const allVisibleSelected =
+    selectableEntries.length > 0 &&
+    selectableEntries.every((item) => selectedPaths.has(item.path));
+
+  function toggleSelected(path: string) {
+    setSelectedPaths((current) => {
+      const next = new Set(current);
+      if (next.has(path)) next.delete(path);
+      else next.add(path);
+      return next;
+    });
+  }
+
+  function toggleAllVisible() {
+    setSelectedPaths((current) => {
+      const next = new Set(current);
+      if (allVisibleSelected) {
+        for (const item of selectableEntries) next.delete(item.path);
+      } else {
+        for (const item of selectableEntries) next.add(item.path);
+      }
+      return next;
+    });
+  }
+
+  function deleteSelected() {
+    if (selectedEntries.length === 0 || busy || readOnly) return;
+    onDeleteEntries(selectedEntries);
+  }
 
   return (
     <div className="flex h-full min-w-0 flex-col bg-bg">
@@ -173,6 +218,15 @@ export default function DirectoryView({
           placeholder={t.explorer.searchPlaceholder}
           className="h-8 min-w-0 flex-1 rounded border border-line bg-bg px-3 text-xs text-ink outline-none focus:border-accent"
         />
+        <Button
+          onClick={deleteSelected}
+          disabled={readOnly || busy || selectedCount === 0}
+          variant="danger"
+          icon={Trash2}
+          className="h-8 px-2.5 text-[11px]"
+        >
+          {t.explorer.deleteSelected(selectedCount)}
+        </Button>
       </div>
 
       {error ? (
@@ -185,11 +239,21 @@ export default function DirectoryView({
         <table className="w-full table-fixed border-collapse text-left text-xs">
           <thead className="sticky top-0 z-10 border-b border-line bg-bg-panel text-[10px] uppercase tracking-wide text-ink-faint">
             <tr>
+              <th className="w-[4%] px-3 py-2">
+                <input
+                  type="checkbox"
+                  checked={allVisibleSelected}
+                  disabled={selectableEntries.length === 0}
+                  aria-label={t.explorer.selectVisible}
+                  onChange={toggleAllVisible}
+                  className="h-3.5 w-3.5 rounded border-line accent-accent"
+                />
+              </th>
               <HeaderCell
                 label={t.explorer.columns.name}
                 active={sortKey === "name"}
                 dir={sortDir}
-                className="w-[45%]"
+                className="w-[41%]"
                 onClick={() => changeSort("name")}
               />
               <HeaderCell
@@ -219,13 +283,13 @@ export default function DirectoryView({
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-sm text-ink-faint">
+                <td colSpan={6} className="px-4 py-8 text-center text-sm text-ink-faint">
                   {t.common.loading}
                 </td>
               </tr>
             ) : filtered.length === 0 ? (
               <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-sm text-ink-faint">
+                <td colSpan={6} className="px-4 py-8 text-center text-sm text-ink-faint">
                   {entries.length === 0 ? t.explorer.emptyFolder : t.explorer.noMatches}
                 </td>
               </tr>
@@ -237,9 +301,22 @@ export default function DirectoryView({
                   onDoubleClick={() => onSelect(item)}
                   className={cx(
                     "group cursor-default border-b border-line/70 text-ink-dim hover:bg-bg-panel/70 hover:text-ink",
+                    selectedPaths.has(item.path) ? "bg-bg-panel text-ink" : "",
                     item.broken ? "text-danger" : "",
                   )}
                 >
+                  <td className="px-3 py-2">
+                    {item.path === ".trash" ? null : (
+                      <input
+                        type="checkbox"
+                        checked={selectedPaths.has(item.path)}
+                        aria-label={t.explorer.selectItem(item.name)}
+                        onChange={() => toggleSelected(item.path)}
+                        onClick={(event) => event.stopPropagation()}
+                        className="h-3.5 w-3.5 rounded border-line accent-accent"
+                      />
+                    )}
+                  </td>
                   <td className="px-3 py-2">
                     <div className="flex min-w-0 items-center gap-2">
                       {item.kind === "dir" ? (

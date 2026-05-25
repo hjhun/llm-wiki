@@ -367,6 +367,12 @@ the bwrap read-only HOME binds. The setup detection combines known CLI/XDG
 locations, Cline editor-extension storage candidates, and `strace` file-access
 evidence when `strace` is available; it stores paths only, never file contents.
 
+Snap-packaged agent CLIs such as `/snap/bin/gemini` cannot run inside this
+unprivileged `bwrap` sandbox because `snap-confine` needs host cgroup and
+capability setup that the sandbox intentionally does not provide. Install those
+CLIs with npm or a standalone binary when they need to serve public sandboxed
+queries.
+
 If you do not want to share the host login state, remove the relevant path from
 `sandboxReadOnlyHomePaths` and log in once using the dedicated public CLI home:
 

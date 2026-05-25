@@ -596,6 +596,10 @@ function nodePackageRoot(realCliPath: string): string | null {
   return parts.slice(0, packageEnd).join(path.sep) || path.sep;
 }
 
+function isSnapLauncher(cliPath: string, realCliPath: string): boolean {
+  return cliPath.startsWith("/snap/bin/") || realCliPath === "/usr/bin/snap";
+}
+
 async function shebangCommand(realPath: string): Promise<string | null> {
   let text: string;
   let handle: Awaited<ReturnType<typeof fs.open>> | null = null;
@@ -634,10 +638,17 @@ async function addShebangRuntimeBinds(
 
 async function addCliRuntimeBinds(
   args: string[],
-  _cli: CliName,
+  cli: CliName,
   cliPath: string,
 ): Promise<string> {
   const realCliPath = await fs.realpath(cliPath).catch(() => cliPath);
+  if (isSnapLauncher(cliPath, realCliPath)) {
+    throw new Error(
+      `${cli} is installed as a Snap launcher (${cliPath}). ` +
+        "Snap-packaged CLIs cannot run inside the public bwrap sandbox; " +
+        "install the CLI with npm/a standalone binary or disable public sandboxing.",
+    );
+  }
   await addShebangRuntimeBinds(args, realCliPath);
   const packageRoot = nodePackageRoot(realCliPath);
   if (packageRoot) {
