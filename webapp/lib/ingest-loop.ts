@@ -37,17 +37,24 @@ export type ProgressSnapshot = {
   sourcePagesMissing: number;
   missingSourceLeaves: string[];
   codeLeavesTotal: number;
+  /** Legacy name: code/mixed leaves that are represented in ingest progress. */
   codeLeavesWithOutputs: number;
+  /** Legacy name: kept for compatibility; Code Wiki pages are no longer required. */
   codeLeavesMissingOutputs: number;
   missingCodeLeaves: string[];
   codeFilePagesTotal: number;
+  /** Legacy name: no longer tracks wiki/code file pages. */
   codeFilePagesWithOutputs: number;
+  /** Code-looking raw files that have not been represented in ingest state. */
   codeFilePagesMissing: number;
   missingCodeFiles: string[];
   codeDirectoryIndexesTotal: number;
+  /** Legacy name: directory wiki/code pages are no longer required. */
   codeDirectoryIndexesWithOutputs: number;
+  /** Legacy name: directory wiki/code pages are no longer required. */
   codeDirectoryIndexesMissing: number;
   missingCodeDirectories: string[];
+  /** Legacy wiki/code output counter; graphify is the primary code artifact now. */
   codeOutputsWritten: number;
   subChunksTotal: number;
   subChunksDone: number;
@@ -613,14 +620,14 @@ export async function buildCodeWikiStatusReference(
     if (snap.missingCodeFiles.length > 0) {
       return [
         `Code Wiki status${scopeLabel}: ${snap.missingCodeFiles.length} code-looking raw files are not represented in ${PROGRESS_STATE_PATH}.`,
-        `Missing state/file-level coverage for: ${snap.missingCodeFiles.slice(0, CODE_STATUS_MAX).join(", ")}${snap.missingCodeFiles.length > CODE_STATUS_MAX ? ` … (+${snap.missingCodeFiles.length - CODE_STATUS_MAX} more)` : ""}`,
-        "During enumeration, create leaf units for direct files in non-leaf directories as well as true leaf directories, then create one mirrored Code Wiki file page per code file. A parent directory `index.md` is navigation/synthesis only and does not substitute for file-level pages.",
+        `Missing state coverage for: ${snap.missingCodeFiles.slice(0, CODE_STATUS_MAX).join(", ")}${snap.missingCodeFiles.length > CODE_STATUS_MAX ? ` … (+${snap.missingCodeFiles.length - CODE_STATUS_MAX} more)` : ""}`,
+        "During enumeration, create leaf units for direct files in non-leaf directories as well as true leaf directories. Do not create per-file wiki/code pages as a completion requirement; code knowledge is materialized by the follow-up `wiki-graphify update` run.",
       ].join("\n");
     }
     return (
       `Code Wiki status${scopeLabel}: no code/mixed leaves are currently detected in ` +
       `${PROGRESS_STATE_PATH}. During enumeration, classify code leaves by ` +
-      "filename/manifest and record `kind`, `project`, and `code_outputs`."
+      "filename/manifest and record `kind`, `project`, and the logical `raw/...` files or `graph_scope`."
     );
   }
   const missing = snap.missingCodeLeaves.slice(0, CODE_STATUS_MAX);
@@ -630,20 +637,15 @@ export async function buildCodeWikiStatusReference(
       : "";
   const missingLine =
     missing.length > 0
-      ? `Missing Code Wiki outputs for: ${missing.join(", ")}${suffix}`
-      : "All detected code/mixed leaves have recorded Code Wiki outputs.";
+      ? `Missing code leaf progress entries for: ${missing.join(", ")}${suffix}`
+      : "All detected code/mixed leaves are represented in ingest progress.";
   return [
-    `Code Wiki status${scopeLabel}: ${snap.codeLeavesWithOutputs}/${snap.codeLeavesTotal} code/mixed leaves have valid wiki/code outputs.`,
+    `Code Wiki status${scopeLabel}: ${snap.codeLeavesWithOutputs}/${snap.codeLeavesTotal} code/mixed leaves are graph-ready after ingest.`,
     missingLine,
-    `File-level Code Wiki coverage${scopeLabel}: ${snap.codeFilePagesWithOutputs}/${snap.codeFilePagesTotal} code files have valid mirrored \`wiki/code/<project>/<relative-file-path>.md\` pages (legacy \`files/*.md\` pages are still accepted).`,
     snap.missingCodeFiles.length > 0
-      ? `Missing file-level Code Wiki pages for: ${snap.missingCodeFiles.slice(0, CODE_STATUS_MAX).join(", ")}${snap.missingCodeFiles.length > CODE_STATUS_MAX ? ` … (+${snap.missingCodeFiles.length - CODE_STATUS_MAX} more)` : ""}`
-      : "All detected code files have file-level Code Wiki pages.",
-    `Directory-index Code Wiki coverage${scopeLabel}: ${snap.codeDirectoryIndexesWithOutputs}/${snap.codeDirectoryIndexesTotal} source directories have valid mirrored \`index.md\` pages.`,
-    snap.missingCodeDirectories.length > 0
-      ? `Missing Code Wiki directory indexes for: ${snap.missingCodeDirectories.slice(0, CODE_STATUS_MAX).join(", ")}${snap.missingCodeDirectories.length > CODE_STATUS_MAX ? ` … (+${snap.missingCodeDirectories.length - CODE_STATUS_MAX} more)` : ""}`
-      : "All represented source directories have Code Wiki index pages.",
-    "For a done code/mixed leaf with missing valid outputs, or for code-looking raw files not represented in progress state, treat the next unit of work as a Code Wiki repair: enumerate direct-file pseudo-leaves plus true leaf directories, run `node scripts/code-index.mjs raw/<project-or-leaf> --format=json` and `--format=markdown` when applicable, mirror the source tree under `wiki/code/<project>/`, create one `index.md` with `directory` in `tags` for each represented directory, create one file page as `wiki/code/<project>/<relative-file-path>.md` with `file` in `tags` for each code file, and record those paths in `code_outputs` before reporting completion. A parent `index.md` does not substitute for file-level Code Wiki pages.",
+      ? `Code-looking raw files still missing from progress state: ${snap.missingCodeFiles.slice(0, CODE_STATUS_MAX).join(", ")}${snap.missingCodeFiles.length > CODE_STATUS_MAX ? ` … (+${snap.missingCodeFiles.length - CODE_STATUS_MAX} more)` : ""}`
+      : "All detected code files are represented by ingest leaves or sub-chunks.",
+    "For a done code/mixed leaf, do not repair by writing mirrored `wiki/code` file or directory pages. Finish the normal source-summary/merge work and rely on the separate `wiki-graphify update` invocation to create or refresh `wiki/graph/graph.json`, `GRAPH_REPORT.md`, and per-leaf graph parts from the code under `raw/`.",
   ].join("\n");
 }
 
@@ -736,16 +738,6 @@ export async function readProgressSnapshot(
           (file) => fileLooksLikeCode(file) || fileLooksLikeRuntimeEvidence(file),
         );
         for (const file of codeFiles) stateCodeFiles.add(file);
-        const coveredCodeFiles = await collectValidCodeFileOutputs(
-          leaf,
-          codeFiles,
-        );
-        const expectedCodeDirectoryIndexes = expectedCodeDirectoryIndexPaths(
-          leaf,
-          codeFiles,
-        );
-        const coveredCodeDirectoryIndexes =
-          await collectValidCodeDirectoryIndexOutputs(leaf);
         snap.sourcePagesWritten += validSourcePages.length;
         const isCodeLeaf = leafKind === "code" || leafKind === "mixed";
         const sourceCoverageMissing =
@@ -761,30 +753,9 @@ export async function readProgressSnapshot(
           snap.codeLeavesTotal += 1;
           snap.codeOutputsWritten += codeOutputs.length;
           snap.codeFilePagesTotal += codeFiles.length;
-          snap.codeFilePagesWithOutputs += coveredCodeFiles.size;
-          snap.codeDirectoryIndexesTotal += expectedCodeDirectoryIndexes.length;
-          snap.codeDirectoryIndexesWithOutputs += expectedCodeDirectoryIndexes.filter(
-            (indexPath) => coveredCodeDirectoryIndexes.has(indexPath),
-          ).length;
-          const missingCodeFiles = codeFiles.filter(
-            (file) => !coveredCodeFiles.has(file),
-          );
-          const missingCodeDirectories = expectedCodeDirectoryIndexes.filter(
-            (indexPath) => !coveredCodeDirectoryIndexes.has(indexPath),
-          );
-          if (leaf.status === "done" && missingCodeFiles.length > 0) {
-            snap.codeFilePagesMissing += missingCodeFiles.length;
-            snap.missingCodeFiles.push(...missingCodeFiles);
-          }
-          if (leaf.status === "done" && missingCodeDirectories.length > 0) {
-            snap.codeDirectoryIndexesMissing += missingCodeDirectories.length;
-            snap.missingCodeDirectories.push(...missingCodeDirectories);
-          }
-          if (codeOutputs.length > 0) {
+          snap.codeFilePagesWithOutputs += codeFiles.length;
+          if (leaf.status === "done" || codeOutputs.length > 0) {
             snap.codeLeavesWithOutputs += 1;
-          } else if (leaf.status === "done") {
-            snap.codeLeavesMissingOutputs += 1;
-            snap.missingCodeLeaves.push(leafPath);
           }
         }
         snap.leavesTotal += 1;
@@ -1037,9 +1008,9 @@ export function decideLoopHalt(input: {
       reason:
         `ingest 산출물 누락 ` +
         `(source leaves=${input.sourcePagesMissing ?? 0}, ` +
-        `code leaves=${input.codeLeavesMissingOutputs ?? 0}, ` +
-        `code files=${input.codeFilePagesMissing ?? 0}, ` +
-        `code directories=${input.codeDirectoryIndexesMissing ?? 0})이 ` +
+        `code leaf progress=${input.codeLeavesMissingOutputs ?? 0}, ` +
+        `untracked code files=${input.codeFilePagesMissing ?? 0}, ` +
+        `legacy code directories=${input.codeDirectoryIndexesMissing ?? 0})이 ` +
         `연속 ${input.idleRounds}개 라운드에서 해결되지 않아 중단`,
     };
   }
@@ -1083,7 +1054,7 @@ export function buildLoopContinuationPrompt(input: {
   if (input.sourcePageStatusRef) lines.push(input.sourcePageStatusRef);
   if (input.codeWikiStatusRef) lines.push(input.codeWikiStatusRef);
   lines.push(
-    `This is /ingest-loop iteration ${input.iteration}. Pick the next pending sub-chunk, merge-pass parent, missing direct-file pseudo-leaf enumeration, or missing Code Wiki output repair from wiki/.progress/ingest/.state.json${rawScope ? ` within ${rawScope}` : ""} and process exactly one unit per the wiki-ingest skill, then exit. Do not loop yourself — the backend will spawn the next iteration.`,
+    `This is /ingest-loop iteration ${input.iteration}. Pick the next pending sub-chunk, merge-pass parent, or missing direct-file pseudo-leaf enumeration from wiki/.progress/ingest/.state.json${rawScope ? ` within ${rawScope}` : ""} and process exactly one unit per the wiki-ingest skill, then exit. Do not loop yourself — the backend will spawn the next iteration. For code/mixed leaves, do not create mirrored wiki/code file pages as a repair task; graphify runs separately after ingest progress is complete.`,
     "",
     "===== CONVERSATION =====",
     rawScope ? `User: /ingest-loop ${rawScope}` : "User: /ingest",
@@ -1447,9 +1418,13 @@ async function validateGraphifyArtifacts(
       ? (parsed as Record<string, unknown>)
       : null;
   const nodes = Array.isArray(root?.nodes) ? root.nodes : null;
-  const edges = Array.isArray(root?.edges) ? root.edges : null;
+  const edges = Array.isArray(root?.edges)
+    ? root.edges
+    : Array.isArray(root?.links)
+      ? root.links
+      : null;
   if (!nodes || !edges) {
-    return "`wiki/graph/graph.json` schema가 유효하지 않습니다: nodes/edges 배열이 필요합니다.";
+    return "`wiki/graph/graph.json` schema가 유효하지 않습니다: nodes 배열과 edges 또는 links 배열이 필요합니다.";
   }
   if (snapshot.sourcePagesWritten > 0 && nodes.length === 0) {
     return (

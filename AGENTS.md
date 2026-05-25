@@ -13,8 +13,8 @@
 > specializing it for CLIO's web UI, resumable ingest loop, graph tooling, and
 > Code Wiki workflows.
 > CLIO also supports a **Code Wiki** mode: source code stored under `raw/` (or
-> approved `raw/` symlinks) can be documented into `wiki/code/` and connected to
-> the same Markdown/graph knowledge base.
+> approved `raw/` symlinks) can be turned into a graphify-backed knowledge graph
+> under `wiki/graph/` and connected to the same Markdown wiki.
 
 ---
 
@@ -23,7 +23,7 @@
 - The user gathers source material in `raw/`. They decide what to read and what to ask. Source material may be prose, PDFs, web captures, logs, or software codebases.
 - You incrementally **build and maintain** the Markdown wiki under `wiki/`.
   - Create summary pages, update entity/concept pages, fill indexes and logs, and flag contradictions.
-  - For code inputs, create Code Wiki pages for projects, mirrored source directories, files, APIs, architecture, testing, and debug knowledge under `wiki/code/`.
+  - For code inputs, preserve source summaries and let graphify create or update the Code Wiki graph under `wiki/graph/`.
   - You handle the maintenance work: summarizing, cross-referencing, organizing, and preserving consistency.
 - The wiki should be searchable and understandable as a coherent work that another person can read.
 
@@ -37,7 +37,7 @@
 | `wiki/` | LLM | LLM may freely write/update | Main wiki body. All generated artifacts go here. |
 | `wiki/sources/` | LLM | LLM | Provenance ledger: one dated summary page per original source plus a generated `wiki/sources/index.md` catalog for topic/entity/source-kind lookup. |
 | `wiki/maps/` | LLM | LLM | Optional associative trails and topic maps that connect sources, entities, concepts, answers, and open questions. |
-| `wiki/code/` | LLM | LLM | Code Wiki pages derived from code in `raw/`: project overviews, mirrored source-directory pages with per-directory `index.md`, file pages, APIs, architecture, testing, and debug notes. |
+| `wiki/code/` | LLM | LLM | Optional human-readable code syntheses such as project overviews or saved answers. Not required for ingest completion; source-code structure is represented primarily by graphify artifacts under `wiki/graph/`. |
 | `wiki/answers/` | LLM | LLM | Pages fed back from query answers. |
 | `wiki/lint/` | LLM | LLM | Lint reports (`<date>.md`). |
 | `wiki/graph/` | LLM (graphify) | LLM | Knowledge graph artifacts: `graph.json`, `GRAPH_REPORT.md`, `parts/`, `.state.json`. |
@@ -94,18 +94,16 @@ Each operation maps to one or more project skills. If these rules conflict with 
 - Always follow the **leaf-directory chunks + merge pass** principle (Section 7), using the normal `wiki/.progress/ingest/` state. There is no separate user-facing Code Wiki command.
 - Outputs:
   - `wiki/sources/<YYYY>/<YYYY-MM>/<slug>.md` source summaries for code files or code groups
-  - `wiki/code/<project>/overview.md`
-  - `wiki/code/<project>/<relative-dir>/index.md` — one page per source directory, summarizing direct files and child directories
-  - `wiki/code/<project>/<relative-file-path>.md` — one page per code file, preserving the source-relative path by appending `.md`, linked to the matching source summary and logical `raw/...` path
-  - `wiki/code/<project>/apis/*.md` or API pages near the owning source directory
-  - optional `wiki/code/<project>/architecture.md`, `testing.md`, and `debug-notes.md`
+  - `wiki/graph/parts/<path-hash>.json` partial graph artifacts for code leaves
+  - `wiki/graph/graph.json` and `wiki/graph/GRAPH_REPORT.md` after `wiki-graphify update`
+  - optional human-readable syntheses under `wiki/code/<project>/` or `wiki/answers/` when explicitly useful
   - updated `wiki/index.md` and appended `wiki/log.md` entries
-- Use specialized Code Wiki skills as needed:
+- Use specialized Code Wiki skills only for optional synthesis after graph/source evidence exists:
   - [`code-documentation`](.agents/skills/code-documentation/SKILL.md) for module/API/runbook docs
   - [`code-architecture`](.agents/skills/code-architecture/SKILL.md) for architecture synthesis
   - [`code-testing`](.agents/skills/code-testing/SKILL.md) for test inventory and gaps
   - [`code-debug`](.agents/skills/code-debug/SKILL.md) for logs, stack traces, and failure analysis
-- Code Wiki pages should bridge back to the ordinary LLM Wiki with wikilinks when code implements a documented concept.
+- Code Wiki graph nodes should bridge back to the ordinary LLM Wiki with sources and wikilinks when code implements a documented concept.
 
 ### 3.6 Browser Capture (`browser-capture`, [`.agents/skills/browser-capture/SKILL.md`](.agents/skills/browser-capture/SKILL.md))
 - Input: user-approved web pages, CLIO web UI QA observations, browser screenshots, or extracted text.
@@ -207,7 +205,7 @@ many topics, entities, concepts, and maps.
 |---|---|
 | `/preprocess [path] [description]`, `/preprocess --apply`, "clean up ads / empty files in raw" | [`wiki-preprocess`](.agents/skills/wiki-preprocess/SKILL.md) |
 | `/ingest <path|url>`, "summarize this material", `+ -> ingest` | [`wiki-ingest`](.agents/skills/wiki-ingest/SKILL.md) |
-| `/ingest <raw code path>`, `/ingest-loop <raw code path>`, "code wiki", "document this codebase", "analyze this repo/code" | [`wiki-ingest`](.agents/skills/wiki-ingest/SKILL.md), which auto-detects code leaves and uses [`code-documentation`](.agents/skills/code-documentation/SKILL.md), [`code-architecture`](.agents/skills/code-architecture/SKILL.md), [`code-testing`](.agents/skills/code-testing/SKILL.md), or [`code-debug`](.agents/skills/code-debug/SKILL.md) as internal helpers |
+| `/ingest <raw code path>`, `/ingest-loop <raw code path>`, "code wiki", "document this codebase", "analyze this repo/code" | [`wiki-ingest`](.agents/skills/wiki-ingest/SKILL.md), which auto-detects code leaves, writes source summaries/progress, and relies on the follow-up [`wiki-graphify`](.agents/skills/wiki-graphify/SKILL.md) update to build the code graph |
 | `/query <question>`, general questions | [`wiki-query`](.agents/skills/wiki-query/SKILL.md) |
 | `/lint`, "check the wiki" | [`wiki-lint`](.agents/skills/wiki-lint/SKILL.md) |
 | "build/update/query the graph" | [`wiki-graphify`](.agents/skills/wiki-graphify/SKILL.md) |
@@ -239,7 +237,7 @@ This applies to ingest, Code Wiki ingest, preprocess planning, and graphify. Nev
 ## 8. Graph Integration
 
 - Graph creation, update, and query operations must go through the [`wiki-graphify`](.agents/skills/wiki-graphify/SKILL.md) skill.
-- Code Wiki pages under `wiki/code/` are graph inputs. Graph nodes should connect code pages to implemented concepts, APIs, directories/modules, and source summaries.
+- Code Wiki is graph-first: graphify reads code evidence under `raw/` plus generated wiki/source pages and writes graph nodes that connect code symbols, files, modules, concepts, and source summaries.
 - The web app Graph tab does not execute graphify directly. It sends `wiki-graphify build/update` requests to the coding agent CLI selected in Settings, and the coding agent follows this repository's rules and skills to run graphify, chunk processing, and the merge pass.
 - Wiki pages must not call the `graphify` binary directly. The coding agent running `wiki-graphify` chooses the execution path: global `graphify`, or `python3 -m graphify` when needed.
 - `wiki-query` may optionally use graph context from `wiki/graph/GRAPH_REPORT.md`, node adjacency, or `wiki-graphify query` as an auxiliary candidate/context source; it must still ground final answers in wiki/source pages.
@@ -310,10 +308,10 @@ Mental checklist for one Code Wiki run:
 - [ ] Did you process only code-looking leaves under `raw/` or the requested target?
 - [ ] Did you include direct source files in non-leaf directories as their own pseudo-leaf chunks?
 - [ ] Did you skip generated/vendor/build directories unless requested?
-- [ ] Did you write source summaries and mirrored `wiki/code/<project>/` pages?
-- [ ] Did every represented Code Wiki directory get an `index.md` summarizing direct files and child directories?
-- [ ] Did every code file get its own mirrored `wiki/code/<project>/<relative-file-path>.md` page, rather than being represented only inside a parent `index.md`?
-- [ ] Did you connect directories/modules/APIs/tests to existing concepts with wikilinks?
+- [ ] Did you write source summaries and record code/mixed leaves in progress state?
+- [ ] Did you avoid file-by-file LLM code documentation unless explicitly requested?
+- [ ] Did `wiki-graphify update` run or remain clearly queued as the follow-up that creates `wiki/graph/graph.json` and `GRAPH_REPORT.md`?
+- [ ] Did graph nodes/source summaries connect directories/modules/APIs/tests to existing concepts where evidence supports it?
 - [ ] Did you update `wiki/index.md` under the `Code` category?
 - [ ] Did you update `wiki/sources/index.md` and any relevant `wiki/maps/` trails?
 - [ ] Did you append a `wiki/log.md` entry without editing old entries?

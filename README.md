@@ -16,7 +16,7 @@ Most "chat with your documents" tools hide knowledge in a transcript or an opaqu
 |---|---|
 | Local-first source library | Your original material lives in `raw/`; agents treat it as read-only. |
 | Maintained Markdown wiki | Summaries, concepts, entities, answers, lint reports, and graph reports live in `wiki/`. |
-| Code Wiki | Code under `raw/` can become module, API, architecture, testing, and debug pages under `wiki/code/`. |
+| Code Wiki | Code under `raw/` becomes a graphify-backed code knowledge graph under `wiki/graph/`, with optional human-readable syntheses when useful. |
 | Agent-operated workflows | `codex`, `claude`, `gemini`, or `cline` can run `/ingest`, `/query`, `/lint`, preprocess, and graph workflows. |
 | Browser workbench | A Next.js UI provides Chat, Explorer, Graph, Automations, and Settings tabs. |
 | Incremental processing | Large folders are processed leaf-first in small chunks, then merged into a coherent wiki. |
@@ -190,20 +190,18 @@ the normal ingest flow:
 /ingest-loop raw/repos/<project>
 ```
 
-The selected coding agent auto-detects code-heavy leaves, reads the
-project-local Code Wiki helper skills, and writes graph-ready Markdown under
-`wiki/code/<project>/`: project overviews, module pages, API/CLI notes,
-architecture synthesis, testing notes, debug notes when logs or failures are
-present, Mermaid diagrams for structure/dependencies, and an OpenGrok-like
-`locations.md` index with symbol, file, and line references. The deterministic
-helper `scripts/code-index.mjs` extracts symbols, import edges, line numbers,
-and Mermaid drafts for agents to use during ingest. Code sources remain
-read-only evidence under `raw/`; actual code edits are separate coding tasks,
-not ingest work.
+The selected coding agent auto-detects code-heavy leaves, writes normal
+`wiki/sources/` provenance summaries, records resumable ingest progress, and
+then relies on `wiki-graphify update` to materialize source-code structure as a
+knowledge graph under `wiki/graph/`: per-leaf parts, `graph.json`, and
+`GRAPH_REPORT.md`. Code sources remain read-only evidence under `raw/`; actual
+code edits are separate coding tasks, not ingest work.
 
-Code Wiki pages are linked from `wiki/index.md` under `Code` and can be included
-in `wiki-graphify update`, so questions can bridge prose knowledge and
-implementation details.
+Human-readable project overviews, API notes, testing notes, or debug notes can
+still be saved under `wiki/code/` or `wiki/answers/` when they are useful
+syntheses, but ingest completion no longer requires one Markdown page per
+source file. Questions can bridge prose knowledge and implementation details
+through the graph plus source summaries.
 
 Run graph workflows from the **Graph** tab:
 

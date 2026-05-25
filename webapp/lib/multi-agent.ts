@@ -163,7 +163,7 @@ function missionProfiles(kind: OrchestratedKind): MissionProfile[] {
     },
     {
       role: "Code Cartographer",
-      detail: "Code Wiki 파일/디렉터리 페이지와 code_outputs 누락을 보강합니다.",
+      detail: "코드 leaf 상태와 graphify 후속 그래프 산출물 누락을 점검합니다.",
       asciiTask: "map code wiki",
     },
     {
@@ -281,8 +281,8 @@ function operationPolicy(kind: OrchestratedKind): string {
     return [
       "You are an ingest worker in a backend-managed loop. Follow wiki-ingest and process at most one sub-chunk or one merge-pass parent, then exit.",
       "Every non-ignored leaf must have one wiki/sources page per original raw file recorded in source_pages_written. Repair missing source pages before reporting completion.",
-      "Code Wiki is part of ingest, not a separate command. During enumeration, classify leaves as prose/code/mixed/ignore and include direct-file pseudo-leaves for code files in non-leaf directories. For code or mixed leaves, run scripts/code-index.mjs when applicable, mirror the source tree under wiki/code/<project>/, create one index.md per represented source directory with directory in tags, create one wiki/code/<project>/<relative-file-path>.md page per code file with file in tags, and record those paths in code_outputs. A parent index.md is navigation/synthesis only; it does not substitute for file-level pages.",
-      "If the progress state shows a done code/mixed leaf with missing valid wiki/code outputs, missing file-level Code Wiki pages, missing directory index pages, or code-looking raw files not represented in state, treat that as the next unit of work and repair the Code Wiki outputs before reporting that ingest is complete.",
+      "Code Wiki is part of ingest, not a separate command. During enumeration, classify leaves as prose/code/mixed/ignore and include direct-file pseudo-leaves for code files in non-leaf directories. For code or mixed leaves, write source summaries as provenance and record leaf/sub-chunk progress. Do not mirror the source tree into wiki/code/<project>/ or create one page per code file as a completion requirement; graphify materializes code knowledge in wiki/graph after ingest.",
+      "If the progress state shows code-looking raw files not represented in state, treat that as the next unit of work and repair the leaf enumeration. Do not repair a done code/mixed leaf by writing wiki/code file or directory pages.",
       "A symlink located under raw/ is a valid source entry: follow it read-only even if its real target is outside the repository, preserve logical raw/... paths in state/citations, and reject only broken links or loops.",
       "If wiki/.progress/ingest/.lock is held by another live process, report that you are standing by and exit successfully. The Coordinator will launch the next round.",
       "Do NOT run wiki-graphify and do NOT write anything under wiki/graph/. The backend triggers graph updates as separate invocations only after all ingest work and merge passes are complete.",
@@ -291,8 +291,8 @@ function operationPolicy(kind: OrchestratedKind): string {
   return [
     "You are an ingest worker. Follow wiki-ingest and process exactly one sub-chunk or one merge-pass parent, then exit.",
     "Every non-ignored leaf must have one wiki/sources page per original raw file recorded in source_pages_written. Repair missing source pages before reporting completion.",
-    "Code Wiki is part of ingest, not a separate command. During enumeration, classify leaves as prose/code/mixed/ignore and include direct-file pseudo-leaves for code files in non-leaf directories. For code or mixed leaves, run scripts/code-index.mjs when applicable, mirror the source tree under wiki/code/<project>/, create one index.md per represented source directory with directory in tags, create one wiki/code/<project>/<relative-file-path>.md page per code file with file in tags, and record those paths in code_outputs. A parent index.md is navigation/synthesis only; it does not substitute for file-level pages.",
-    "If the progress state shows a done code/mixed leaf with missing valid wiki/code outputs, missing file-level Code Wiki pages, missing directory index pages, or code-looking raw files not represented in state, treat that as the next unit of work and repair the Code Wiki outputs before reporting that ingest is complete.",
+    "Code Wiki is part of ingest, not a separate command. During enumeration, classify leaves as prose/code/mixed/ignore and include direct-file pseudo-leaves for code files in non-leaf directories. For code or mixed leaves, write source summaries as provenance and record leaf/sub-chunk progress. Do not mirror the source tree into wiki/code/<project>/ or create one page per code file as a completion requirement; graphify materializes code knowledge in wiki/graph after ingest.",
+    "If the progress state shows code-looking raw files not represented in state, treat that as the next unit of work and repair the leaf enumeration. Do not repair a done code/mixed leaf by writing wiki/code file or directory pages.",
     "A symlink located under raw/ is a valid source entry: follow it read-only even if its real target is outside the repository, preserve logical raw/... paths in state/citations, and reject only broken links or loops.",
     "If wiki/.progress/ingest/.lock is held by another live process, report that you are standing by and exit successfully.",
     "Do NOT run wiki-graphify and do NOT write anything under wiki/graph/. The backend triggers graph updates as separate invocations only after all ingest work and merge passes are complete.",
@@ -439,7 +439,7 @@ function buildManagerPrompt(input: {
   const writePolicy =
     input.kind === "lint"
       ? "For /lint, use worker findings as inspection input, then perform exactly one Coordinator write pass following wiki-lint, including report/log/index updates and --fix only if requested."
-      : "For ingest operations, do not re-run ingest work in this Coordinator pass. Review progress and worker outputs, and do not call the run complete when done leaves still lack source_pages_written coverage or detected code/mixed leaves still lack valid wiki/code file pages recorded in code_outputs.";
+      : "For ingest operations, do not re-run ingest work in this Coordinator pass. Review progress and worker outputs, and do not call the run complete when done leaves still lack source_pages_written coverage or code-looking raw files are still missing from ingest state. Do not require wiki/code file pages for completion; graphify runs after ingest.";
 
   return [
     "You are the central Supervisor / Coordinator agent for an LLM Wiki multi-agent run.",

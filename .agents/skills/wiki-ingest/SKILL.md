@@ -1,6 +1,6 @@
 ---
 name: wiki-ingest
-description: Read new material in raw/ as leaf-directory chunks and incrementally build wiki/. Automatically detects prose, code repositories, logs, and test output; code-heavy leaves produce directory-mirrored Code Wiki pages under wiki/code/ with per-directory index.md summaries, source locations, and Mermaid diagrams. Responds to /ingest, /ingest-loop, "summarize this material", and chat + -> ingest triggers.
+description: Read new material in raw/ as leaf-directory chunks and incrementally build wiki/. Automatically detects prose, code repositories, logs, and test output; code-heavy leaves preserve source summaries and rely on graphify to materialize code knowledge under wiki/graph/. Responds to /ingest, /ingest-loop, "summarize this material", and chat + -> ingest triggers.
 allowed-cli: [codex, claude, gemini, cline]
 ---
 
@@ -13,7 +13,7 @@ pattern: the user curates immutable `raw/` sources, and the LLM incrementally
 builds a persistent, interlinked Markdown wiki instead of re-deriving knowledge
 from raw documents at query time. The concrete CLIO rules in `AGENTS.md`,
 `CLAUDE.md`, and this skill specialize that pattern for resumable chunking,
-Code Wiki output, graph updates, and Korean wiki writing.
+Code Wiki graph updates and Korean wiki writing.
 
 ## Purpose
 
@@ -21,7 +21,7 @@ Read material newly dropped by the user into `raw/` and perform the following.
 
 1. Write one `wiki/sources/<YYYY>/<YYYY-MM>/<slug>.md` summary page per original source, treating `wiki/sources/` as a dated provenance ledger rather than the main topic taxonomy.
 2. Create or update related entity/concept pages, reusing existing pages instead of creating near-duplicates (see Step 2.3).
-3. If a leaf is code-heavy, create or update Code Wiki pages under `wiki/code/<project>/` by mirroring the source directory structure, writing one file-level page per code file beside a per-directory `index.md`, plus architecture/testing/debug notes, code locations, and Mermaid diagrams.
+3. If a leaf is code-heavy, keep the normal LLM Wiki ingest contract: write provenance/source summaries and progress state, then let the separate `wiki-graphify update` workflow build the code knowledge graph from the immutable code under `raw/`.
 4. Refresh `wiki/sources/index.md` as a compact source catalog organized by metadata facets such as topic, entity, source kind, source date, raw path prefix, status, and recent updates.
 5. Create or update `wiki/maps/<topic>.md` associative trail pages when a source belongs to an ongoing research thread that benefits from a navigable source/concept/entity map.
 6. Keep `wiki/index.md` and `wiki/log.md` consistent.
@@ -63,7 +63,7 @@ externalized to `wiki/.progress/ingest/`.
 ## Output
 
 - List of new/updated `wiki/**` Markdown files.
-- For code-heavy inputs, graph-ready Code Wiki pages under `wiki/code/<project>/`, including one mirrored file page for each code file and an `index.md` summary in every mirrored source directory.
+- For code-heavy inputs, graph-ready source summaries and ingest progress; the Code Wiki graph itself is produced by the separate `wiki-graphify update` invocation under `wiki/graph/`.
 - Session Markdown with chat log: `sessions/<date>/<time>_ingest.md` (conversation only).
 - Externalized progress: `wiki/.progress/ingest/.state.json` + `wiki/.progress/ingest/leaves/<hash>.json` + human-readable `wiki/.progress/ingest/DASHBOARD.md`.
 - `wiki/sources/index.md` refreshed during the merge pass when source pages changed.
@@ -108,14 +108,11 @@ conversation. The host webapp also slims the prompt to the last N turns
 5. If the target may contain code, scan only filenames/manifests first to
    classify leaves. Do not open many source files just to decide whether the
    input is code.
-6. If code leaves are present, run the deterministic code indexer for the
-   project or leaf before writing Code Wiki pages:
-   ```bash
-   node scripts/code-index.mjs raw/<project-or-leaf> --format=json
-   node scripts/code-index.mjs raw/<project-or-leaf> --format=markdown
-   ```
-   Use the JSON for symbol/dependency evidence and the Markdown output as the
-   first draft for `wiki/code/<project>/locations.md` and `diagrams.md`.
+6. If code leaves are present, do not perform file-by-file LLM code
+   documentation. Preserve lightweight source summaries and state. The backend
+   triggers `wiki-graphify update` after ingest progress, and that workflow
+   uses graphify's code extraction path to produce nodes, edges, communities,
+   and reports under `wiki/graph/`.
 
 ## Code Auto-Detection
 
@@ -147,7 +144,7 @@ Record the classification in `wiki/.progress/ingest/.state.json` per leaf:
     "raw/repos/foo/src/": {
       "kind": "code",
       "project": "foo",
-      "code_outputs": []
+      "graph_scope": "raw/repos/foo/src/"
     }
   }
 }
@@ -204,62 +201,27 @@ For exactly **one** sub-chunk whose `status === "pending"`:
    - Add source facets when knowable: `source_kind`, `raw_path`, `language`, `topics`, `entities`, `concepts`, `projects`, `claims`, and `status`. These fields drive retrieval and cataloging; do not encode topic taxonomy in the source file path.
    - Choose `<YYYY>/<YYYY-MM>` by this priority: explicit `source_date` or source text date -> raw path/metadata date -> raw file mtime -> ingest date. If only the year is known, use that year with the fallback month from the next available source.
    - Body: one-line gist → key points (max 12 bullets) → quotes → wiki connections (`[[Entity]]`, `[[Concept]]`, and useful `[[wiki/maps/<topic>]]` trails) → source path/URL.
-   - For code files, include these additional sections in the source summary:
-     `## Code inventory`, `## Symbols`, `## Dependencies`, `## Locations`.
-     Locations use `raw/...:L<line>` or `raw/...:L<start>-L<end>` when line
-     numbers are known.
+   - For code files, keep the source summary lightweight: identify the file or
+     group as code evidence, note obvious project/module context from filenames
+     or manifests, and defer detailed symbols, dependencies, and line-level
+     structure to graphify.
    - Update the per-leaf JSON entry: `processed: true`, `summary_page: "wiki/sources/<YYYY>/<YYYY-MM>/<slug>.md"`.
    - **Discard the file body from working memory** before opening the next file. Do not keep two file bodies in context simultaneously.
-3. If the sub-chunk is code-heavy, update Code Wiki pages **from source summaries and symbol/dependency takeaways**:
-   - A directory `index.md` is navigation and synthesis only. It never
-     substitutes for file-level analysis: every code file represented in the
-     sub-chunk still needs its own mirrored file page.
-   - `wiki/code/<project>/overview.md` — project purpose, entry points,
-     directories, build/test commands, and links to the mirrored directory
-     indexes plus architecture/testing/API pages.
-   - `wiki/code/<project>/<relative-dir>/index.md` — one page for every
-     source directory represented by the sub-chunk, including the project root.
-     Summarize that directory's purpose, direct files, child
-     directories, important symbols, dependencies, tests, and risks. Parent
-     directory indexes must summarize and link to their child directory
-     indexes, so a reader can navigate top-down through the codebase. The
-     page must have `type: code` frontmatter and include `directory` in
-     `tags` so the backend can verify directory-index coverage.
-   - `wiki/code/<project>/<relative-file-path>.md` — one page per code file in
-     the sub-chunk, preserving the raw project-relative path and appending
-     `.md` to the source filename. Example: `raw/repos/foo/src/server.ts`
-     becomes `wiki/code/foo/src/server.ts.md`; `raw/repos/foo/src/index.md`
-     becomes `wiki/code/foo/src/index.md.md`. Include the file role, key
-     symbols, dependencies, important line locations, tests touching it, risks,
-     and links to its `wiki/sources/...` source summary. The page must have
-     required frontmatter with `type: code`, include `file` in `tags`, and
-     mention the logical `raw/...` path so the backend can verify file-level
-     coverage.
-   - API/CLI/configuration/runbook pages stay near the directory that owns the
-     implementation when that is clear, or at `wiki/code/<project>/apis/` for
-     cross-cutting public surfaces.
-   - `wiki/code/<project>/architecture.md` — system boundary, components,
-     data/control flow, external dependencies, design decisions supported by
-     evidence.
-   - `wiki/code/<project>/testing.md` — test inventory, commands, covered
-     modules, gaps, and recommended tests.
-   - `wiki/code/<project>/debug-notes.md` — only when logs, stack traces, or
-     failing tests are present.
-   - `wiki/code/<project>/diagrams.md` — Mermaid diagrams for dependency and
-     structure views. Explorer already renders fenced `mermaid` blocks.
-   - Prefer locations and dependency edges from `scripts/code-index.mjs` over
-     hand-written guesses. If the script misses a language feature, supplement
-     it with targeted `rg` searches and mark uncertain line numbers as unknown
-     instead of inventing them.
-   Record every file-level page and any other Code Wiki pages written in the
-   sub-chunk's `code_outputs`; do not mark a code/mixed leaf complete until
-   each code file in that leaf has a valid mirrored file page under
-   `wiki/code/<project>/...`, every direct source file in non-leaf directories
-   has been covered by a direct-file pseudo-leaf, and every represented
-   directory has an `index.md`.
-   Use the internal helper skills `code-documentation`, `code-architecture`,
-   `code-testing`, and `code-debug` as needed. They are implementation helpers,
-   not separate user-facing commands.
+3. If the sub-chunk is code-heavy, keep Code Wiki work graph-first:
+   - Do **not** create mirrored `wiki/code/<project>/<relative-file>.md` pages
+     or per-directory `index.md` pages as a completion requirement.
+   - Do **not** run `scripts/code-index.mjs` as the normal path. It is a legacy
+     fallback/debug helper only.
+   - Record enough progress state for the backend to know which logical
+     `raw/...` leaf and files were processed. `source_pages_written` remains
+     the provenance contract; `code_outputs` is legacy compatibility and may be
+     omitted for new code ingests.
+   - The Code Wiki artifact for source code is the graphify output produced by
+     a later `wiki-graphify update`: `wiki/graph/parts/<hash>.json`,
+     `wiki/graph/graph.json`, and `wiki/graph/GRAPH_REPORT.md`.
+   - If a user explicitly asks for a human-readable architecture, testing, API,
+     or debug synthesis after the graph exists, answer from the graph and
+     source summaries and optionally save that synthesis as ordinary wiki pages.
 4. Update entity/concept pages **from the takeaways only** (the per-leaf JSON), not by re-opening the raw files. If a raw file truly must be re-read, open it, read just the needed span, and close it before moving on.
    - **Reuse before creating.** Before adding a new `wiki/entities/` or `wiki/concepts/` page, check `wiki/index.md` for an existing page naming the same target — including case, spacing, punctuation, and English/Korean variants (`Transformer` ≈ `트랜스포머` ≈ `transformer-model`). If one exists, update it and link with the index's exact `[[Page Name]]`. Create a new page only when no existing page covers the target. Parallel workers each see only part of the input, so this is the main safeguard against near-duplicate pages — and therefore against duplicate, disconnected graph nodes.
 5. **Contradictions**: if a new claim disagrees with an existing wiki page, add a block quote on that page:
@@ -272,7 +234,7 @@ For exactly **one** sub-chunk whose `status === "pending"`:
    - Changed files: `wiki/sources/2026/2026-05/foo.md`, `wiki/entities/bar.md`
    - Notes: <files done>/<files total> in leaf
    ```
-7. Mark the sub-chunk `status: "done"`, set `ended_at`, record `source_pages_written` and any `code_outputs`. If this was the leaf's last sub-chunk, set `leaves[<leafPath>].status = "done"` **and queue the merge pass**: add the leaf's immediate parent directory (a POSIX path ending in `/`; use `raw/` for a leaf sitting directly under `raw/`) to `merge_pass.pending_parents` unless it is already listed. This is the only place `pending_parents` is filled — Step 3 and the `/ingest-loop` backend driver both rely on it to know merge work is outstanding, so skipping it leaves the loop unable to detect completion. Persist `.state.json`.
+7. Mark the sub-chunk `status: "done"`, set `ended_at`, and record `source_pages_written`. For code/mixed leaves, do not block completion on `wiki/code` page creation. If this was the leaf's last sub-chunk, set `leaves[<leafPath>].status = "done"` **and queue the merge pass**: add the leaf's immediate parent directory (a POSIX path ending in `/`; use `raw/` for a leaf sitting directly under `raw/`) to `merge_pass.pending_parents` unless it is already listed. This is the only place `pending_parents` is filled — Step 3 and the `/ingest-loop` backend driver both rely on it to know merge work is outstanding, so skipping it leaves the loop unable to detect completion. Persist `.state.json`.
 8. **Regenerate `wiki/.progress/ingest/DASHBOARD.md`** from `.state.json` (idempotent — overwrite, do not append).
 9. **Release `.lock` and return.** Do **not** start the next sub-chunk in the same call. The next `/ingest` invocation will read `.state.json` and pick up the next `pending` sub-chunk.
 
@@ -291,10 +253,10 @@ Only run when **every** leaf in the input scope has `status === "done"` and `mer
    - If useful, write/append the root synthesis note at `wiki/synthesis/<batch>.md`.
    - Refresh `wiki/sources/index.md` from source page frontmatter. Keep it compact and facet-oriented: recent sources, topic, entity, source_kind, source_date, raw_path prefix, status, and needs-review items.
    - Create or update `wiki/maps/<topic>.md` only when there is a durable research thread or associative trail worth navigating. Map pages should link to source summaries, entity/concept pages, answers, contradictions, and open questions; they should not duplicate every source summary.
-   - If the parent contains code leaves, consolidate `wiki/code/<project>/`
-     pages, refresh parent directory `index.md` summaries so they accurately
-     roll up child directories, and refresh `diagrams.md` so dependencies
-     across leaves are shown.
+   - If the parent contains code leaves, do not consolidate `wiki/code/` file
+     pages. The merge pass should keep the normal LLM Wiki pages coherent; the
+     separate `wiki-graphify update` invocation builds the code graph from
+     `raw/`.
 3. Append a merge entry to `wiki/log.md`:
    ```markdown
    ## [YYYY-MM-DD HH:MM] ingest | merge pass | <parent>
@@ -310,9 +272,10 @@ If `graph.autoUpdateOnIngest` is `true`, graph synchronization is handled as
 separate coding-agent CLI invocations after ingest progress is detected. The
 webapp may run scoped `wiki-graphify update` between loop iterations only when
 `graph.autoUpdateStrategy` allows it (`auto` uses workload thresholds). A
-scoped update rebuilds the completed leaf's partial graph and then merges all
-valid `wiki/graph/parts/*.json` into the connected final `graph.json`. After
-the final merge completes, always run `wiki-graphify update` as the quality
+scoped update rebuilds the completed leaf's partial graph from the logical
+`raw/...` code source or generated wiki page and then merges all valid
+`wiki/graph/parts/*.json` into the connected final `graph.json`. After the
+final merge completes, always run `wiki-graphify update` as the quality
 merge/normalization pass. Do not bundle graph work into the same merge-pass LLM
 call; each graph step must be a follow-up invocation that uses the
 `wiki-graphify` skill.
@@ -330,104 +293,38 @@ stale graph artifacts.
 - **Force re-run a leaf**: user can ask "re-ingest raw/foo/". Set that leaf's `status` back to `"pending"` and clear its `sub_chunks`; the next call processes it.
 - **`wiki/.progress/ingest/.state.json` corrupted**: rename to `.state.json.bak.<ISO8601>`, re-enumerate from scratch. Warn the user in chat.
 
-## Code Wiki Page Conventions
+## Code Wiki Graph Conventions
 
-Code Wiki pages use the same frontmatter rules as normal wiki pages, with
-`type: code` or `type: architecture`.
+Code Wiki follows the root `llm-wiki.md` pattern: raw code remains immutable
+source material, and the LLM-maintained wiki accumulates summaries,
+cross-references, and answers. Source-code structure itself is represented by
+the graphify knowledge graph, not by forcing the LLM to write one Markdown page
+per source file.
 
-### Directory-Mirrored Layout
+Primary Code Wiki graph artifacts:
 
-Mirror the source tree under `wiki/code/<project>/` instead of flattening code
-files into a global `files/` directory. Keep these conventions:
+- `wiki/graph/parts/<sha1(leafPath)>.json` — partial graph for a raw code leaf.
+- `wiki/graph/graph.json` — merged graph across wiki and raw code evidence.
+- `wiki/graph/GRAPH_REPORT.md` — human-readable graph report.
+- `wiki/sources/<YYYY>/<YYYY-MM>/<slug>.md` — provenance summary for raw code,
+  logs, tests, or runtime evidence.
 
-- `wiki/code/<project>/overview.md` is the project-level orientation page.
-- `wiki/code/<project>/<relative-dir>/index.md` summarizes one source
-  directory. It links to direct file pages and child directory `index.md` pages.
-- Parent `index.md` pages summarize the purpose and notable contents of child
-  directories, not just list them.
-- `wiki/code/<project>/<relative-file-path>.md` documents one source file by
-  appending `.md` to the raw filename. This avoids collisions with directory
-  `index.md` pages and preserves recognizability.
-- Legacy pages under `wiki/code/<project>/files/` may be kept and updated when
-  they already exist, but new Code Wiki output should use the mirrored layout.
+Optional human-readable code pages may still be created when they are useful
+synthesis, such as an answer saved under `wiki/answers/` or a project overview
+under `wiki/code/<project>/overview.md`. They are not required for ingest
+completion, and they should be derived from source summaries plus graphify
+evidence rather than ad hoc file-by-file code reading.
 
-Every Code Wiki page should include code location links when known:
-
-```markdown
-- `startServer()` — `raw/repos/foo/src/server.ts:L42-L88`
-  ([open](/explorer?ws=raw&path=repos/foo/src/server.ts&line=42))
-```
-
-Use logical `raw/...` paths only. The Explorer link path omits the `raw/`
-workspace prefix and may include `&line=<n>` to scroll/highlight the line. Keep
-the full line span in nearby text. If a function/class line number is unknown,
-include the file path and symbol name rather than guessing.
-
-### `wiki/code/<project>/diagrams.md`
-
-Create Mermaid diagrams when code structure or dependencies are discoverable.
-Prefer small, readable diagrams over exhaustive hairballs.
-
-Recommended sections:
-
-````markdown
----
-title: <Project> Diagrams
-type: code
-tags: [code, diagram, <project>]
-sources: [...]
-updated: YYYY-MM-DD
----
-
-# <Project> Diagrams
-
-## Module Dependencies
-
-```mermaid
-flowchart LR
-  Web["webapp"] --> API["API routes"]
-  API --> Lib["lib/*"]
-```
-
-## Request / Control Flow
-
-```mermaid
-sequenceDiagram
-  participant UI
-  participant API
-  participant Agent
-  UI->>API: POST /api/chat/send
-  API->>Agent: run selected CLI
-```
-````
-
-Use Mermaid node labels that match Code Wiki page names when possible, so graph
-and wiki navigation stay aligned.
-
-## Code Location Index
-
-For projects with many code pages, write or update
-`wiki/code/<project>/locations.md`:
+For code locations, prefer graph nodes and edges containing `source_file` and
+`source_location`. Use logical `raw/...` paths in any saved wiki page:
 
 ```markdown
----
-title: <Project> Code Locations
-type: code
-tags: [code, locations, <project>]
-sources: [...]
-updated: YYYY-MM-DD
----
-
-# <Project> Code Locations
-
-| Symbol | Kind | Location | Open |
-|---|---|---|---|
-| `runIngestLoop` | function | `raw/repos/foo/webapp/lib/ingest-loop.ts:L940-L1094` | [open](/explorer?ws=raw&path=repos/foo/webapp/lib/ingest-loop.ts&line=940) |
+- `runIngestLoop` — `raw/repos/foo/webapp/lib/ingest-loop.ts:L940`
+  ([open](/explorer?ws=raw&path=repos/foo/webapp/lib/ingest-loop.ts&line=940))
 ```
 
-This is the Code Wiki's OpenGrok-like index: it should be compact, searchable,
-and focused on important functions/classes/routes/config rather than every
-private local variable.
+If graphify misses a language feature, mark the location as unknown or run a
+targeted read-only `rg` search. Do not invent line numbers.
 
 ## Prohibited (hard rules)
 

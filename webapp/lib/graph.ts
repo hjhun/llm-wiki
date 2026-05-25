@@ -13,6 +13,7 @@ import {
   type WsKey,
 } from "./files";
 import {
+  PROJECT_ROOT,
   WIKI_GRAPH_PATH,
   WIKI_GRAPH_REPORT_PATH,
 } from "./paths";
@@ -126,6 +127,7 @@ export function buildGraphifyPrompt(
             leafList.length > 0
               ? `- Scoped leaves to refresh before merge: ${leafList.map((p) => `\`${p}\``).join(", ")}.`
               : "- Scoped leaves: auto-detect changed/missing leaves.",
+            "- If a scoped leaf is under `raw/` and contains code, use graphify's code extraction path on that raw leaf or its containing project. Do not wait for mirrored `wiki/code` Markdown pages; the code graph itself is the Code Wiki artifact.",
             "- After refreshing those partials, ALWAYS run the merge pass across ALL valid wiki/graph/parts/*.json so the target path is connected back into the existing graph.",
             "- Output connected artifacts: wiki/graph/graph.json and wiki/graph/GRAPH_REPORT.md.",
             "- Do not treat a scoped partial refresh as complete until graph.json has been rewritten from the full parts set.",
@@ -139,7 +141,7 @@ export function buildGraphifyPrompt(
     `Run exactly this graph operation: ${commandLabel}`,
     "",
     "Output path is fixed by this repository (see paths.ts and the wiki-graphify SKILL):",
-    "- wiki/graph/graph.json",
+    "- wiki/graph/graph.json (`edges` is preferred; `links` from graphify's native exporter is accepted for compatibility)",
     "- wiki/graph/GRAPH_REPORT.md",
     "- wiki/graph/parts/<sha1(leafPath)>.json (per-leaf partials)",
     "- wiki/graph/.state.json (leaf -> built_at/content_hash)",
@@ -148,7 +150,8 @@ export function buildGraphifyPrompt(
     "Execution path (from the SKILL):",
     "1. Prefer the global `graphify` command from PATH; fall back to `python3 -m graphify` only if the script is missing.",
     "2. For graphifyy 0.4.x the installed CLI exposes only code-oriented commands (`graphify update <path>` calls `_rebuild_code`, which by default writes to <path>/graphify-out/). Therefore:",
-    "   - If you do invoke `graphify update`, pass `--out wiki/graph` so output lands in the correct directory: `graphify update wiki/ --out wiki/graph`.",
+    "   - For code under raw/, `graphify update raw/<scope> --out wiki/graph` is the preferred no-LLM extraction path when a whole connected code graph is appropriate.",
+    "   - For wiki/ Markdown content, if you do invoke `graphify update`, pass `--out wiki/graph` so output lands in the correct directory: `graphify update wiki/ --out wiki/graph`.",
     "   - For Markdown wiki content (the common case here), `graphify update` alone will NOT extract entities/concepts — it is code-only. Use the Python package modules `graphify.detect`, `graphify.extract`, `graphify.build`, `graphify.cluster`, `graphify.report`, and `graphify.export` to assemble per-leaf partials in wiki/graph/parts/, then (for `update`/`build` only) merge into wiki/graph/graph.json. Follow the leaf-first chunk policy in §Chunk Policy of the SKILL.",
     "3. There is no literal `graphify build` subcommand; `wiki-graphify build` is an agent-level operation name, not a CLI command.",
     "4. During `/ingest-loop`, the webapp may skip scoped incremental updates for small workloads when `graph.autoUpdateStrategy` is `auto`; whenever an incremental update does run, it is `wiki-graphify update` with scoped leaves and MUST still merge all existing parts into graph.json.",
@@ -186,6 +189,24 @@ function asStringArray(v: unknown): string[] {
     .filter(Boolean);
 }
 
+function asWorkspaceSource(v: unknown): string | null {
+  if (typeof v !== "string" || !v.trim()) return null;
+  const source = v.trim().replace(/\\/g, "/");
+  if (/^(wiki|raw|sessions)\//.test(source)) return source;
+  if (path.isAbsolute(source)) {
+    const rel = path.relative(PROJECT_ROOT, source).replace(/\\/g, "/");
+    if (rel && !rel.startsWith("../") && rel !== "..") return rel;
+  }
+  return source;
+}
+
+function graphSources(v: Record<string, unknown>): string[] {
+  const sources = new Set(asStringArray(v.sources));
+  const sourceFile = asWorkspaceSource(v.source_file);
+  if (sourceFile) sources.add(sourceFile);
+  return [...sources];
+}
+
 function normalizeNode(v: unknown, index: number): GraphNode | null {
   if (!isRecord(v)) return null;
   const id =
@@ -202,7 +223,7 @@ function normalizeNode(v: unknown, index: number): GraphNode | null {
     label,
     type: asString(v.type) || undefined,
     tags: asStringArray(v.tags),
-    sources: asStringArray(v.sources),
+    sources: graphSources(v),
     documents: [],
     community: asNumber(v.community, null),
     centrality: asNumber(v.centrality, null),
@@ -224,9 +245,9 @@ function normalizeEdge(v: unknown): GraphEdge | null {
   return {
     src,
     dst,
-    type: asString(v.type) || undefined,
+    type: asString(v.type) || asString(v.relation) || undefined,
     weight: asNumber(v.weight, 1) ?? 1,
-    sources: asStringArray(v.sources),
+    sources: graphSources(v),
     documents: [],
   };
 }
@@ -379,8 +400,12 @@ function normalizeGraph(raw: unknown): GraphData {
     if (nodeIds.has(id)) return id;
     return aliasIndex.get(graphIdKey(id)) ?? null;
   };
-  const edges = Array.isArray(root.edges)
+  const rawEdges = Array.isArray(root.edges)
     ? root.edges
+    : Array.isArray(root.links)
+      ? root.links
+      : [];
+  const edges = rawEdges
         .map(normalizeEdge)
         .filter((edge): edge is GraphEdge => edge !== null)
         .map((edge): GraphEdge | null => {
@@ -391,8 +416,7 @@ function normalizeGraph(raw: unknown): GraphData {
             ? edge
             : { ...edge, src, dst };
         })
-        .filter((edge): edge is GraphEdge => edge !== null)
-    : [];
+        .filter((edge): edge is GraphEdge => edge !== null);
   const communities = Array.isArray(root.communities)
     ? root.communities
         .map(normalizeCommunity)
