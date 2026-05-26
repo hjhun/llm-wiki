@@ -478,6 +478,9 @@ select {
 .agent-voxel-paw {
   fill: #f2d0a4;
 }
+.agent-voxel-rear-paw {
+  fill: #d8a15f;
+}
 .agent-voxel-spark {
   fill: rgb(var(--color-accent));
   opacity: 0;

@@ -91,55 +91,57 @@ function FallbackVoxelCatMascot({ running }: { running: boolean }) {
         />
         <g className="agent-voxel-bob">
           <g className="agent-voxel-tail">
-            <rect x="80" y="78" width="18" height="12" rx="2" />
-            <rect x="94" y="65" width="13" height="25" rx="2" />
-            <rect x="86" y="60" width="15" height="12" rx="2" />
+            <g transform="rotate(-30 88 91)">
+              <rect x="80" y="86" width="24" height="12" rx="2" />
+              <rect x="100" y="67" width="13" height="31" rx="2" />
+              <rect x="91" y="57" width="18" height="12" rx="2" />
+            </g>
           </g>
           <rect
             className="agent-voxel-body"
-            x="39"
+            x="37"
             y="77"
-            width="43"
+            width="42"
             height="41"
             rx="5"
           />
           <rect
             className="agent-voxel-body-shade"
-            x="69"
+            x="68"
             y="77"
-            width="13"
+            width="18"
             height="41"
             rx="5"
           />
           <rect
             className="agent-voxel-belly"
-            x="49"
+            x="47"
             y="86"
-            width="20"
+            width="18"
             height="22"
             rx="2"
           />
           <rect
             className="agent-voxel-paw agent-voxel-paw-l"
-            x="37"
+            x="36"
             y="112"
             width="22"
             height="12"
             rx="2"
           />
           <rect
-            className="agent-voxel-paw agent-voxel-paw-r"
-            x="62"
-            y="112"
-            width="22"
-            height="12"
+            className="agent-voxel-paw agent-voxel-paw-r agent-voxel-rear-paw"
+            x="66"
+            y="111"
+            width="20"
+            height="13"
             rx="2"
           />
           <rect
             className="agent-voxel-collar"
-            x="39"
+            x="37"
             y="74"
-            width="43"
+            width="49"
             height="7"
             rx="1"
           />
