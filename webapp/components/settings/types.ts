@@ -61,6 +61,18 @@ export type SettingsConfig = {
   };
   graph: {
     minCommunitySize: number;
+    extraction: {
+      profile: "wiki" | "code" | "deep";
+      scope: "wiki" | "wiki+raw";
+      maxNodesPerLeaf: number;
+      maxConceptsPerSource: number;
+      maxCodeSymbolsPerFile: number;
+      minConfidence: number;
+      includeRationaleNodes: boolean;
+      includeSemanticSimilarity: boolean;
+      includeHyperedges: boolean;
+      dropIsolatedDerivedNodes: boolean;
+    };
     autoUpdateOnIngest: boolean;
     autoUpdateStrategy: "auto" | "finalOnly" | "partialAndFinal";
     partialThresholds: {

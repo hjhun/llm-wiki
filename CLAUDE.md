@@ -237,6 +237,11 @@ This applies to ingest, Code Wiki ingest, preprocess planning, and graphify. Nev
 ## 8. Graph Integration
 
 - Graph creation, update, and query operations must go through the [`wiki-graphify`](.agents/skills/wiki-graphify/SKILL.md) skill.
+- `wiki-graphify` reuses the global graphify extraction style, but applies the
+  CLIO-bounded `graph.extraction` profile from config. The default profile is a
+  compact wiki topology graph: source/entity/concept/project/map nodes and
+  explicit links/facets first, not one node per heading, paragraph, rationale
+  snippet, helper function, or incidental noun.
 - Code Wiki is graph-first: graphify reads code evidence under `raw/` plus generated wiki/source pages and writes graph nodes that connect code symbols, files, modules, concepts, and source summaries.
 - The web app Graph tab does not execute graphify directly. It sends `wiki-graphify build/update` requests to the coding agent CLI selected in Settings, and the coding agent follows this repository's rules and skills to run graphify, chunk processing, and the merge pass.
 - Wiki pages must not call the `graphify` binary directly. The coding agent running `wiki-graphify` chooses the execution path: global `graphify`, or `python3 -m graphify` when needed.

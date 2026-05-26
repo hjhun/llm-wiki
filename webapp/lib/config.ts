@@ -84,6 +84,36 @@ export const ConfigSchema = z.object({
   }),
   graph: z.object({
     minCommunitySize: z.number().int().min(1).default(3),
+    extraction: z
+      .object({
+        /**
+         * CLIO uses graphify's extraction pipeline, but the default profile is
+         * deliberately sparse: wiki/source/entity/concept topology first,
+         * rich code-symbol graphs only when explicitly requested.
+         */
+        profile: z.enum(["wiki", "code", "deep"]).default("wiki"),
+        scope: z.enum(["wiki", "wiki+raw"]).default("wiki"),
+        maxNodesPerLeaf: z.number().int().min(1).default(40),
+        maxConceptsPerSource: z.number().int().min(1).default(8),
+        maxCodeSymbolsPerFile: z.number().int().min(0).default(12),
+        minConfidence: z.number().min(0).max(1).default(0.65),
+        includeRationaleNodes: z.boolean().default(false),
+        includeSemanticSimilarity: z.boolean().default(false),
+        includeHyperedges: z.boolean().default(false),
+        dropIsolatedDerivedNodes: z.boolean().default(true),
+      })
+      .default({
+        profile: "wiki",
+        scope: "wiki",
+        maxNodesPerLeaf: 40,
+        maxConceptsPerSource: 8,
+        maxCodeSymbolsPerFile: 12,
+        minConfidence: 0.65,
+        includeRationaleNodes: false,
+        includeSemanticSimilarity: false,
+        includeHyperedges: false,
+        dropIsolatedDerivedNodes: true,
+      }),
     autoUpdateOnIngest: z.boolean().default(true),
     /**
      * Controls whether ingest runs scoped graph updates between iterations.

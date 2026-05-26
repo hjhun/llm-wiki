@@ -67,7 +67,7 @@ such as `graphify.detect`, `graphify.extract`, `graphify.build`,
 
 | Command | Input | Output |
 |---|---|---|
-| `build` | Optional: `--scope=wiki|raw|wiki+raw` (default `wiki+raw`) | Agent-level full refresh of `graph.json`, `GRAPH_REPORT.md`, `parts/*`, `.state.json`; do not call a literal `graphify build` command |
+| `build` | Optional: `--scope=wiki|raw|wiki+raw` (default from `graph.extraction.scope`, normally `wiki`) | Agent-level full refresh of `graph.json`, `GRAPH_REPORT.md`, `parts/*`, `.state.json`; do not call a literal `graphify build` command |
 | `update` | Optional: `--since=<date>`, automatic change detection, or scoped `<leafPath>` list supplied by the webapp | Agent-level incremental rebuild of changed/scoped leaves -> rerun merge pass across **all** valid `parts/*.json` so the changed target is connected into `graph.json` |
 | `update-partial` | One or more `<leafPath>` (POSIX, trailing `/`) | Cache-only operation: build per-leaf partials in `wiki/graph/parts/<sha1(leafPath)>.json` for the listed leaves only. **Skip the merge pass.** Do NOT touch `graph.json`, `GRAPH_REPORT.md`, or rerun community clustering. Use only when the caller explicitly wants a cache refresh without a connected final graph. |
 | `query` | One natural-language question, optional `--k=<neighbor-count>` | Graph candidate/context notes, cited nodes, and optional Markdown answer when invoked directly |
@@ -107,14 +107,79 @@ drained, so graphify reads a stable wiki state.
    agent CLI lacking login/session credentials in the webapp process
    environment, not graphify itself. Report that distinction clearly. **Never
    expose credentials in wiki pages.**
-4. Apply chunk limits and graph options from `config/default.json`, such as `min_community_size` and `extract_model`.
+4. Apply chunk limits and graph options from merged config (`config/default.json` plus `config/local.json`), especially `graph.extraction`, `graph.minCommunitySize`, and `chunking.*`.
+
+## Extraction Profile (CLIO-Bounded Graphify)
+
+Use the global graphify extraction style, but run it through a CLIO profile
+instead of copying the global `/graphify` skill verbatim. The global graphify
+skill is intentionally generous: it extracts AST symbols, semantic concepts,
+rationale nodes, semantic-similarity edges, hyperedges, and rich exports. CLIO's
+graph is an auxiliary retrieval layer for an already-curated wiki, so graphify's
+extractors must be followed by filtering, normalization, and node budgets.
+
+Default policy comes from `graph.extraction`:
+
+```json
+{
+  "profile": "wiki",
+  "scope": "wiki",
+  "maxNodesPerLeaf": 40,
+  "maxConceptsPerSource": 8,
+  "maxCodeSymbolsPerFile": 12,
+  "minConfidence": 0.65,
+  "includeRationaleNodes": false,
+  "includeSemanticSimilarity": false,
+  "includeHyperedges": false,
+  "dropIsolatedDerivedNodes": true
+}
+```
+
+Profiles:
+
+- `wiki` (default): graph source pages, entity pages, concept pages, maps, and
+  their explicit wikilinks/frontmatter. Prefer nodes that correspond to a
+  durable wiki page or a source frontmatter facet (`topics`, `entities`,
+  `concepts`, `projects`, `claims`). Do not create nodes for headings,
+  paragraphs, individual claims, rationale snippets, or every mentioned noun.
+- `code`: use graphify's code extraction path for `raw/` code evidence, then
+  keep project/module/file and public API nodes first. Limit file/function/class
+  symbols with `maxCodeSymbolsPerFile`; drop private/local/helper symbols unless
+  they are central or cited by a wiki/source page.
+- `deep`: allow richer global graphify behavior for deliberate investigations.
+  Even in this profile, preserve leaf-first output under `wiki/graph/` and
+  enforce provenance, confidence, and merge invariants.
+
+Filtering rules after extraction:
+
+1. Keep nodes that have stable provenance (`sources`, `source_file`, or
+   `raw_path`) and a meaningful label.
+2. Keep explicit relationships first: wikilinks, frontmatter facets, imports,
+   calls, citations, and source-page references.
+3. Drop `INFERRED` edges with `confidence_score < graph.extraction.minConfidence`
+   unless the profile is `deep`.
+4. Drop `semantically_similar_to` edges unless
+   `includeSemanticSimilarity=true`.
+5. Drop rationale/claim-snippet nodes unless `includeRationaleNodes=true`; keep
+   the important claim text on the source node's metadata instead.
+6. Drop hyperedges unless `includeHyperedges=true`.
+7. Enforce `maxConceptsPerSource` and `maxNodesPerLeaf` by keeping cited,
+   linked, high-centrality, and page-backed nodes first. Record any truncation
+   count in the partial graph and `GRAPH_REPORT.md`.
+8. If `dropIsolatedDerivedNodes=true`, remove isolated nodes that are not backed
+   by a wiki/source page. Isolated page-backed source/entity/concept nodes may
+   stay because they are useful retrieval anchors.
+
+The intended result is a compact topology graph, not an exhaustive AST or
+sentence-level graph. A normal small wiki should produce tens or hundreds of
+nodes, not one node per heading, claim, function, or incidental concept.
 
 ## Chunk Policy (Required, Leaf-First)
 
 This follows the same principle as `wiki-ingest`.
 
 1. **Find leaf directories**: list directories with no child directories in `wiki/` and optionally `raw/`. Also treat files that live directly inside a non-leaf directory as a small pseudo-leaf for that directory, so root files such as `wiki/index.md` and `wiki/log.md` are not skipped.
-2. **Build partial graphs**: for each leaf, use the selected graphify execution path with only the files in that leaf.
+2. **Build partial graphs**: for each leaf, use the selected graphify execution path with only the files in that leaf. Reuse graphify package modules where possible (`detect`, `extract`, `build`, `cluster`, `report`, `export`), then apply the CLIO extraction profile before writing the partial.
    - Output path: `wiki/graph/parts/<sha1(leaf path)>.json`.
    - Options: use supported graphify CLI commands where they fit, or call installed `graphify` Python package modules directly. Choose the narrowest input shape supported by the selected executable/package.
 3. **Record state**: update `wiki/graph/.state.json` with leaf path -> `{built_at, content_hash, part_file}`.
@@ -131,6 +196,9 @@ alone leaves these as duplicate, poorly connected nodes. The merge pass is
 responsible for reconciling them.
 
 1. **Collect nodes**: read every `parts/*.json` and collect nodes/edges into one collection.
+   Ignore any extracted node that violates the active `graph.extraction`
+   profile unless it is already present in an existing `graph.json` and still
+   has valid provenance.
 2. **Resolve entities (cross-partial, do this first)**: before any id-keyed
    merge, cluster nodes that refer to the **same real-world entity** even when
    their ids differ.
@@ -150,11 +218,16 @@ responsible for reconciling them.
    occurrence count. If an endpoint is still missing from the node set, resolve
    it through the step-2 alias table before considering it dangling; drop an
    edge only when no canonical node can be found.
-5. **Recompute communities**: run the selected graphify community algorithm once more on the merged graph. Absorb communities that are too small (`size < min_community_size`) into adjacent communities.
-6. **Output**: standard `wiki/graph/graph.json` schema below plus
+5. **Apply graph budget**: after dedupe, prune low-confidence inferred edges,
+   isolated derived nodes, and over-budget per-source/per-leaf nodes according
+   to `graph.extraction`. Never prune the last provenance anchor for a source
+   page.
+6. **Recompute communities**: run the selected graphify community algorithm once more on the merged graph. Absorb communities that are too small (`size < minCommunitySize`) into adjacent communities.
+7. **Output**: standard `wiki/graph/graph.json` schema below plus
    `GRAPH_REPORT.md`. Enforce the invariant that every `edges[].src`/`dst`
    exists in `nodes[].id`, and report how many dangling edges were resolved or
-   dropped in `GRAPH_REPORT.md`.
+   dropped in `GRAPH_REPORT.md`. Also report nodes/edges pruned by the CLIO
+   extraction profile.
 
 ### Standard graph.json Schema
 
@@ -195,6 +268,8 @@ responsible for reconciling them.
 - **God Nodes**: top N by centrality plus one-line descriptions.
 - **Communities**: id, label, size, and 5 representative nodes.
 - **New Nodes** for incremental updates: nodes added since the previous build.
+- **Extraction Budget**: active profile, scope, nodes/edges kept, nodes/edges
+  pruned, and any per-leaf truncation.
 - **Isolated Nodes**: nodes with zero inbound edges; recommend cross-checking with wiki-lint.
 
 ## Workflow

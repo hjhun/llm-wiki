@@ -23,6 +23,18 @@
   },
   "graph": {
     "minCommunitySize": 3,
+    "extraction": {
+      "profile": "wiki",
+      "scope": "wiki",
+      "maxNodesPerLeaf": 40,
+      "maxConceptsPerSource": 8,
+      "maxCodeSymbolsPerFile": 12,
+      "minConfidence": 0.65,
+      "includeRationaleNodes": false,
+      "includeSemanticSimilarity": false,
+      "includeHyperedges": false,
+      "dropIsolatedDerivedNodes": true
+    },
     "autoUpdateOnIngest": true,
     "autoUpdateStrategy": "auto",
     "partialThresholds": {

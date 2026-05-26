@@ -44,6 +44,20 @@ const Body = z.object({
   graph: z
     .object({
       minCommunitySize: z.number().int().min(1).max(1000),
+      extraction: z
+        .object({
+          profile: z.enum(["wiki", "code", "deep"]).optional(),
+          scope: z.enum(["wiki", "wiki+raw"]).optional(),
+          maxNodesPerLeaf: z.number().int().min(1).max(100_000).optional(),
+          maxConceptsPerSource: z.number().int().min(1).max(10_000).optional(),
+          maxCodeSymbolsPerFile: z.number().int().min(0).max(100_000).optional(),
+          minConfidence: z.number().min(0).max(1).optional(),
+          includeRationaleNodes: z.boolean().optional(),
+          includeSemanticSimilarity: z.boolean().optional(),
+          includeHyperedges: z.boolean().optional(),
+          dropIsolatedDerivedNodes: z.boolean().optional(),
+        })
+        .optional(),
       autoUpdateOnIngest: z.boolean(),
       autoUpdateStrategy: z
         .enum(["auto", "finalOnly", "partialAndFinal"])
@@ -180,6 +194,10 @@ export async function PUT(req: Request) {
         ? {
             ...current.graph,
             ...parsed.data.graph,
+            extraction: {
+              ...current.graph.extraction,
+              ...parsed.data.graph.extraction,
+            },
             partialThresholds: {
               ...current.graph.partialThresholds,
               ...parsed.data.graph.partialThresholds,
