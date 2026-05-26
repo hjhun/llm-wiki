@@ -39,8 +39,8 @@ const Body = z.object({
   /**
    * Operation hint that selects the timeout bucket in config.cli.timeouts.
    * Defaults to "chat" if omitted; the client sets "ingest"/"query"/"lint"
-   * when it detects a slash command so long-running ingest jobs are not
-   * SIGTERM-ed at the 5-minute chat cap. "ingest-loop" runs the backend
+   * when it detects a slash command so each operation can use its own timeout
+   * policy. "ingest-loop" runs the backend
    * loop that drives wiki-ingest one sub-chunk at a time until the
    * progress state reports no remaining work. Code-heavy material is handled
    * by the normal ingest flow through project-local Code Wiki rules.

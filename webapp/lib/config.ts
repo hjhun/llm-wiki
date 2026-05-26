@@ -191,12 +191,12 @@ export const ConfigSchema = z.object({
      * minutes per leaf chunk and SIGTERM-ing the child mid-summary corrupts
      * partial progress. Code-heavy inputs still use the ingest timeout because
      * they are handled inside the normal wiki-ingest flow. `chat` defaults to
-     * 30 minutes — the chat UI surfaces a Cancel button for user-driven aborts,
-     * but the timeout still protects against a CLI that wedges silently.
+     * null so normal chat requests can wait until the selected CLI returns; the
+     * chat UI still surfaces a Cancel button for user-driven aborts.
      */
     timeouts: z
       .object({
-        chat: z.number().int().min(1000).nullable().default(30 * 60 * 1000),
+        chat: z.number().int().min(1000).nullable().default(null),
         ingest: z.number().int().min(1000).nullable().default(null),
         /**
          * Per-sub-chunk timeout inside an /ingest-loop iteration. Defaults to

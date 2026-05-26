@@ -51,7 +51,7 @@
     "maxStderrBytes": 262144,
     "promptWarnBytes": 131072,
     "timeouts": {
-      "chat": 1800000,
+      "chat": null,
       "ingest": null,
       "ingest-loop": null,
       "preprocess": 3600000,
