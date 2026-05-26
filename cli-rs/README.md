@@ -23,6 +23,9 @@ cargo build --release
 | `clio ingest-loop` | webapp HTTP | Run `/ingest-loop` until the progress state is drained. |
 | `clio query <question>` | webapp HTTP | Ask the wiki a question. |
 | `clio lint [--fix]` | webapp HTTP | Run the wiki-lint health check. |
+| `clio start` | local process | Start the webapp with `clio-web.service` when installed, otherwise fall back to `setup.sh --start`. |
+| `clio shutdown` | local process | Stop the webapp with `clio-web.service` when installed, otherwise fall back to `setup.sh --shutdown`. Alias: `clio stop`. |
+| `clio restart` | local process | Restart the webapp with `clio-web.service` when installed, otherwise run `setup.sh --shutdown` then `setup.sh --start`. |
 | `clio status` | webapp HTTP | Show resolved project, webapp URL, and token status. |
 
 The `ingest`/`ingest-loop`/`query`/`lint` commands POST to the running
@@ -30,6 +33,12 @@ webapp's `/api/chat/send` endpoint. They therefore behave exactly like the
 Chat tab — same configured coding agent, same ingest-loop orchestration,
 same session logs. The `raw` subcommands never need the webapp; they only
 touch the filesystem.
+
+The `start`/`shutdown`/`restart` commands never require the webapp to already
+be reachable. They first check whether `clio-web.service` is installed through
+`systemctl cat`; if not, or if `--no-systemd` is passed, they manage the
+checkout-local server through `setup.sh` using the configured `server.host` and
+`server.port`.
 
 ## Project & webapp discovery
 

@@ -234,6 +234,9 @@ export PATH="$HOME/.clio/bin:$PATH"
 | `clio ingest-loop [path]` | Run `/ingest-loop [path]` until the progress state is drained. |
 | `clio query <question>` | Ask the wiki a question. |
 | `clio lint [--fix]` | Run the wiki-lint health check. |
+| `clio start` | Start the webapp through `clio-web.service` when installed, otherwise through `setup.sh --start`. |
+| `clio shutdown` | Stop the webapp through `clio-web.service` when installed, otherwise through `setup.sh --shutdown`. Alias: `clio stop`. |
+| `clio restart` | Restart the webapp; falls back to `setup.sh --shutdown` then `setup.sh --start` on systems without a service file. |
 | `clio status` | Show the resolved project, webapp URL, and token status. |
 
 `ingest`, `ingest-loop`, `query`, and `lint` call the **running webapp's HTTP
@@ -241,6 +244,10 @@ API**, so they behave exactly like the Chat tab — same coding agent, same
 ingest-loop orchestration, same session logs. Start the webapp first
 (`./setup.sh --start`). `raw` subcommands work offline; they only touch the
 filesystem.
+
+`start`, `shutdown`, and `restart` do not require the webapp to already be
+reachable. They use the installed `clio-web.service` when systemd reports it;
+otherwise they manage the checkout-local server with `setup.sh`.
 
 The CLI finds its project by checking `$CLIO_HOME`, then walking up from the
 current directory, then falling back to `~/.clio`. It reads the webapp port and the

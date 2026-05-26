@@ -62,6 +62,16 @@ enum Command {
     /// Run the wiki-lint health check.
     Lint(commands::lint::LintArgs),
 
+    /// Start the CLIO webapp server.
+    Start(commands::server::ServerArgs),
+
+    /// Stop the CLIO webapp server.
+    #[command(alias = "stop")]
+    Shutdown(commands::server::ServerArgs),
+
+    /// Restart the CLIO webapp server.
+    Restart(commands::server::ServerArgs),
+
     /// Show resolved project paths, webapp URL, and CLI token status.
     Status,
 }
@@ -98,6 +108,15 @@ async fn run(cli: Cli) -> ExitCode {
         Command::IngestLoop(args) => commands::ingest::run_loop(&ctx, args).await,
         Command::Query(args) => commands::query::run(&ctx, args).await,
         Command::Lint(args) => commands::lint::run(&ctx, args).await,
+        Command::Start(args) => {
+            commands::server::run(&ctx, commands::server::ServerAction::Start, args).await
+        }
+        Command::Shutdown(args) => {
+            commands::server::run(&ctx, commands::server::ServerAction::Shutdown, args).await
+        }
+        Command::Restart(args) => {
+            commands::server::run(&ctx, commands::server::ServerAction::Restart, args).await
+        }
         Command::Status => commands::status::run(&ctx).await,
     };
 

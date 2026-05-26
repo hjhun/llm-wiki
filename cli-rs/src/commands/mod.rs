@@ -8,4 +8,5 @@ pub mod ingest;
 pub mod lint;
 pub mod query;
 pub mod raw;
+pub mod server;
 pub mod status;

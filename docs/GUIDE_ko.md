@@ -296,10 +296,12 @@ clio raw remove research/old.md               # raw/.trash/ 로 소프트 삭제
 먼저 `raw/.trash/`에 백업한 뒤 새 내용으로 교체합니다. 즉 기존 파일을
 다시 add하면 사실상 업데이트로 동작합니다.
 
-위키 작업 — 다음 명령은 실행 중인 웹앱을 호출하므로 먼저
-`./setup.sh --start`로 웹앱을 띄워야 합니다.
+서버 관리와 위키 작업:
 
 ```bash
+clio start                                   # 웹앱 시작
+clio restart                                # systemd 또는 setup.sh fallback으로 재시작
+clio shutdown                               # 웹앱 종료
 clio ingest raw/research                      # /ingest 1회 패스
 clio ingest-loop raw/research                 # 해당 경로가 끝날 때까지 /ingest-loop
 clio query "위키가 검색에 대해 뭐라고 하나요?"
@@ -307,9 +309,12 @@ clio lint --fix                               # wiki-lint 건강 점검
 clio status                                   # 프로젝트, 웹앱 URL, 토큰 표시
 ```
 
-`ingest`, `ingest-loop`, `query`, `lint`는 웹앱 HTTP API를 거치므로
-Settings에서 설정한 코딩 에이전트를 그대로 사용하고, Chat 탭과 동일한
-세션 로그·진행 대시보드·그래프 업데이트를 생성합니다.
+`clio start`, `clio shutdown`, `clio restart`는 `clio-web.service`가 설치되어
+있으면 systemd를 사용합니다. service file이 없는 시스템에서는 로컬
+`setup.sh` 서버 제어로 fallback합니다. `ingest`, `ingest-loop`, `query`,
+`lint`는 웹앱 HTTP API를 거치므로 Settings에서 설정한 코딩 에이전트를
+그대로 사용하고, Chat 탭과 동일한 세션 로그·진행 대시보드·그래프
+업데이트를 생성합니다.
 
 CLI는 프로젝트를 자동으로 찾습니다. `$CLIO_HOME`, 그다음 현재
 디렉터리에서 위로 거슬러 올라가며 탐색하고, 마지막으로 `~/.clio`를

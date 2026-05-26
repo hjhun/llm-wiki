@@ -300,10 +300,12 @@ Re-running `clio raw add` on a path that already exists in `raw/` replaces
 it and backs the previous bytes up to `raw/.trash/` first, so an "add" of an
 existing file is effectively an update.
 
-Drive the wiki — these commands call the running web app, so start it first
-with `./setup.sh --start`:
+Manage the server and drive the wiki:
 
 ```bash
+clio start                                   # start the webapp
+clio restart                                # restart via systemd or setup.sh fallback
+clio shutdown                               # stop the webapp
 clio ingest raw/research                      # one /ingest pass
 clio ingest-loop raw/research                 # /ingest-loop until that path is drained
 clio query "What does the wiki say about retrieval?"
@@ -311,10 +313,12 @@ clio lint --fix                               # wiki-lint health check
 clio status                                   # show project, webapp URL, token
 ```
 
-Because `ingest`, `ingest-loop`, `query`, and `lint` go through the web
-app's HTTP API, they use the coding agent configured in **Settings** and
-produce the same session logs, progress dashboard, and graph updates as the
-Chat tab.
+`clio start`, `clio shutdown`, and `clio restart` use `clio-web.service` when
+it is installed. On systems without a service file, they fall back to the local
+`setup.sh` server controls. Because `ingest`, `ingest-loop`, `query`, and
+`lint` go through the web app's HTTP API, they use the coding agent configured
+in **Settings** and produce the same session logs, progress dashboard, and
+graph updates as the Chat tab.
 
 The CLI finds its project automatically: it checks `$CLIO_HOME`, then walks up
 from the current directory, then falls back to `~/.clio`. It reads the web app

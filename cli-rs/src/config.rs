@@ -24,6 +24,8 @@ const PROJECT_MARKERS: &[&str] = &["llm-wiki.md", "CLAUDE.md"];
 pub struct Context {
     pub project_root: PathBuf,
     pub base_url: String,
+    pub server_host: String,
+    pub server_port: u16,
     /// `auth.cliToken` value. `None` means we found no token; commands that
     /// require auth surface a friendly error instead of blowing up at the
     /// first 401 response.
@@ -39,10 +41,14 @@ impl Context {
         let project_root = resolve_project_root(home_override).await?;
         let cfg = load_config(&project_root).await?;
         let base_url = base_url_override.unwrap_or_else(|| build_base_url(&cfg));
+        let server_host = configured_server_host(&cfg);
+        let server_port = configured_server_port(&cfg);
         let token = token_override.or(cfg.auth.cli_token);
         Ok(Self {
             project_root,
             base_url,
+            server_host,
+            server_port,
             token,
         })
     }
@@ -172,17 +178,29 @@ async fn read_json(path: &Path) -> Result<Option<RawConfig>> {
 }
 
 fn build_base_url(cfg: &RawConfig) -> String {
-    let host = cfg
-        .server
+    let host = configured_server_host(cfg);
+    // The webapp binds 0.0.0.0 by default. From the local CLI we always
+    // dial localhost so the request never traverses the LAN.
+    let host = if host == "0.0.0.0" {
+        "127.0.0.1"
+    } else {
+        host.as_str()
+    };
+    let port = configured_server_port(cfg);
+    format!("http://{host}:{port}")
+}
+
+fn configured_server_host(cfg: &RawConfig) -> String {
+    cfg.server
         .host
         .as_deref()
         .filter(|h| !h.is_empty())
-        .unwrap_or("127.0.0.1");
-    // The webapp binds 0.0.0.0 by default. From the local CLI we always
-    // dial localhost so the request never traverses the LAN.
-    let host = if host == "0.0.0.0" { "127.0.0.1" } else { host };
-    let port = cfg.server.port.unwrap_or(9091);
-    format!("http://{host}:{port}")
+        .unwrap_or("0.0.0.0")
+        .to_string()
+}
+
+fn configured_server_port(cfg: &RawConfig) -> u16 {
+    cfg.server.port.unwrap_or(9091)
 }
 
 #[cfg(test)]

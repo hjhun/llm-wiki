@@ -18,6 +18,12 @@ pub async fn run(ctx: &Context) -> Result<u8> {
     );
     println!("{} {}", style("webapp base:").bold(), ctx.base_url);
     println!(
+        "{} {}:{}",
+        style("server bind:").bold(),
+        ctx.server_host,
+        ctx.server_port
+    );
+    println!(
         "{} {}",
         style("cli token:").bold(),
         match ctx.token.as_deref() {
