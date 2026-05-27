@@ -3,6 +3,7 @@
 import { Children, useEffect, useRef, useState } from "react";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { getMermaidRenderConfig, useMermaidTheme } from "../mermaidThemes";
 
 type MarkdownPreviewProps = {
   content: string;
@@ -50,6 +51,7 @@ export default function MarkdownPreview({
 function MermaidDiagram({ source }: MermaidDiagramProps) {
   const [svg, setSvg] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [theme] = useMermaidTheme();
   const idRef = useRef<string | null>(null);
   const renderCountRef = useRef(0);
 
@@ -65,13 +67,11 @@ function MermaidDiagram({ source }: MermaidDiagramProps) {
         setSvg(null);
         setError(null);
         const mermaid = (await import("mermaid")).default;
-        const theme =
-          document.documentElement.dataset.theme === "dark" ? "dark" : "default";
 
         mermaid.initialize({
           startOnLoad: false,
           securityLevel: "strict",
-          theme,
+          ...getMermaidRenderConfig(theme),
         });
 
         renderCountRef.current += 1;
@@ -96,7 +96,7 @@ function MermaidDiagram({ source }: MermaidDiagramProps) {
     return () => {
       cancelled = true;
     };
-  }, [source]);
+  }, [source, theme]);
 
   if (error) {
     return (

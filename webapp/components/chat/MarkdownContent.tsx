@@ -19,6 +19,7 @@ import {
   Download,
   ExternalLink,
   Maximize2,
+  Palette,
   RotateCcw,
   Workflow,
   X,
@@ -27,6 +28,12 @@ import {
 } from "lucide-react";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
+import {
+  getMermaidRenderConfig,
+  MERMAID_THEME_OPTIONS,
+  useMermaidTheme,
+  type MermaidThemeId,
+} from "../mermaidThemes";
 import { writeClipboard } from "./clipboard";
 
 type MarkdownContentProps = {
@@ -191,6 +198,7 @@ function MermaidDiagram({
   const idRef = useRef<string | null>(null);
   const renderCountRef = useRef(0);
   const renderTokenRef = useRef(0);
+  const [theme, setTheme] = useMermaidTheme();
   const svgSize = useMemo(() => (svg ? getSvgSize(svg) : null), [svg]);
 
   if (!idRef.current) {
@@ -218,13 +226,11 @@ function MermaidDiagram({
     async function renderDiagram() {
       try {
         const mermaid = (await import("mermaid")).default;
-        const theme =
-          document.documentElement.dataset.theme === "dark" ? "dark" : "default";
 
         mermaid.initialize({
           startOnLoad: false,
           securityLevel: "strict",
-          theme,
+          ...getMermaidRenderConfig(theme),
         });
 
         renderCountRef.current += 1;
@@ -259,7 +265,7 @@ function MermaidDiagram({
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [source, live]);
+  }, [source, live, theme]);
 
   useEffect(() => {
     if (!copied) return;
@@ -361,6 +367,27 @@ function MermaidDiagram({
             Source
           </button>
         </div>
+        <label
+          title="Diagram theme"
+          className="flex h-7 items-center gap-1 rounded border border-line bg-bg-subtle px-1.5 text-ink-dim transition focus-within:border-accent/60 hover:bg-bg-panel hover:text-ink"
+        >
+          <Palette aria-hidden className="h-3.5 w-3.5 shrink-0" />
+          <span className="sr-only">Diagram theme</span>
+          <select
+            value={theme}
+            onChange={(event) =>
+              setTheme(event.target.value as MermaidThemeId)
+            }
+            aria-label="Mermaid theme"
+            className="h-full max-w-[6.5rem] bg-transparent font-mono text-[10px] font-medium uppercase tracking-wide text-current outline-none"
+          >
+            {MERMAID_THEME_OPTIONS.map((option) => (
+              <option key={option.id} value={option.id} title={option.title}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
         <div className="flex overflow-hidden rounded border border-line bg-bg-subtle">
           <button
             type="button"
