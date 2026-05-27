@@ -25,6 +25,18 @@ import {
   runMultiAgentOperation,
 } from "@/lib/multi-agent";
 
+const CHAT_KINDS = [
+  "chat",
+  "ingest",
+  "ingest-loop",
+  "preprocess",
+  "query",
+  "lint",
+  "graph",
+] as const;
+
+type ChatKindInput = (typeof CHAT_KINDS)[number];
+
 const Body = z.object({
   sessionPath: z.string().min(1).optional(),
   message: z.string().min(1).max(20000),
@@ -38,24 +50,14 @@ const Body = z.object({
   context: z.enum(["slim", "full"]).optional(),
   /**
    * Operation hint that selects the timeout bucket in config.cli.timeouts.
-   * Defaults to "chat" if omitted; the client sets "ingest"/"query"/"lint"
-   * when it detects a slash command so each operation can use its own timeout
-   * policy. "ingest-loop" runs the backend
-   * loop that drives wiki-ingest one sub-chunk at a time until the
-   * progress state reports no remaining work. Code-heavy material is handled
-   * by the normal ingest flow through project-local Code Wiki rules.
+   * The server still normalizes it from the message so ordinary questions
+   * without `/query` follow the wiki-query flow, matching the user guide.
+   * "ingest-loop" runs the backend loop that drives wiki-ingest one
+   * sub-chunk at a time until the progress state reports no remaining work.
+   * Code-heavy material is handled by the normal ingest flow through
+   * project-local Code Wiki rules.
    */
-  kind: z
-    .enum([
-      "chat",
-      "ingest",
-      "ingest-loop",
-      "preprocess",
-      "query",
-      "lint",
-      "graph",
-    ])
-    .optional(),
+  kind: z.enum(CHAT_KINDS).optional(),
 });
 
 const LOG_HEADING_RE =
@@ -182,6 +184,35 @@ function formatCancelledReply(input: {
   ].join("\n");
 }
 
+function formatTimedOutReply(input: { kind: string; durationMs: number }) {
+  return [
+    "⏱️ CLI 실행 시간이 설정된 제한을 초과해 중단되었습니다.",
+    "",
+    `- kind: ${input.kind}`,
+    `- durationMs: ${input.durationMs}`,
+    "- result: timeout 타이머가 실행 중이던 CLI 프로세스에 SIGTERM을 보냈습니다.",
+    "- note: 기본 설정에서는 query timeout이 비활성화되어야 합니다. 이 메시지가 보이면 config/local.json의 cli.timeouts 값을 확인하세요.",
+  ].join("\n");
+}
+
+function inferKind(message: string): ChatKindInput {
+  const head = message.trimStart().toLowerCase();
+  if (head.startsWith("/ingest-loop")) return "ingest-loop";
+  if (head.startsWith("/ingest")) return "ingest";
+  if (head.startsWith("/preprocess")) return "preprocess";
+  if (head.startsWith("/query")) return "query";
+  if (head.startsWith("/lint")) return "lint";
+  if (head.startsWith("wiki-graphify ")) return "graph";
+  if (head.startsWith("/")) return "chat";
+  return "query";
+}
+
+function normalizeKind(message: string, requested?: ChatKindInput): ChatKindInput {
+  const inferred = inferKind(message);
+  if (!requested || requested === "chat") return inferred;
+  return requested;
+}
+
 function querySingleAgentPolicy(): string {
   return [
     "This request is a single-agent /query operation.",
@@ -193,7 +224,7 @@ function querySingleAgentPolicy(): string {
     "Do not append a sources/references/candidate-pages section just because you inspected wiki/index.md or retrieval helpers. Mention or link wiki pages only when the answer materially relies on them and the link helps the user.",
     "Treat wiki/index.md, wiki/log.md, sessions, progress files, and candidate-page lists as internal navigation unless the user specifically asks about those files.",
     "Do not modify raw/. Only create or edit wiki/answers, wiki/index.md, or wiki/log.md when the user explicitly requested --save or clearly consents to saving the answer. If the answer contains a reusable synthesis, end with a concise save suggestion instead of writing files without consent.",
-    "Because the user explicitly invoked /query, Korean Markdown is a good default for structured answers. For simple questions, answer briefly without unnecessary sections. Keep any plan summary concise and user-facing; do not expose private chain-of-thought.",
+    "Korean Markdown is a good default for structured query answers. For simple questions, answer briefly without unnecessary sections. Keep any plan summary concise and user-facing; do not expose private chain-of-thought.",
   ].join("\n");
 }
 
@@ -218,7 +249,7 @@ export async function POST(req: Request) {
   if (!CLI_NAMES.includes(agent)) {
     return jsonError(`unknown agent: ${agent}`, 400);
   }
-  const kind = parsed.data.kind ?? "chat";
+  const kind = normalizeKind(parsed.data.message, parsed.data.kind);
 
   // 세션이 없으면 첫 메시지를 기준으로 새 세션 생성.
   let sessionPath = parsed.data.sessionPath;
@@ -378,6 +409,11 @@ export async function POST(req: Request) {
           reply = formatCancelledReply({
             kind,
             exitCode: result.exitCode,
+            durationMs: result.durationMs,
+          });
+        } else if (result.timedOut) {
+          reply = formatTimedOutReply({
+            kind,
             durationMs: result.durationMs,
           });
         }

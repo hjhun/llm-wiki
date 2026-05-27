@@ -202,6 +202,8 @@ export type RunResult = {
   stderr: string;
   exitCode: number;
   durationMs: number;
+  timedOut?: boolean;
+  aborted?: boolean;
   stdoutTruncated: StreamTruncation | null;
   stderrTruncated: StreamTruncation | null;
 };
@@ -950,6 +952,8 @@ export async function runCli(
     const stdoutBuf = new TailBuffer(stdoutCap);
     const stderrBuf = new TailBuffer(stderrCap);
     let closed = false;
+    let timedOut = false;
+    let aborted = false;
     let abortKillTimer: ReturnType<typeof setTimeout> | null = null;
     child.stdout.on("data", (d: Buffer) => {
       const chunk = d.toString();
@@ -965,6 +969,7 @@ export async function runCli(
     let timeoutKillTimer: ReturnType<typeof setTimeout> | null = null;
     const timer = opts.timeoutMs
       ? setTimeout(() => {
+          timedOut = true;
           child.kill("SIGTERM");
           timeoutKillTimer ??= setTimeout(() => {
             if (!closed) child.kill("SIGKILL");
@@ -973,6 +978,7 @@ export async function runCli(
       : null;
     const killOnAbort = opts.killOnAbort ?? true;
     const onAbort = () => {
+      aborted = true;
       child.kill("SIGTERM");
       abortKillTimer ??= setTimeout(() => {
         if (!closed) child.kill("SIGKILL");
@@ -1005,6 +1011,8 @@ export async function runCli(
         stderr: stderrBuf.toString(),
         exitCode: code ?? -1,
         durationMs: Date.now() - started,
+        timedOut,
+        aborted,
         stdoutTruncated: stdoutBuf.truncation(),
         stderrTruncated: stderrBuf.truncation(),
       });

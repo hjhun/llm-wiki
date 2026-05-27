@@ -1008,9 +1008,9 @@ ensure_initial_files() {
     "maxStderrBytes": 262144,
     "promptWarnBytes": 131072,
     "timeouts": {
-      "chat": 300000,
+      "chat": null,
       "ingest": null,
-      "query": 1800000,
+      "query": null,
       "lint": 1800000,
       "graph": 1800000
     }

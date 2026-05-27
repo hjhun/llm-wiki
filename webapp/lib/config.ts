@@ -222,7 +222,10 @@ export const ConfigSchema = z.object({
      * partial progress. Code-heavy inputs still use the ingest timeout because
      * they are handled inside the normal wiki-ingest flow. `chat` defaults to
      * null so normal chat requests can wait until the selected CLI returns; the
-     * chat UI still surfaces a Cancel button for user-driven aborts.
+     * chat UI still surfaces a Cancel button for user-driven aborts. `query`
+     * also defaults to null because coding-agent CLIs can spend a long time
+     * searching the wiki and a timeout-triggered SIGTERM loses the final
+     * answer after the work was already paid for.
      */
     timeouts: z
       .object({
@@ -253,16 +256,16 @@ export const ConfigSchema = z.object({
           .min(1000)
           .nullable()
           .default(60 * 60 * 1000),
-        query: z.number().int().min(1000).nullable().default(30 * 60 * 1000),
+        query: z.number().int().min(1000).nullable().default(null),
         lint: z.number().int().min(1000).nullable().default(30 * 60 * 1000),
         graph: z.number().int().min(1000).nullable().default(30 * 60 * 1000),
       })
       .default({
-        chat: 30 * 60 * 1000,
+        chat: null,
         ingest: null,
         "ingest-loop": null,
         preprocess: 60 * 60 * 1000,
-        query: 30 * 60 * 1000,
+        query: null,
         lint: 30 * 60 * 1000,
         graph: 30 * 60 * 1000,
       }),

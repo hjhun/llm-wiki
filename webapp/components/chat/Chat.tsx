@@ -46,7 +46,8 @@ function detectKind(message: string): ChatKind {
   if (head.startsWith("/query")) return "query";
   if (head.startsWith("/lint")) return "lint";
   if (head.startsWith("wiki-graphify ")) return "graph";
-  return "chat";
+  if (head.startsWith("/")) return "chat";
+  return "query";
 }
 
 export default function Chat() {
