@@ -44,6 +44,8 @@ type PublicQueryResponse = {
 const LEGACY_MESSAGES_KEY = "clio.public.messages.v1";
 const CONVERSATIONS_KEY = "clio.public.conversations.v1";
 const VISITOR_ID_KEY = "clio.public.visitorId.v1";
+const PUBLIC_HISTORY_LIMIT = 12;
+const PUBLIC_HISTORY_MESSAGE_LIMIT = 8000;
 
 function nowStamp(): string {
   return new Date().toTimeString().slice(0, 8);
@@ -89,6 +91,23 @@ function sortConversations(
   return [...conversations].sort(
     (a, b) => Date.parse(b.updated) - Date.parse(a.updated),
   );
+}
+
+function buildRequestHistory(
+  conversation: PublicConversation | null,
+): Array<{ role: "user" | "assistant"; content: string }> {
+  return (conversation?.messages ?? [])
+    .filter(
+      (
+        message,
+      ): message is PublicMessage & { role: "user" | "assistant" } =>
+        message.role === "user" || message.role === "assistant",
+    )
+    .slice(-PUBLIC_HISTORY_LIMIT)
+    .map((message) => ({
+      role: message.role,
+      content: message.content.slice(0, PUBLIC_HISTORY_MESSAGE_LIMIT),
+    }));
 }
 
 function loadConversations(): PublicConversation[] {
@@ -195,6 +214,7 @@ export default function PublicClioChat({
     if (!message || pending) return;
 
     const conversationId = activeId ?? newId();
+    const history = buildRequestHistory(activeConversation);
     const nowIso = new Date().toISOString();
     const userMessage: PublicMessage = {
       id: newId(),
@@ -247,6 +267,7 @@ export default function PublicClioChat({
           message,
           visitorId: getVisitorId(),
           conversationId,
+          history,
         }),
       });
       if (!res.ok) throw await asError(res);

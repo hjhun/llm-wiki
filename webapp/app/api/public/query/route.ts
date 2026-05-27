@@ -12,6 +12,15 @@ const Body = z.object({
   message: z.string().min(1).max(20000),
   visitorId: z.string().min(1).max(200).optional(),
   conversationId: z.string().min(1).max(200).optional(),
+  history: z
+    .array(
+      z.object({
+        role: z.enum(["user", "assistant"]),
+        content: z.string().min(1).max(8000),
+      }),
+    )
+    .max(24)
+    .optional(),
 });
 
 export async function POST(req: Request) {
@@ -24,7 +33,11 @@ export async function POST(req: Request) {
   if (!parsed.success) return jsonError("message required", 400);
 
   try {
-    const result = await runPublicQuery(parsed.data.message, req.signal);
+    const result = await runPublicQuery(
+      parsed.data.message,
+      parsed.data.history ?? [],
+      req.signal,
+    );
     await appendPublicSessionLog({
       request: req,
       visitorId: parsed.data.visitorId,

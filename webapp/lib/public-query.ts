@@ -16,6 +16,11 @@ export type PublicQuerySource = {
 
 export type PublicQueryVisibleSource = Omit<PublicQuerySource, "excerpt">;
 
+export type PublicQueryHistoryMessage = {
+  role: "user" | "assistant";
+  content: string;
+};
+
 export type PublicQueryResult = {
   mode: "query";
   question: string;
@@ -32,6 +37,8 @@ type WikiDoc = {
 };
 
 const MAX_QUESTION_CHARS = 4000;
+const MAX_HISTORY_MESSAGES = 12;
+const MAX_HISTORY_MESSAGE_CHARS = 3000;
 const MAX_DOC_BYTES = 256 * 1024;
 const MAX_CONTEXT_DOCS = 8;
 const MAX_EXCERPT_CHARS = 1400;
@@ -149,6 +156,45 @@ function scoreDoc(doc: WikiDoc, tokens: string[]): number {
 
 function compactWhitespace(input: string): string {
   return input.replace(/[ \t]+/g, " ").replace(/\n{3,}/g, "\n\n").trim();
+}
+
+function normalizeHistory(
+  history: PublicQueryHistoryMessage[] = [],
+): PublicQueryHistoryMessage[] {
+  return history
+    .filter(
+      (message) =>
+        (message.role === "user" || message.role === "assistant") &&
+        message.content.trim().length > 0,
+    )
+    .slice(-MAX_HISTORY_MESSAGES)
+    .map((message) => ({
+      role: message.role,
+      content: message.content
+        .trim()
+        .replace(/\r\n?/g, "\n")
+        .slice(0, MAX_HISTORY_MESSAGE_CHARS),
+    }));
+}
+
+function formatHistory(history: PublicQueryHistoryMessage[]): string {
+  return history
+    .map((message) => {
+      const label = message.role === "user" ? "User" : "Assistant";
+      return `${label}:\n${message.content}`;
+    })
+    .join("\n\n----\n\n");
+}
+
+function buildRetrievalText(
+  question: string,
+  history: PublicQueryHistoryMessage[],
+): string {
+  const previous = history
+    .map((message) => message.content)
+    .join("\n")
+    .slice(-8000);
+  return previous ? `${previous}\n${question}` : question;
 }
 
 function makeExcerpt(doc: WikiDoc, tokens: string[]): string {
@@ -290,7 +336,9 @@ function buildPrompt(
   question: string,
   sources: PublicQuerySource[],
   allowExternalLookup: boolean,
+  history: PublicQueryHistoryMessage[] = [],
 ): string {
+  const conversation = formatHistory(history);
   const context = sources
     .map(
       (source, index) =>
@@ -325,12 +373,15 @@ function buildPrompt(
     "- This is query-only chat, not an explicit /query command. Do not force Markdown: answer simple questions simply, and use Markdown structure only when it makes the answer easier to read or the user asks for it.",
     "",
     "Answer protocol:",
-    "1. Infer the user's intent: factual lookup, comparison, explanation, code/API question, troubleshooting, freshness-sensitive external fact, or requested output format.",
+    "1. Infer the user's intent from the current question and the previous conversation. Use prior turns to resolve follow-ups, pronouns, omitted subjects, and user preferences.",
     "2. Make a short internal plan for how to answer from the available evidence and tools. Do not reveal private chain-of-thought; only mention a concise approach if it helps the user trust the answer.",
     "3. Decide whether the supplied wiki excerpts are enough. If they are enough, synthesize an answer from them instead of listing or echoing excerpts. If they are not enough and external lookup is allowed, inspect what read-only search/browser tools are available in this CLI context and use the minimum needed. If external lookup is not allowed, say what is missing instead of guessing.",
     "4. Do not merely return search hits, source lists, excerpts, or raw tool output. Explain the answer in the shape the user's question calls for: a direct sentence for simple facts, a short comparison for compare/contrast, a stepwise diagnosis for troubleshooting, or a compact table only when it genuinely helps.",
     "5. If the answer seems like a reusable synthesis that would normally be worth filing back into wiki/answers, mention that public query-only mode cannot save it and that an authenticated /query --save flow can preserve it.",
     "6. Separate wiki-grounded facts from external facts, cite only sources that are actually necessary for the answer, and call out uncertainty or missing evidence.",
+    "",
+    "Previous conversation:",
+    conversation || "(none)",
     "",
     "User question:",
     question,
@@ -353,6 +404,7 @@ async function withTempDir<T>(fn: (dir: string) => Promise<T>): Promise<T> {
 
 export async function runPublicQuery(
   input: string,
+  history: PublicQueryHistoryMessage[] = [],
   signal?: AbortSignal,
 ): Promise<PublicQueryResult> {
   const started = Date.now();
@@ -361,10 +413,11 @@ export async function runPublicQuery(
     throw new Error("question required");
   }
 
+  const safeHistory = normalizeHistory(history);
   const docs = await readWikiDocs();
   const sources = isSimpleConversation(question)
     ? []
-    : selectSources(question, docs);
+    : selectSources(buildRetrievalText(question, safeHistory), docs);
   const cfg = await loadConfig();
   const agent = cfg.agent.default as CliName | null;
   const allowExternalLookup = cfg.publicQuery.allowExternalLookup;
@@ -380,7 +433,12 @@ export async function runPublicQuery(
     };
   }
 
-  const prompt = buildPrompt(question, sources, allowExternalLookup);
+  const prompt = buildPrompt(
+    question,
+    sources,
+    allowExternalLookup,
+    safeHistory,
+  );
   const configuredTimeout = cfg.cli.timeouts.query ?? PUBLIC_QUERY_CLI_TIMEOUT_MS;
   const timeoutMs = Math.min(configuredTimeout, PUBLIC_QUERY_CLI_TIMEOUT_MS);
   try {
