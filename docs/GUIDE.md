@@ -103,7 +103,7 @@ The repository includes local instructions in `.agents/skills/`. These tell the 
 - At least one supported coding agent CLI:
   - `codex`
   - `claude`
-  - `gemini`
+  - `agy` (Antigravity)
   - `cline`
 
 ### Optional Helpers
@@ -116,7 +116,7 @@ The repository includes local instructions in `.agents/skills/`. These tell the 
 - `qmd` for search/reranking
 - Marp CLI for slide-style answers
 
-`setup.sh` attempts to install or upgrade graphify unless you pass `--skip-graphify`. Agent CLIs are detected, but not installed by default. You can request a best-effort install with `--install-cli=codex,claude,gemini`.
+`setup.sh` attempts to install or upgrade graphify unless you pass `--skip-graphify`. Agent CLIs are detected, but not installed by default. You can request a best-effort install with `--install-cli=codex,claude,agy`.
 
 For browser-based automation jobs, `./setup.sh --with-agent-browser` performs a best-effort install of the optional `agent-browser` helper.
 
@@ -356,7 +356,7 @@ Supported CLIs:
 |---|---|
 | `codex` | `codex exec "<prompt>"` |
 | `claude` | `claude -p "<prompt>"` |
-| `gemini` | `gemini --prompt "<prompt>"` |
+| `agy` (Antigravity) | `agy --prompt "<prompt>"` |
 | `cline` | `cline -y "<prompt>"` |
 
 In **Settings**:
@@ -831,7 +831,7 @@ Or use another port:
 
 ### No Coding Agent Detected
 
-1. Install one of `codex`, `claude`, `gemini`, or `cline`.
+1. Install one of `codex`, `claude`, `agy`, or `cline`.
 2. Confirm it works in your shell:
 
 ```bash

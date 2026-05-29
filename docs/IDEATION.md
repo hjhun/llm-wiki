@@ -11,7 +11,7 @@
 
 ### 1.2 Goals
 - **Reproducible setup**: `setup.sh` handles global graphify install/detection, optional helper tools, and app build. Coding agent CLIs are used from the **host installation**.
-- **Agent-independent operation**: automatically detect whichever CLI the user has among codex/claude/gemini/cline and run the same workflow.
+- **Agent-independent operation**: automatically detect whichever CLI the user has among codex/claude/agy/cline and run the same workflow.
 - **Integrated UI for wiki + graph + chat + explorer**: everything in one browser workspace.
 - **The wiki is a plain Markdown git repository**: 100% compatible with external tools such as Obsidian.
 - **Extensibility**: add new skills, tools, and CLI adapters as modules.
@@ -122,7 +122,7 @@ Common frontmatter for each SKILL.md:
 ---
 name: <kebab-case>
 description: <one-line trigger description>
-allowed-cli: [codex, claude, gemini, cline]
+allowed-cli: [codex, claude, agy, cline]
 ---
 ```
 
@@ -231,7 +231,7 @@ The first step of each optional skill should be: "Check whether the required bin
 
 ### 6.5 Settings Tab
 - **Admin**: change password, log out of sessions.
-- **CLI selection**: dropdown for `codex | claude | gemini | cline`, plus path/model/extra flags per CLI. Show auto-detection results.
+- **CLI selection**: dropdown for `codex | claude | agy | cline`, plus path/model/extra flags per CLI. Show auto-detection results.
 - **Wiki paths**: override `wiki/`, `raw/`, and `sessions/`.
 - **Tool status**: graphify, qmd, and marp installation/version/active toggle.
 - **Port/host**: service port and bind address, default `127.0.0.1`.
@@ -242,7 +242,7 @@ The first step of each optional skill should be: "Check whether the required bin
 ## 7. Coding Agent CLI Integration
 
 ### 7.0 Principle: Host First
-- **Use the CLI already installed on the host PC.** This project does not create a separate isolated environment. It detects `codex`, `claude`, `gemini`, and `cline` from `PATH`.
+- **Use the CLI already installed on the host PC.** This project does not create a separate isolated environment. It detects `codex`, `claude`, `agy`, and `cline` from `PATH`.
 - Detection order: 1. absolute path specified in `Settings`; 2. `which`/`whereis`; 3. common install locations such as `~/.npm-global/bin`, `~/.local/bin`, `/usr/local/bin`.
 - CLIs not installed on the host are **not installed automatically**. Settings and README only provide official installation guidance. Best-effort installation is attempted only when an explicit option such as `setup.sh --install-cli=claude` is used.
 - Every detected CLI is shown in Settings with version and path. The user chooses one as the "default agent".
@@ -254,7 +254,7 @@ Following dormammu's `cli_adapter.py` pattern, Node has an adapter layer with th
 |---|---|---|---|
 | `codex` | `codex exec "<prompt>"` | change cwd | `--dangerously-bypass-approvals-and-sandbox` |
 | `claude` | `claude -p "<prompt>"` (print mode) | change cwd | `--dangerously-skip-permissions` |
-| `gemini` | `gemini --prompt "<prompt>"` | `--include-directories` | `--approval-mode yolo` |
+| `agy` (Antigravity) | `agy --prompt "<prompt>"` | `--add-dir` | `--dangerously-skip-permissions` |
 | `cline` | `cline -y "<prompt>"` | change cwd | `-y` (yolo mode, auto-approval) |
 
 ### 7.2 Safeguards
@@ -274,7 +274,7 @@ Order:
 
 1. **Prerequisite checks**: `git`, `bash`, `curl`, `python3`, `node` (>=20), `pnpm` (enable corepack if missing), `whereis`, and so on.
 2. **graphify install/detection**: by default, find `graphify` in `PATH`, read the installed `graphifyy` package version, upgrade `graphifyy` to the latest available package globally, and run `graphify install`. Prefer `pipx`; use `pip --user` only when Python is not externally managed. With `--skip-graphify`, skip installation/upgrade and use only an already-installed global `graphify`.
-3. **Coding agent CLI detection (no install)**: search for `codex`, `claude`, `gemini`, and `cline` in `PATH` and common install paths. Record found items with path/version in `config/cli-detected.json`.
+3. **Coding agent CLI detection (no install)**: search for `codex`, `claude`, `agy`, and `cline` in `PATH` and common install paths. Record found items with path/version in `config/cli-detected.json`.
    - If at least one is found, continue. If none are found, warn and continue so the user can set a manual path in Settings.
    - **Automatic installation is disabled by default.** Only if the user passes `--install-cli=<name>[,<name>...]` should setup attempt official installation for that CLI, for example `--install-cli=claude` -> `npm i -g @anthropic-ai/claude-code`.
    - Installation failures print guidance and do not stop setup.
@@ -321,7 +321,7 @@ Each phase is scoped so it can become an independent PR or session.
 ## 11. Decisions and Open Research
 
 - **cline CLI**: use `cline -y "<prompt>"` as the standard non-interactive yolo form. If not installed on the host, show it as inactive in Settings and provide install guidance only.
-- **Gemini CLI option changes**: `--approval-mode` may change in the future. Add version detection to the adapter.
+- **agy CLI option changes**: `--dangerously-skip-permissions` may change in the future. Add version detection to the adapter.
 - **Codex CLI package name**: installation source may vary by user environment and needs standardization.
 - **Graph visualization library**: benchmark cytoscape.js vs sigma.js. Initial recommendation: cytoscape, because community examples are plentiful.
 - **Wiki auto-commit policy**: decide between committing after every ingest and user-triggered commits.
@@ -344,4 +344,4 @@ This principle is written with the same tone in CLAUDE.md / AGENTS.md and every 
 
 ## 13. One-Line Summary
 
-> The user drops material into `raw/`. They type `/ingest` in the browser. The host coding agent (codex/claude/gemini/cline) grows `wiki/` leaf directory by leaf directory, then synthesizes it with a merge pass. graphify builds the graph the same way. Explorer lets the user inspect it, Chat lets them ask questions, and the wiki gets smarter every day.
+> The user drops material into `raw/`. They type `/ingest` in the browser. The host coding agent (codex/claude/agy/cline) grows `wiki/` leaf directory by leaf directory, then synthesizes it with a merge pass. graphify builds the graph the same way. Explorer lets the user inspect it, Chat lets them ask questions, and the wiki gets smarter every day.

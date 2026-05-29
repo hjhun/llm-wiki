@@ -15,7 +15,7 @@ pub struct QueryArgs {
     #[arg(required = true, value_name = "QUESTION", trailing_var_arg = true)]
     pub words: Vec<String>,
 
-    /// Override the coding-agent CLI (codex/claude/gemini/cline).
+    /// Override the coding-agent CLI (codex/claude/agy/cline).
     #[arg(long)]
     pub agent: Option<String>,
 

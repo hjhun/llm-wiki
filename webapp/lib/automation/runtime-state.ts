@@ -6,7 +6,7 @@ import { PROJECT_ROOT } from "../paths";
 const STATE_REL = "wiki/.progress/automation/state.json";
 
 const AgentResultSchema = z.object({
-  agent: z.enum(["codex", "claude", "gemini", "cline"]),
+  agent: z.enum(["codex", "claude", "agy", "cline"]),
   status: z.enum(["success", "error"]),
   workspacePath: z.string(),
   artifactPath: z.string(),

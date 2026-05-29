@@ -59,7 +59,7 @@ export const TEXT = {
       guideFreeQuestion: "자유 질문 또는 슬래시 커맨드:",
       guideSessions: "세션 md는 sessions/<date>/에 자동 저장됩니다.",
       guideAgent:
-        "에이전트는 호스트 PC의 codex / claude / gemini / cline 중 Settings에서 지정한 것을 사용합니다.",
+        "에이전트는 호스트 PC의 codex / claude / agy / cline 중 Settings에서 지정한 것을 사용합니다.",
       processing: "처리 중...",
       progressTitle: "진행 상황",
       progressWaiting: "진행 상태를 기다리는 중...",
@@ -305,7 +305,7 @@ export const TEXT = {
         "켜면 공개 채팅이 날씨나 최신 정보처럼 wiki 밖의 근거가 필요한 질문에 읽기 전용 검색/브라우저 도구를 사용할 수 있습니다.",
       publicQuerySandbox: "bwrap sandbox 사용",
       publicQuerySandboxDesc:
-        "켜면 public CLI를 격리된 HOME에서 실행합니다. config의 sandboxReadOnlyHomePaths에 지정된 ~/.codex, ~/.claude, ~/.cline*, ~/.gemini, XDG 하위 상태 경로, ~/.agents 등과 agent-browser 설치물은 읽기 전용으로 공유합니다.",
+        "켜면 public CLI를 격리된 HOME에서 실행합니다. config의 sandboxReadOnlyHomePaths에 지정된 ~/.codex, ~/.claude, ~/.cline*, ~/.agy, XDG 하위 상태 경로, ~/.agents 등과 agent-browser 설치물은 읽기 전용으로 공유합니다.",
       password: "Password",
       admin: "admin",
       currentPassword: "Current password",
@@ -481,7 +481,7 @@ export const TEXT = {
       guideFreeQuestion: "Ask freely or use a slash command:",
       guideSessions: "Session Markdown is saved automatically under sessions/<date>/.",
       guideAgent:
-        "The agent uses the host codex / claude / gemini / cline selected in Settings.",
+        "The agent uses the host codex / claude / agy / cline selected in Settings.",
       processing: "Processing...",
       progressTitle: "Progress",
       progressWaiting: "Waiting for first progress update...",
@@ -731,7 +731,7 @@ export const TEXT = {
         "When on, public chat may use read-only search/browser tools for questions that need evidence outside the wiki, such as weather or current facts.",
       publicQuerySandbox: "Use bwrap sandbox",
       publicQuerySandboxDesc:
-        "When on, public CLI runs with an isolated HOME. Host paths from sandboxReadOnlyHomePaths, such as ~/.codex, ~/.claude, ~/.cline*, ~/.gemini, XDG state subpaths, ~/.agents, and agent-browser installs, are shared read-only.",
+        "When on, public CLI runs with an isolated HOME. Host paths from sandboxReadOnlyHomePaths, such as ~/.codex, ~/.claude, ~/.cline*, ~/.agy, XDG state subpaths, ~/.agents, and agent-browser installs, are shared read-only.",
       password: "Password",
       admin: "admin",
       currentPassword: "Current password",

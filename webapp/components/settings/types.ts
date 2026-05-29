@@ -1,4 +1,4 @@
-export type CliName = "codex" | "claude" | "gemini" | "cline";
+export type CliName = "codex" | "claude" | "agy" | "cline";
 
 export type CliInfo = {
   name: CliName;

@@ -15,7 +15,7 @@ pub struct LintArgs {
     #[arg(long)]
     pub fix: bool,
 
-    /// Override the coding-agent CLI (codex/claude/gemini/cline).
+    /// Override the coding-agent CLI (codex/claude/agy/cline).
     #[arg(long)]
     pub agent: Option<String>,
 

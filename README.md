@@ -17,7 +17,7 @@ Most "chat with your documents" tools hide knowledge in a transcript or an opaqu
 | Local-first source library | Your original material lives in `raw/`; agents treat it as read-only. |
 | Maintained Markdown wiki | Summaries, concepts, entities, answers, lint reports, and graph reports live in `wiki/`. |
 | Code Wiki | Code under `raw/` becomes a graphify-backed code knowledge graph under `wiki/graph/`, with optional human-readable syntheses when useful. |
-| Agent-operated workflows | `codex`, `claude`, `gemini`, or `cline` can run `/ingest`, `/query`, `/lint`, preprocess, and graph workflows. |
+| Agent-operated workflows | `codex`, `claude`, `agy`, or `cline` can run `/ingest`, `/query`, `/lint`, preprocess, and graph workflows. |
 | Browser workbench | A Next.js UI provides Chat, Explorer, Graph, Automations, and Settings tabs. |
 | Incremental processing | Large folders are processed leaf-first in small chunks, then merged into a coherent wiki. |
 | Automation support | Auto Ingest, Auto Lint, and draft-only scheduled jobs help keep the wiki moving without hiding the artifacts. |
@@ -29,7 +29,7 @@ Most "chat with your documents" tools hide knowledge in a transcript or an opaqu
 flowchart LR
     User["You<br/>curate sources"] --> Raw["raw/<br/>original material"]
     Raw --> Chat["Chat command<br/>/ingest-loop raw/topic"]
-    Chat --> Agent["Selected coding agent<br/>Codex, Claude, Gemini, or cline"]
+    Chat --> Agent["Selected coding agent<br/>Codex, Claude, agy, or cline"]
     Agent --> Skills["Project skills<br/>wiki-ingest, wiki-query, wiki-lint, wiki-graphify"]
     Skills --> Wiki["wiki/<br/>Markdown knowledge base"]
     Wiki --> Explorer["Explorer<br/>read and inspect"]
@@ -121,7 +121,8 @@ The project setup and full workflows need:
 - Node.js `>=20`
 - npm
 - Python 3
-- At least one supported coding agent CLI: `codex`, `claude`, `gemini`, or `cline`
+- At least one supported coding agent CLI: `codex`, `claude`, `agy`
+  (Antigravity), or `cline`
 - Optional: a Rust toolchain (`cargo`) to build the `clio` CLI from source.
   Release installs try the prebuilt `clio` asset for Ubuntu, Windows, or macOS
   first, then fall back to a local cargo build when no matching asset exists.
@@ -326,36 +327,37 @@ HOME-relative paths are exposed:
       ".codex",
       ".claude",
       ".cline",
-      ".gemini",
+      ".agy",
       ".antigravity",
       ".agents",
       ".claude.json",
       ".codex.json",
       ".cline.json",
-      ".gemini.json",
+      ".agy.json",
       ".config/codex",
       ".config/claude",
       ".config/cline",
-      ".config/gemini",
+      ".config/agy",
+      ".config/antigravity",
       ".config/anthropic",
       ".config/gcloud",
       ".config/google-cloud",
       ".local/share/codex",
       ".local/share/claude",
       ".local/share/cline",
-      ".local/share/gemini",
+      ".local/share/agy",
       ".local/share/anthropic",
       ".local/share/antigravity",
       ".local/state/codex",
       ".local/state/claude",
       ".local/state/cline",
-      ".local/state/gemini",
+      ".local/state/agy",
       ".local/state/anthropic",
       ".local/state/antigravity",
       ".cache/codex",
       ".cache/claude",
       ".cache/cline",
-      ".cache/gemini",
+      ".cache/agy",
       ".cache/anthropic",
       ".cache/antigravity"
     ]
@@ -374,7 +376,7 @@ the bwrap read-only HOME binds. The setup detection combines known CLI/XDG
 locations, Cline editor-extension storage candidates, and `strace` file-access
 evidence when `strace` is available; it stores paths only, never file contents.
 
-Snap-packaged agent CLIs such as `/snap/bin/gemini` cannot run inside this
+Snap-packaged agent CLIs cannot run inside this
 unprivileged `bwrap` sandbox because `snap-confine` needs host cgroup and
 capability setup that the sandbox intentionally does not provide. Install those
 CLIs with npm or a standalone binary when they need to serve public sandboxed
@@ -530,7 +532,7 @@ Common `setup.sh` options:
 | `--skip-qmd` | Do not install qmd. Setup installs project-local qmd by default. |
 | `--with-marp` | Best-effort optional Marp CLI setup. |
 | `--with-agent-browser` | Best-effort optional agent-browser setup for browser automation tasks. |
-| `--install-cli=<names>` | Best-effort CLI install for `codex`, `claude`, `gemini`, or `cline`. |
+| `--install-cli=<names>` | Best-effort CLI install for `codex`, `claude`, `agy`, or `cline`. |
 
 Runtime files are written under `.run/`:
 
@@ -572,7 +574,7 @@ sudo systemctl disable --now clio-web.service
 |---|---|
 | `codex` | `codex exec "<prompt>"` |
 | `claude` | `claude -p "<prompt>"` |
-| `gemini` | `gemini --prompt "<prompt>"` |
+| `agy` (Antigravity) | `agy --prompt "<prompt>"` |
 | `cline` | `cline -y "<prompt>"` |
 
 Each CLI must be authenticated in the host environment where the web app runs. If Chat or Graph says that no default agent is configured, open Settings and choose one. If a Graph Build/Update request asks for an API key, it usually means the selected coding agent CLI is not logged in or the webapp process was started without the CLI's normal environment.

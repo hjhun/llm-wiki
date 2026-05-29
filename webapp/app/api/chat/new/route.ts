@@ -6,7 +6,7 @@ import { newSession } from "@/lib/sessions";
 
 const Body = z.object({
   subject: z.string().min(1).max(120).optional(),
-  agent: z.enum(["codex", "claude", "gemini", "cline"]).nullable().optional(),
+  agent: z.enum(["codex", "claude", "agy", "cline"]).nullable().optional(),
 });
 
 export async function POST(req: Request) {

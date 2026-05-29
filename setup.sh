@@ -67,7 +67,7 @@ Options:
   --with-qmd                    Deprecated no-op; qmd is installed by default
   --with-marp                   Best-effort optional Marp CLI install
   --with-agent-browser          Best-effort optional agent-browser install
-  --install-cli=<names>         Best-effort install for codex,claude,gemini,cline
+  --install-cli=<names>         Best-effort install for codex,claude,agy,cline
   --detect-cli-runtime          Detect CLI config paths for bwrap (default)
   --skip-detect-cli-runtime     Skip CLI runtime config path detection
   --clio-skill <target>         Install bundled clio skill to global, project,
@@ -79,7 +79,7 @@ Options:
 Examples:
   ./setup.sh
   ./setup.sh --port 7788 --skip-graphify
-  ./setup.sh --install-cli=claude,gemini --with-marp
+  ./setup.sh --install-cli=claude,agy --with-marp
   ./setup.sh --clio-skill both
 EOF
 }
@@ -239,7 +239,7 @@ const path = require("node:path");
 const { spawnSync } = require("node:child_process");
 
 const out = process.argv[2];
-const names = ["codex", "claude", "gemini", "cline"];
+const names = ["codex", "claude", "agy", "cline"];
 const extras = [
   path.join(process.env.HOME || "/", ".npm-global", "bin"),
   path.join(process.env.HOME || "/", ".local", "bin"),
@@ -329,7 +329,7 @@ const { spawnSync } = require("node:child_process");
 const out = process.argv[2];
 const projectRoot = process.argv[3];
 const home = process.env.HOME || "/";
-const names = ["codex", "claude", "gemini", "cline"];
+const names = ["codex", "claude", "agy", "cline"];
 const extras = [
   path.join(home, ".npm-global", "bin"),
   path.join(home, ".local", "bin"),
@@ -363,15 +363,19 @@ const AGENT_PREFIXES = {
     ".cache/anthropic",
     ".agents",
   ],
-  gemini: [
-    ".gemini",
-    ".gemini.json",
-    ".config/gemini",
+  agy: [
+    ".agy",
+    ".agy.json",
+    ".config/agy",
+    ".config/antigravity",
     ".config/gcloud",
     ".config/google-cloud",
-    ".local/share/gemini",
-    ".local/state/gemini",
-    ".cache/gemini",
+    ".local/share/agy",
+    ".local/share/antigravity",
+    ".local/state/agy",
+    ".local/state/antigravity",
+    ".cache/agy",
+    ".cache/antigravity",
     ".agents",
   ],
   cline: [
@@ -618,9 +622,15 @@ install_cli_best_effort() {
         log "best-effort install: claude via npm package @anthropic-ai/claude-code"
         npm install -g @anthropic-ai/claude-code || warn "claude install failed; install it manually and set the path in Settings"
         ;;
+      agy)
+        if command -v agy >/dev/null 2>&1; then
+          log "agy (Antigravity) already available: $(command -v agy)"
+        else
+          warn "agy (Antigravity) automatic install is not available here; install agy manually and set the path in Settings"
+        fi
+        ;;
       gemini)
-        log "best-effort install: gemini via npm package @google/gemini-cli"
-        npm install -g @google/gemini-cli || warn "gemini install failed; install it manually and set the path in Settings"
+        warn "gemini CLI has been replaced by agy and is scheduled to be unsupported after 2026-06-18; skipping gemini install"
         ;;
       cline)
         warn "cline is usually distributed as an editor extension; skipping automatic install"

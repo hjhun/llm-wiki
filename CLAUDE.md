@@ -1,6 +1,6 @@
 # AGENTS.md / CLAUDE.md - LLM Wiki Operating Rules
 
-> This file is synchronized with its counterpart (`AGENTS.md` or `CLAUDE.md`) so Codex, Claude, Gemini, cline, and other coding agents follow the same rules.
+> This file is synchronized with its counterpart (`AGENTS.md` or `CLAUDE.md`) so Codex, Claude, agy, cline, and other coding agents follow the same rules.
 > **The two files must always stay in sync.** If one is updated, update the other as well.
 
 ---
@@ -273,7 +273,7 @@ This repository is operated through one of the coding agent CLIs installed on th
 |---|---|---|
 | `codex` | `codex exec "<prompt>"` | `--dangerously-bypass-approvals-and-sandbox` |
 | `claude` | `claude -p "<prompt>"` | `--dangerously-skip-permissions` |
-| `gemini` | `gemini --prompt "<prompt>"` | `--approval-mode yolo` (`--include-directories` helper) |
+| `agy` (Antigravity) | `agy --prompt "<prompt>"` | `--dangerously-skip-permissions` (`--add-dir` helper) |
 | `cline` | `cline -y "<prompt>"` | `-y` (auto-approval) |
 
 - Any agent entering this repository treats these operating rules as the primary local rules.

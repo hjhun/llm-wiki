@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
 const AgentPaths = z.object({
   codex: z.string().optional(),
   claude: z.string().optional(),
-  gemini: z.string().optional(),
+  agy: z.string().optional(),
   cline: z.string().optional(),
 });
 
@@ -24,11 +24,11 @@ const Body = z.object({
     .optional(),
   agent: z
     .object({
-      default: z.enum(["codex", "claude", "gemini", "cline"]).nullable(),
+      default: z.enum(["codex", "claude", "agy", "cline"]).nullable(),
       safeMode: z.boolean(),
       paths: AgentPaths,
       orchestration: z.object({
-        cli: z.enum(["codex", "claude", "gemini", "cline"]).nullable(),
+        cli: z.enum(["codex", "claude", "agy", "cline"]).nullable(),
         maxConcurrentAgents: z.number().int().min(1).max(16),
         namePrefix: z.string().min(1).max(40),
         managerName: z.string().min(1).max(40),
@@ -149,7 +149,7 @@ function normalizePaths(paths: z.infer<typeof AgentPaths>) {
   return {
     codex: paths.codex?.trim() ?? "",
     claude: paths.claude?.trim() ?? "",
-    gemini: paths.gemini?.trim() ?? "",
+    agy: paths.agy?.trim() ?? "",
     cline: paths.cline?.trim() ?? "",
   };
 }

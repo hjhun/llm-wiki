@@ -21,7 +21,7 @@ pub struct IngestArgs {
     #[arg(value_name = "PATH")]
     pub target: Option<String>,
 
-    /// Override the coding-agent CLI (codex/claude/gemini/cline).
+    /// Override the coding-agent CLI (codex/claude/agy/cline).
     /// Default uses agent.default from config/local.json.
     #[arg(long)]
     pub agent: Option<String>,
@@ -38,7 +38,7 @@ pub struct IngestLoopArgs {
     #[arg(value_name = "PATH")]
     pub target: Option<String>,
 
-    /// Override the coding-agent CLI (codex/claude/gemini/cline).
+    /// Override the coding-agent CLI (codex/claude/agy/cline).
     #[arg(long)]
     pub agent: Option<String>,
 

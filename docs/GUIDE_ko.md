@@ -100,7 +100,7 @@ CLIO는 단순히 문서에 채팅하는 도구가 아닙니다. 중요한 결�
 - 지원되는 코딩 에이전트 CLI 중 하나 이상:
   - `codex`
   - `claude`
-  - `gemini`
+  - `agy` (Antigravity)
   - `cline`
 
 ### 선택 도구
@@ -113,7 +113,7 @@ CLIO는 단순히 문서에 채팅하는 도구가 아닙니다. 중요한 결�
 - 검색/재랭킹 보조용 `qmd`
 - 슬라이드 답변 생성을 위한 Marp CLI
 
-`setup.sh`는 기본적으로 graphify 설치 또는 업그레이드를 시도합니다. 원하지 않으면 `--skip-graphify`를 사용하세요. 코딩 에이전트 CLI는 자동 감지하지만 기본적으로 자동 설치하지 않습니다. 필요하면 `--install-cli=codex,claude,gemini`처럼 명시적으로 요청할 수 있습니다.
+`setup.sh`는 기본적으로 graphify 설치 또는 업그레이드를 시도합니다. 원하지 않으면 `--skip-graphify`를 사용하세요. 코딩 에이전트 CLI는 자동 감지하지만 기본적으로 자동 설치하지 않습니다. 필요하면 `--install-cli=codex,claude,agy`처럼 명시적으로 요청할 수 있습니다.
 
 브라우저 기반 자동화 작업이 필요하다면 `./setup.sh --with-agent-browser`로 선택 도구인 `agent-browser` 설치를 best-effort로 시도할 수 있습니다.
 
@@ -352,7 +352,7 @@ CLIO의 ingest/query/lint/graph 작업은 웹앱 자체가 직접 수행하지 �
 |---|---|
 | `codex` | `codex exec "<prompt>"` |
 | `claude` | `claude -p "<prompt>"` |
-| `gemini` | `gemini --prompt "<prompt>"` |
+| `agy` (Antigravity) | `agy --prompt "<prompt>"` |
 | `cline` | `cline -y "<prompt>"` |
 
 **Settings**에서:
@@ -824,7 +824,7 @@ git status --short
 
 ### 코딩 에이전트가 감지되지 않을 때
 
-1. `codex`, `claude`, `gemini`, `cline` 중 하나를 설치합니다.
+1. `codex`, `claude`, `agy`, `cline` 중 하나를 설치합니다.
 2. 쉘에서 동작하는지 확인합니다.
 
 ```bash

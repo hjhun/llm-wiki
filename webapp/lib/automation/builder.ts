@@ -321,7 +321,7 @@ function validPreset(value: unknown): AutomationJob["schedule"]["preset"] {
 }
 
 function normalizeAgents(value: unknown): CliName[] {
-  const valid = new Set(["codex", "claude", "gemini", "cline"]);
+  const valid = new Set(["codex", "claude", "agy", "cline"]);
   const agents = Array.isArray(value)
     ? value.filter((item): item is CliName => typeof item === "string" && valid.has(item))
     : [];

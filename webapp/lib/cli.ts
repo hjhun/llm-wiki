@@ -10,11 +10,11 @@ import {
   PROJECT_ROOT,
 } from "./paths";
 
-export type CliName = "codex" | "claude" | "gemini" | "cline";
+export type CliName = "codex" | "claude" | "agy" | "cline";
 export const CLI_NAMES: readonly CliName[] = [
   "codex",
   "claude",
-  "gemini",
+  "agy",
   "cline",
 ] as const;
 
@@ -169,20 +169,19 @@ function buildArgs(
       return safeMode
         ? ["-p", prompt]
         : ["-p", prompt, "--dangerously-skip-permissions"];
-    case "gemini":
+    case "agy":
       return safeMode
         ? [
             "--prompt",
             prompt,
-            "--include-directories",
+            "--add-dir",
             projectRoot,
           ]
         : [
             "--prompt",
             prompt,
-            "--approval-mode",
-            "yolo",
-            "--include-directories",
+            "--dangerously-skip-permissions",
+            "--add-dir",
             projectRoot,
           ];
     case "cline":
@@ -229,7 +228,7 @@ const AGENT_CONFIG_HOME_DIRS = [
   ".codex",
   ".claude",
   ".cline",
-  ".gemini",
+  ".agy",
   ".antigravity",
   ".agents",
 ] as const;
@@ -238,7 +237,7 @@ const XDG_AGENT_SUBDIRS = [
   "codex",
   "claude",
   "cline",
-  "gemini",
+  "agy",
   "anthropic",
   "antigravity",
 ] as const;

@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import { Button, EmptyState, PageHeader, StatusBadge } from "../ui";
 
-type CliName = "codex" | "claude" | "gemini" | "cline";
+type CliName = "codex" | "claude" | "agy" | "cline";
 type Template = "youtube-summary" | "github-gerrit-review" | "email-sync" | "custom";
 
 type AutomationJob = {
@@ -112,7 +112,7 @@ type AutomationResult = {
   agents: AutomationAgentResult[];
 };
 
-const CLI_NAMES: CliName[] = ["codex", "claude", "gemini", "cline"];
+const CLI_NAMES: CliName[] = ["codex", "claude", "agy", "cline"];
 const TEMPLATES: Array<{ value: Template; label: string }> = [
   { value: "youtube-summary", label: "YouTube summary" },
   { value: "github-gerrit-review", label: "GitHub/Gerrit review" },
