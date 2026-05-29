@@ -7,7 +7,9 @@ import type {
   EventObject,
   StylesheetJson,
 } from "cytoscape";
+import { Maximize2, ZoomIn, ZoomOut } from "lucide-react";
 import { useEffect, useMemo, useRef } from "react";
+import { IconButton } from "../ui";
 import type { GraphData, GraphNode } from "./types";
 
 type Props = {
@@ -27,14 +29,14 @@ type Props = {
 };
 
 const COMMUNITY_COLORS = [
-  { fill: "#5b8def", border: "#9ab9ff", halo: "#6fa3ff", edge: "#6f8fbd" },
-  { fill: "#37a98b", border: "#8de4ca", halo: "#58cfb0", edge: "#5da697" },
-  { fill: "#d18a3d", border: "#f2c078", halo: "#e6a24d", edge: "#b99160" },
-  { fill: "#b873d9", border: "#ddb4f2", halo: "#c68fea", edge: "#a985b9" },
-  { fill: "#d96880", border: "#f4a9b8", halo: "#ec7e94", edge: "#b77f8d" },
-  { fill: "#6fb6c9", border: "#a9e2ee", halo: "#7fd1e6", edge: "#6fa5b0" },
-  { fill: "#a0a86b", border: "#d8dfa5", halo: "#c3cc7e", edge: "#9da36f" },
-  { fill: "#8d96a8", border: "#c8d0de", halo: "#aab5c7", edge: "#8792a3" },
+  { fill: "#8b8df7", border: "#c2c4ff", halo: "#8b8df7", edge: "#6f7397" },
+  { fill: "#53c7a5", border: "#a3f3d8", halo: "#53c7a5", edge: "#5f8d80" },
+  { fill: "#f2b56b", border: "#ffdba2", halo: "#f2b56b", edge: "#9a8161" },
+  { fill: "#e46e9f", border: "#ffb5d0", halo: "#e46e9f", edge: "#9b6b7e" },
+  { fill: "#68c5df", border: "#b8edf8", halo: "#68c5df", edge: "#668d99" },
+  { fill: "#c4d867", border: "#edf7ad", halo: "#c4d867", edge: "#858f61" },
+  { fill: "#f0835d", border: "#ffc4aa", halo: "#f0835d", edge: "#9a7162" },
+  { fill: "#a7b1c2", border: "#d5dce8", halo: "#a7b1c2", edge: "#717987" },
 ];
 
 type NodeVisual = {
@@ -43,12 +45,6 @@ type NodeVisual = {
   edgeColor: string;
   haloColor: string;
   labelColor: string;
-  shape:
-    | "ellipse"
-    | "round-diamond"
-    | "round-rectangle"
-    | "round-hexagon"
-    | "round-tag";
 };
 
 function hashString(value: string): number {
@@ -58,19 +54,6 @@ function hashString(value: string): number {
     hash = Math.imul(hash, 16777619);
   }
   return hash >>> 0;
-}
-
-function shapeForNode(node: GraphNode): NodeVisual["shape"] {
-  const type = (node.type ?? "").toLowerCase();
-  if (type.includes("source") || type.includes("document")) return "round-tag";
-  if (type.includes("entity") || type.includes("person")) return "ellipse";
-  if (type.includes("concept") || type.includes("topic")) {
-    return "round-diamond";
-  }
-  if (type.includes("analysis") || type.includes("comparison")) {
-    return "round-rectangle";
-  }
-  return "round-hexagon";
 }
 
 function visualForNode(node: GraphNode): NodeVisual {
@@ -86,39 +69,22 @@ function visualForNode(node: GraphNode): NodeVisual {
     borderColor: palette.border,
     edgeColor: palette.edge,
     haloColor: palette.halo,
-    labelColor: "#f8fafc",
-    shape: shapeForNode(node),
+    labelColor: "#d8dde7",
   };
 }
 
 function nodeSize(node: GraphNode): number {
   const centrality = node.centrality ?? 0;
-  return Math.max(22, Math.min(48, 25 + centrality * 34));
-}
-
-function nodeWidth(node: GraphNode): number {
-  const base = nodeSize(node);
-  const type = (node.type ?? "").toLowerCase();
-  if (type.includes("source") || type.includes("document")) return base * 1.36;
-  if (type.includes("analysis") || type.includes("comparison")) return base * 1.22;
-  return base;
-}
-
-function nodeHeight(node: GraphNode): number {
-  const base = nodeSize(node);
-  const type = (node.type ?? "").toLowerCase();
-  if (type.includes("source") || type.includes("document")) return base * 0.82;
-  if (type.includes("analysis") || type.includes("comparison")) return base * 0.9;
-  return base;
+  return Math.max(9, Math.min(30, 10 + centrality * 28));
 }
 
 function labelSize(node: GraphNode): number {
   const centrality = node.centrality ?? 0;
-  return Math.max(10.5, Math.min(13, 10.8 + centrality * 3));
+  return Math.max(10, Math.min(12.5, 10 + centrality * 2.8));
 }
 
 function edgeWidth(weight: number): number {
-  return Math.max(0.8, Math.min(4.2, weight * 0.82));
+  return Math.max(0.55, Math.min(2.8, 0.55 + weight * 0.42));
 }
 
 function edgeId(
@@ -136,52 +102,44 @@ const stylesheet = [
     style: {
       "background-color": "data(color)",
       "border-color": "data(borderColor)",
-      "border-opacity": 0.95,
-      "border-width": 1.8,
+      "border-opacity": 0.82,
+      "border-width": 1.2,
       color: "data(labelColor)",
       "font-family":
         "ui-sans-serif, Pretendard, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif",
       "font-size": "data(labelSize)",
-      "font-weight": 650,
-      height: "data(height)",
+      "font-weight": 520,
+      height: "data(size)",
       label: "data(label)",
-      "min-zoomed-font-size": 7,
+      "min-zoomed-font-size": 9,
       "overlay-opacity": 0,
-      shape: "data(shape)",
-      "shadow-blur": 18,
+      opacity: 0.92,
+      shape: "ellipse",
+      "shadow-blur": 9,
       "shadow-color": "data(haloColor)",
-      "shadow-opacity": 0.32,
+      "shadow-opacity": 0.2,
       "shadow-offset-x": 0,
       "shadow-offset-y": 0,
-      "text-background-color": "#08111d",
-      "text-background-opacity": 0.52,
-      "text-background-padding": "3px",
-      "text-border-color": "data(haloColor)",
-      "text-border-opacity": 0.18,
-      "text-border-width": 1,
+      "text-background-opacity": 0,
       "text-halign": "center",
-      "text-margin-x": 9,
-      "text-margin-y": 8,
-      "text-outline-color": "#050910",
-      "text-outline-opacity": 0.62,
-      "text-outline-width": 1,
+      "text-margin-y": 9,
+      "text-outline-color": "#101216",
+      "text-outline-opacity": 0.86,
+      "text-outline-width": 2,
       "text-valign": "bottom",
       "text-wrap": "ellipsis",
-      "text-max-width": "150px",
-      width: "data(width)",
+      "text-max-width": "132px",
+      width: "data(size)",
     },
   },
   {
     selector: "edge",
     style: {
-      "curve-style": "bezier",
+      "curve-style": "haystack",
+      "haystack-radius": 0.64,
       "line-color": "data(edgeColor)",
-      "line-opacity": 0.42,
+      "line-opacity": 0.26,
       "overlay-opacity": 0,
-      "target-arrow-shape": "triangle",
-      "target-arrow-color": "data(edgeTargetColor)",
-      "target-arrow-fill": "filled",
-      "arrow-scale": 0.72,
       width: "data(width)",
     },
   },
@@ -189,15 +147,14 @@ const stylesheet = [
     selector: ".selected",
     style: {
       "border-color": "#f8fafc",
-      "border-width": 3.2,
+      "border-width": 2.4,
       color: "#ffffff",
-      "shadow-blur": 36,
+      label: "data(fullLabel)",
+      "shadow-blur": 30,
       "shadow-color": "data(haloColor)",
-      "shadow-opacity": 0.78,
-      "text-background-color": "#07111f",
-      "text-background-opacity": 0.84,
-      "text-border-opacity": 0.44,
-      "z-index": 10,
+      "shadow-opacity": 0.84,
+      "text-outline-opacity": 0.95,
+      "z-index": 20,
     },
   },
   {
@@ -205,28 +162,45 @@ const stylesheet = [
     style: {
       "border-color": "data(borderColor)",
       "border-opacity": 1,
-      "shadow-blur": 24,
-      "shadow-opacity": 0.48,
+      label: "data(fullLabel)",
+      "shadow-blur": 18,
+      "shadow-opacity": 0.46,
       opacity: 1,
+      "z-index": 12,
     },
   },
   {
     selector: "edge.related",
     style: {
       "line-color": "data(edgeTargetColor)",
-      "line-opacity": 0.76,
-      "target-arrow-color": "data(edgeTargetColor)",
+      "line-opacity": 0.78,
       opacity: 1,
-      width: "mapData(width, 0.8, 4.2, 1.8, 6.2)",
+      width: "mapData(width, 0.55, 2.8, 1.5, 4.2)",
+      "z-index": 8,
     },
   },
   {
     selector: ".dimmed",
     style: {
-      opacity: 0.26,
+      opacity: 0.18,
     },
   },
 ] as unknown as StylesheetJson;
+
+function truncateLabel(label: string, max = 30): string {
+  return label.length > max ? `${label.slice(0, max - 1)}...` : label;
+}
+
+function labeledNodeIds(nodes: GraphNode[]): Set<string> {
+  if (nodes.length <= 70) return new Set(nodes.map((node) => node.id));
+  const count = Math.min(42, Math.max(16, Math.round(nodes.length * 0.16)));
+  return new Set(
+    [...nodes]
+      .sort((a, b) => (b.centrality ?? 0) - (a.centrality ?? 0))
+      .slice(0, count)
+      .map((node) => node.id),
+  );
+}
 
 export default function GraphCanvas({
   graph,
@@ -244,24 +218,21 @@ export default function GraphCanvas({
     const visualById = new Map(
       graph.nodes.map((node) => [node.id, visualForNode(node)]),
     );
+    const labelIds = labeledNodeIds(graph.nodes);
     const nodes: ElementDefinition[] = graph.nodes.map((node) => {
       const visual = visualById.get(node.id) ?? visualForNode(node);
       return {
         data: {
           id: node.id,
-          label:
-            node.label.length > 38
-              ? `${node.label.slice(0, 37)}...`
-              : node.label,
+          label: labelIds.has(node.id) ? truncateLabel(node.label) : "",
+          fullLabel: truncateLabel(node.label, 42),
           color: visual.color,
           borderColor: visual.borderColor,
           edgeColor: visual.edgeColor,
           haloColor: visual.haloColor,
           labelColor: visual.labelColor,
           labelSize: labelSize(node),
-          shape: visual.shape,
-          height: nodeHeight(node),
-          width: nodeWidth(node),
+          size: nodeSize(node),
         },
       };
     });
@@ -292,12 +263,12 @@ export default function GraphCanvas({
       layout: {
         name: graph.nodes.length > 1 ? "cose" : "grid",
         animate: false,
-        componentSpacing: 126,
+        componentSpacing: 118,
         fit: true,
-        idealEdgeLength: 128,
-        nodeOverlap: 16,
-        nodeRepulsion: 6200,
-        padding: 58,
+        idealEdgeLength: 104,
+        nodeOverlap: 8,
+        nodeRepulsion: 7400,
+        padding: 64,
       },
     });
 
@@ -333,6 +304,13 @@ export default function GraphCanvas({
     related.addClass("related");
     selected.addClass("selected");
     cy.elements().difference(related).addClass("dimmed");
+    cy.animate(
+      {
+        center: { eles: selected },
+        zoom: Math.max(cy.zoom(), Math.min(1.35, cy.maxZoom())),
+      },
+      { duration: 240 },
+    );
   }, [selectedId]);
 
   function fit() {
@@ -364,64 +342,48 @@ export default function GraphCanvas({
 
   return (
     <div
-      className="relative h-full w-full overflow-hidden bg-bg"
+      className="relative h-full w-full overflow-hidden bg-[#101216]"
       style={{
         backgroundImage:
-          "radial-gradient(circle at 18% 16%, rgb(91 141 239 / 0.18), transparent 28%), radial-gradient(circle at 82% 72%, rgb(55 169 139 / 0.13), transparent 34%), linear-gradient(135deg, rgb(7 12 20), rgb(13 18 27) 48%, rgb(8 13 20))",
+          "linear-gradient(rgb(255 255 255 / 0.022) 1px, transparent 1px), linear-gradient(90deg, rgb(255 255 255 / 0.018) 1px, transparent 1px)",
         backgroundRepeat: "no-repeat",
-        backgroundSize: "auto",
+        backgroundSize: "36px 36px",
       }}
     >
-      <div
-        className="pointer-events-none absolute inset-0 opacity-[0.17]"
-        style={{
-          backgroundImage:
-            "linear-gradient(rgb(148 163 184 / 0.18) 1px, transparent 1px), linear-gradient(90deg, rgb(148 163 184 / 0.18) 1px, transparent 1px)",
-          backgroundSize: "32px 32px",
-          maskImage:
-            "radial-gradient(circle at 50% 46%, black, transparent 78%)",
-        }}
-      />
       <div ref={containerRef} className="h-full w-full" />
-      <div className="pointer-events-none absolute bottom-3 left-3 rounded border border-white/10 bg-slate-950/62 px-3 py-2 shadow-xl shadow-black/20 backdrop-blur-md">
-        <div className="mb-1.5 font-sans text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">
+      <div className="pointer-events-none absolute bottom-3 left-3 rounded-md border border-white/10 bg-[#17191f]/82 px-3 py-2 shadow-xl shadow-black/20 backdrop-blur-md">
+        <div className="mb-1.5 font-mono text-[10px] font-medium uppercase tracking-[0.16em] text-slate-500">
           {text.graphLegend}
         </div>
         <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-[11px] text-slate-300">
-          <LegendItem color="#5b8def" shape="ellipse" label={text.entityNode} />
-          <LegendItem color="#37a98b" shape="diamond" label={text.conceptNode} />
-          <LegendItem color="#d18a3d" shape="tag" label={text.sourceNode} />
+          <LegendItem color="#8b8df7" label={text.entityNode} />
+          <LegendItem color="#53c7a5" label={text.conceptNode} />
+          <LegendItem color="#f2b56b" label={text.sourceNode} />
           <LegendItem
-            color="#b873d9"
-            shape="rectangle"
+            color="#e46e9f"
             label={text.analysisNode}
           />
         </div>
       </div>
-      <div className="absolute right-3 top-3 flex overflow-hidden rounded border border-white/10 bg-slate-950/72 shadow-xl shadow-black/30 backdrop-blur-md">
-        <button
-          type="button"
+      <div className="absolute right-3 top-3 flex gap-1 rounded-md border border-white/10 bg-[#17191f]/82 p-1 shadow-xl shadow-black/30 backdrop-blur-md">
+        <IconButton
+          icon={ZoomIn}
+          label={text.zoomIn}
           onClick={() => zoomBy(1.18)}
-          title={text.zoomIn}
-          className="h-8 w-8 border-r border-white/10 text-sm text-slate-300 hover:bg-white/10 hover:text-white"
-        >
-          +
-        </button>
-        <button
-          type="button"
+          className="border-transparent bg-transparent text-slate-300 hover:bg-white/10 hover:text-white"
+        />
+        <IconButton
+          icon={ZoomOut}
+          label={text.zoomOut}
           onClick={() => zoomBy(0.84)}
-          title={text.zoomOut}
-          className="h-8 w-8 border-r border-white/10 text-sm text-slate-300 hover:bg-white/10 hover:text-white"
-        >
-          -
-        </button>
-        <button
-          type="button"
+          className="border-transparent bg-transparent text-slate-300 hover:bg-white/10 hover:text-white"
+        />
+        <IconButton
+          icon={Maximize2}
+          label={text.fitGraph}
           onClick={fit}
-          className="h-8 px-2.5 text-[11px] font-medium text-slate-300 hover:bg-white/10 hover:text-white"
-        >
-          {text.fitGraph}
-        </button>
+          className="border-transparent bg-transparent text-slate-300 hover:bg-white/10 hover:text-white"
+        />
       </div>
     </div>
   );
@@ -429,26 +391,15 @@ export default function GraphCanvas({
 
 function LegendItem({
   color,
-  shape,
   label,
 }: {
   color: string;
-  shape: "ellipse" | "diamond" | "tag" | "rectangle";
   label: string;
 }) {
-  const shapeClass =
-    shape === "ellipse"
-      ? "rounded-full"
-      : shape === "diamond"
-        ? "rotate-45 rounded-[3px]"
-        : shape === "tag"
-          ? "rounded-r-full rounded-l-[3px]"
-          : "rounded-[4px]";
-
   return (
     <div className="flex items-center gap-1.5">
       <span
-        className={`h-2.5 w-3.5 shrink-0 border border-white/35 ${shapeClass}`}
+        className="h-2.5 w-2.5 shrink-0 rounded-full border border-white/35"
         style={{ backgroundColor: color, boxShadow: `0 0 10px ${color}66` }}
       />
       <span className="whitespace-nowrap">{label}</span>
