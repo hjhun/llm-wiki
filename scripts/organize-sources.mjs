@@ -11,13 +11,8 @@ const rootArg = readArg("--root");
 const projectRoot = path.resolve(rootArg ?? process.cwd());
 const wikiRoot = path.join(projectRoot, "wiki");
 const sourcesRoot = path.join(wikiRoot, "sources");
-const rawRoot = path.join(projectRoot, "raw");
 
 const DATE_DIR_RE = /^(\d{4})\/(\d{4}-\d{2})\/([^/]+\.md)$/;
-const ISO_DATE_RE = /\b((?:19|20)\d{2})[-/.](0[1-9]|1[0-2])[-/.](0[1-9]|[12]\d|3[01])\b/;
-const YEAR_MONTH_RE = /\b((?:19|20)\d{2})[-/.](0[1-9]|1[0-2])\b/;
-const KOREAN_YEAR_MONTH_RE = /((?:19|20)\d{2})\s*년\s*(0?[1-9]|1[0-2])\s*월/;
-const YEAR_ONLY_RE = /\b((?:19|20)\d{2})\b/;
 
 function readArg(name) {
   const index = args.indexOf(name);
@@ -31,10 +26,6 @@ function toPosix(value) {
 
 function escapeRegExp(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-function padMonth(value) {
-  return String(Number(value)).padStart(2, "0");
 }
 
 function parseFrontmatter(text) {
@@ -66,38 +57,6 @@ function parseSourceList(frontmatter) {
   return [raw];
 }
 
-function parseDateHint(text) {
-  const iso = text.match(ISO_DATE_RE);
-  if (iso) return { year: iso[1], month: iso[2], strongMonth: true };
-
-  const yearMonth = text.match(YEAR_MONTH_RE);
-  if (yearMonth) {
-    return { year: yearMonth[1], month: yearMonth[2], strongMonth: true };
-  }
-
-  const korean = text.match(KOREAN_YEAR_MONTH_RE);
-  if (korean) {
-    return {
-      year: korean[1],
-      month: padMonth(korean[2]),
-      strongMonth: true,
-    };
-  }
-
-  const yearOnly = text.match(YEAR_ONLY_RE);
-  if (yearOnly) return { year: yearOnly[1], month: null, strongMonth: false };
-  return null;
-}
-
-async function statOrNull(abs) {
-  try {
-    return await fs.stat(abs);
-  } catch (err) {
-    if (err?.code === "ENOENT") return null;
-    throw err;
-  }
-}
-
 async function walk(dir) {
   const entries = await fs.readdir(dir, { withFileTypes: true }).catch((err) => {
     if (err?.code === "ENOENT") return [];
@@ -115,78 +74,47 @@ async function walk(dir) {
   return out;
 }
 
-async function fallbackDate(fileAbs, sourcePaths, updated) {
-  for (const sourcePath of sourcePaths) {
-    if (!sourcePath.startsWith("raw/")) continue;
-    const rawRel = sourcePath.slice("raw/".length);
-    const rawStat = await statOrNull(path.join(rawRoot, rawRel));
-    if (rawStat) return rawStat.mtime;
-  }
-
-  if (updated) {
-    const updatedDate = new Date(updated);
-    if (!Number.isNaN(updatedDate.valueOf())) return updatedDate;
-  }
-
-  const fileStat = await fs.stat(fileAbs);
-  return fileStat.mtime;
+function trimRawPath(value) {
+  return value
+    .trim()
+    .replace(/^["']|["']$/g, "")
+    .replace(/^\.?\/*/, "")
+    .replace(/#.*$/, "");
 }
 
-async function inferChronology(fileAbs, rel, text) {
-  const { frontmatter, body } = parseFrontmatter(text);
-  const sourceDate = parseField(frontmatter, "source_date");
-  const updated = parseField(frontmatter, "updated");
-  const sourcePaths = parseSourceList(frontmatter);
-  const fallback = await fallbackDate(fileAbs, sourcePaths, updated);
-  const fallbackYear = String(fallback.getFullYear());
-  const fallbackMonth = String(fallback.getMonth() + 1).padStart(2, "0");
-
-  const sourceDateHint = sourceDate ? parseDateHint(sourceDate) : null;
-  const bodyHint = parseDateHint(body);
-  const rawPathHint = parseDateHint(sourcePaths.join("\n"));
-  const hint = sourceDateHint ?? bodyHint ?? rawPathHint;
-
-  if (hint) {
-    return {
-      year: hint.year,
-      month: hint.month ?? fallbackMonth,
-      strongMonth: hint.strongMonth,
-      reason: sourceDateHint
-        ? "source_date"
-        : bodyHint
-          ? "body"
-          : "raw path",
-    };
+function firstRawPath(frontmatter) {
+  const rawPath = parseField(frontmatter, "raw_path");
+  if (rawPath && trimRawPath(rawPath).startsWith("raw/")) {
+    return trimRawPath(rawPath);
   }
+
+  const sourcePaths = parseSourceList(frontmatter);
+  return sourcePaths.map(trimRawPath).find((sourcePath) => sourcePath.startsWith("raw/")) ?? null;
+}
+
+function sourceTargetFromRawPath(rawPath) {
+  const rawRel = rawPath.slice("raw/".length).replace(/^\/+/, "");
+  if (!rawRel || rawRel.endsWith("/")) {
+    return `${rawRel}index.md`;
+  }
+
+  const parsed = path.posix.parse(rawRel);
+  const name = parsed.ext ? parsed.name : parsed.base;
+  return path.posix.join(parsed.dir, `${name}.md`);
+}
+
+function candidateTarget(rel, frontmatter) {
+  const rawPath = firstRawPath(frontmatter);
+  if (!rawPath) return { target: rel, reason: "missing raw_path" };
+
+  const target = sourceTargetFromRawPath(rawPath);
+  if (target === rel) return { target: rel, reason: "already raw mirror" };
 
   const dateDir = rel.match(DATE_DIR_RE);
-  if (dateDir) {
-    return {
-      year: dateDir[1],
-      month: dateDir[2].slice(5),
-      strongMonth: false,
-      reason: "existing dated path",
-    };
-  }
-
   return {
-    year: fallbackYear,
-    month: fallbackMonth,
-    strongMonth: false,
-    reason: updated ? "updated/raw mtime fallback" : "mtime fallback",
+    target,
+    reason: dateDir ? "migrate dated source to raw mirror" : "raw_path",
   };
-}
-
-function candidateTarget(rel, chronology) {
-  const dated = rel.match(DATE_DIR_RE);
-  if (dated) {
-    const currentMonth = dated[2];
-    const inferredMonth = `${chronology.year}-${chronology.month}`;
-    if (!chronology.strongMonth || currentMonth === inferredMonth) {
-      return rel;
-    }
-  }
-  return `${chronology.year}/${chronology.year}-${chronology.month}/${path.basename(rel)}`;
 }
 
 async function uniqueTarget(rel, occupied) {
@@ -207,14 +135,14 @@ async function buildPlan() {
   for (const fileAbs of files) {
     const rel = toPosix(path.relative(sourcesRoot, fileAbs));
     const text = await fs.readFile(fileAbs, "utf8");
-    const chronology = await inferChronology(fileAbs, rel, text);
-    const desired = candidateTarget(rel, chronology);
+    const { frontmatter } = parseFrontmatter(text);
+    const { target: desired, reason } = candidateTarget(rel, frontmatter);
     if (desired === rel) continue;
 
     occupied.delete(rel);
     const target = await uniqueTarget(desired, occupied);
     occupied.add(target);
-    moves.push({ from: `wiki/sources/${rel}`, to: `wiki/sources/${target}`, reason: chronology.reason });
+    moves.push({ from: `wiki/sources/${rel}`, to: `wiki/sources/${target}`, reason });
   }
 
   return moves;
@@ -259,7 +187,7 @@ async function appendLog(moves, changedRefs) {
   const stamp = now.toISOString().slice(0, 16).replace("T", " ");
   const moved = moves.map((move) => `\`${move.from}\` -> \`${move.to}\``).join(", ");
   const refs = changedRefs.length ? changedRefs.map((file) => `\`${file}\``).join(", ") : "none";
-  const entry = `\n## [${stamp}] lint | source chronology layout\n- Moved sources: ${moved}\n- Updated references: ${refs}\n`;
+  const entry = `\n## [${stamp}] lint | source raw-mirror layout\n- Moved sources: ${moved}\n- Updated references: ${refs}\n`;
   await fs.appendFile(logPath, entry, "utf8");
 }
 
@@ -291,7 +219,7 @@ const result = {
 if (json) {
   process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
 } else if (moves.length === 0) {
-  process.stdout.write("No source chronology moves needed.\n");
+  process.stdout.write("No source raw-mirror moves needed.\n");
 } else {
   process.stdout.write(`${apply ? "Moved" : "Would move"} ${moves.length} source page(s):\n`);
   for (const move of moves) {

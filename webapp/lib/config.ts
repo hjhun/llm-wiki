@@ -87,10 +87,11 @@ export const ConfigSchema = z.object({
     extraction: z
       .object({
         /**
-         * CLIO uses graphify's extraction pipeline, but the default profile is
-         * deliberately sparse: wiki/source/entity/concept topology first,
-         * rich code-symbol graphs only when explicitly requested.
+         * CLIO builds an Obsidian-like page-title graph first. graphify's
+         * extraction pipeline then enriches that sparse topology only when it
+         * has stable provenance.
          */
+        primaryNodeModel: z.enum(["page-title"]).default("page-title"),
         profile: z.enum(["wiki", "code", "deep"]).default("wiki"),
         scope: z.enum(["wiki", "wiki+raw"]).default("wiki"),
         maxNodesPerLeaf: z.number().int().min(1).default(40),
@@ -103,6 +104,7 @@ export const ConfigSchema = z.object({
         dropIsolatedDerivedNodes: z.boolean().default(true),
       })
       .default({
+        primaryNodeModel: "page-title",
         profile: "wiki",
         scope: "wiki",
         maxNodesPerLeaf: 40,

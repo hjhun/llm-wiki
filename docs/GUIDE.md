@@ -584,7 +584,7 @@ Lint checks include:
 - orphan pages
 - contradiction candidates
 - stale claims
-- source chronology layout
+- source raw-mirror layout
 - graph/wiki mismatch
 - sensitive information patterns
 

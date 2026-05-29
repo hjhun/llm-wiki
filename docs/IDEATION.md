@@ -137,7 +137,7 @@ allowed-cli: [codex, claude, agy, cline]
   5. Persist chunk progress as a checklist in `sessions/<date>/<time>_ingest.md` so work can be resumed.
 - **Workflow per chunk**:
   1. Read sources in the chunk and extract key takeaways.
-  2. Create `wiki/sources/<YYYY>/<YYYY-MM>/<slug>.md` with YAML frontmatter.
+  2. Create raw-mirrored `wiki/sources/<raw-relative-path>.md` with YAML frontmatter.
   3. Find and update related entity/concept pages, or create them if missing.
   4. If a contradiction is found, add a `> ⚠️ Conflicts with [[...]]` block to the relevant page.
   5. Append a chunk-level log entry to `wiki/log.md`.

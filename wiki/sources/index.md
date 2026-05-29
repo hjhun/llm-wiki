@@ -3,13 +3,13 @@ title: Source Catalog
 type: index
 tags: [sources, catalog, provenance]
 sources: []
-updated: 2026-05-24
+updated: 2026-05-29
 ---
 
 # Source Catalog
 
-This generated catalog helps agents find evidence without treating the dated
-`wiki/sources/<YYYY>/<YYYY-MM>/` folders as the knowledge taxonomy.
+This generated catalog helps agents find evidence while source pages keep their
+raw-mirrored provenance layout under `wiki/sources/<raw-relative-path>.md`.
 
 ## Recent Sources
 

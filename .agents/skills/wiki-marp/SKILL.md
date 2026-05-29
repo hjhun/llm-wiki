@@ -62,7 +62,7 @@ Candidate execution paths:
 2. Put the title and question/topic on the first slide.
 3. Each body slide should carry one message.
 4. Cite every factual claim.
-   - Wiki source: `[[wiki/sources/2026/2026-05/foo]]`
+   - Wiki source: `[[wiki/sources/articles/foo]]`
    - Graph source: `(graph: community #3, node "Foo")`
    - Original source: `raw/...`
 5. Make the final slide "Reference Pages" and list cited wiki pages.

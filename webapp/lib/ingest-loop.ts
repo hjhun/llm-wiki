@@ -671,7 +671,7 @@ export async function buildSourcePageStatusReference(
     missing.length > 0
       ? `Missing source page coverage for done leaves: ${missing.join(", ")}${suffix}`
       : "All done leaves have recorded source page coverage.",
-    "For a done leaf with missing source page coverage, treat the next unit of work as a source-page repair: write one `wiki/sources/<YYYY>/<YYYY-MM>/<slug>.md` page per original raw file, then record those paths in the matching sub-chunk `source_pages_written` before reporting completion.",
+    "For a done leaf with missing source page coverage, treat the next unit of work as a source-page repair: write one raw-mirrored `wiki/sources/<raw-relative-path>.md` page per original raw file, then record those paths in the matching sub-chunk `source_pages_written` before reporting completion.",
   ].join("\n");
 }
 

@@ -58,7 +58,7 @@ Return a candidate list for `wiki-query`.
 ## qmd candidates
 
 1. `wiki/concepts/foo.md` — score 0.82 — matches the main keywords in the question
-2. `wiki/sources/2026/2026-05/bar.md` — score 0.76 — source summary contains related explanation
+2. `wiki/sources/articles/bar.md` — score 0.76 — source summary contains related explanation
 ```
 
 ## Workflow

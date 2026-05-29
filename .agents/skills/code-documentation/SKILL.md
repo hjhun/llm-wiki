@@ -91,7 +91,7 @@ updated: YYYY-MM-DD
 title: <Project> / <relative file path>
 type: code
 tags: [code, file, <project>]
-sources: [wiki/sources/<YYYY>/<YYYY-MM>/<slug>.md]
+sources: [wiki/sources/<raw-relative-path>.md]
 updated: YYYY-MM-DD
 ---
 

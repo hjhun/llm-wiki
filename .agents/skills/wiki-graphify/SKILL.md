@@ -16,7 +16,8 @@ ground claims in wiki pages, source summaries, and read-only raw sources.
 
 ## Purpose
 
-Use the wiki and original sources as input to produce the following artifacts.
+Use the wiki and original sources as input to produce an Obsidian-like page
+graph first, then enrich it with bounded graphify extraction when useful.
 
 - `wiki/graph/graph.json` — normalized node/edge graph.
 - `wiki/graph/GRAPH_REPORT.md` — summary of god nodes, community structure, and key paths.
@@ -109,19 +110,51 @@ drained, so graphify reads a stable wiki state.
    expose credentials in wiki pages.**
 4. Apply chunk limits and graph options from merged config (`config/default.json` plus `config/local.json`), especially `graph.extraction`, `graph.minCommunitySize`, and `chunking.*`.
 
+## Page-Title Graph Model (Default)
+
+CLIO's default knowledge graph is page-first, not concept-extraction-first.
+This makes the graph behave more like Obsidian: stable Markdown pages are the
+primary nodes, and relationships inside those pages create the edges.
+
+Default node rules:
+
+1. Create one node for each Markdown page in scope. Use frontmatter `title`
+   when present; otherwise derive the label from the filename. Use a stable id
+   from the wiki path without `.md` (`wiki/concepts/llm-wiki-pattern.md` ->
+   `concepts/llm-wiki-pattern`), with `aliases` containing the displayed title.
+2. For source pages, keep the raw-mirrored page path as the node id
+   (`wiki/sources/articles/foo.md` -> `sources/articles/foo`) and store
+   `raw_path`, `source_date`, `ingested_at`, `topics`, `entities`, `concepts`,
+   `projects`, and `claims` as metadata.
+3. Create edges from explicit links first:
+   - `[[Page Name]]` and relative Markdown links -> `links_to`
+   - frontmatter `sources` -> `cites`
+   - source page `raw_path` -> `derived_from`
+   - source page facets (`topics`, `entities`, `concepts`, `projects`) ->
+     `mentions` or `about`, preferably to an existing page node when one exists
+4. Do not create standalone nodes for headings, paragraphs, rationale snippets,
+   incidental nouns, or every claim. Keep those as metadata on the page/source
+   node unless a durable wiki page exists for them.
+
+graphify's richer extraction is an enrichment layer. It may add code symbols,
+imports, calls, or high-confidence semantic edges, but it must attach them back
+to page/source nodes and obey the CLIO extraction budget below.
+
 ## Extraction Profile (CLIO-Bounded Graphify)
 
 Use the global graphify extraction style, but run it through a CLIO profile
 instead of copying the global `/graphify` skill verbatim. The global graphify
 skill is intentionally generous: it extracts AST symbols, semantic concepts,
 rationale nodes, semantic-similarity edges, hyperedges, and rich exports. CLIO's
-graph is an auxiliary retrieval layer for an already-curated wiki, so graphify's
-extractors must be followed by filtering, normalization, and node budgets.
+graph is an auxiliary retrieval layer for an already-curated wiki, so page-title
+nodes are built first and graphify's extractors are followed by filtering,
+normalization, and node budgets.
 
 Default policy comes from `graph.extraction`:
 
 ```json
 {
+  "primaryNodeModel": "page-title",
   "profile": "wiki",
   "scope": "wiki",
   "maxNodesPerLeaf": 40,
@@ -138,10 +171,12 @@ Default policy comes from `graph.extraction`:
 Profiles:
 
 - `wiki` (default): graph source pages, entity pages, concept pages, maps, and
-  their explicit wikilinks/frontmatter. Prefer nodes that correspond to a
-  durable wiki page or a source frontmatter facet (`topics`, `entities`,
-  `concepts`, `projects`, `claims`). Do not create nodes for headings,
-  paragraphs, individual claims, rationale snippets, or every mentioned noun.
+  their explicit wikilinks/frontmatter. Page titles/paths are the canonical
+  nodes. Source frontmatter facets (`topics`, `entities`, `concepts`,
+  `projects`, `claims`) become metadata and edges to existing page nodes; create
+  a new facet node only when no page exists and the facet is useful as a durable
+  retrieval anchor. Do not create nodes for headings, paragraphs, individual
+  claims, rationale snippets, or every mentioned noun.
 - `code`: use graphify's code extraction path for `raw/` code evidence, then
   keep project/module/file and public API nodes first. Limit file/function/class
   symbols with `maxCodeSymbolsPerFile`; drop private/local/helper symbols unless
@@ -152,8 +187,9 @@ Profiles:
 
 Filtering rules after extraction:
 
-1. Keep nodes that have stable provenance (`sources`, `source_file`, or
-   `raw_path`) and a meaningful label.
+1. Keep all page-backed nodes with stable paths. For extracted nodes, keep only
+   nodes that have stable provenance (`sources`, `source_file`, or `raw_path`)
+   and a meaningful label.
 2. Keep explicit relationships first: wikilinks, frontmatter facets, imports,
    calls, citations, and source-page references.
 3. Drop `INFERRED` edges with `confidence_score < graph.extraction.minConfidence`
@@ -189,41 +225,42 @@ This follows the same principle as `wiki-ingest`.
 ## Merge Algorithm
 
 Partial graphs are produced by independent, stateless invocations (one per
-leaf), so the **same real-world entity routinely appears under different
-ids/labels across partials** — case, spacing, accents, English vs Korean, and
-slug variants such as `transformer` vs `transformer-model`. Exact-id matching
-alone leaves these as duplicate, poorly connected nodes. The merge pass is
-responsible for reconciling them.
+leaf), so the merge pass must preserve page-backed node identity while still
+reconciling aliases and extracted nodes that refer to the same thing.
 
 1. **Collect nodes**: read every `parts/*.json` and collect nodes/edges into one collection.
    Ignore any extracted node that violates the active `graph.extraction`
    profile unless it is already present in an existing `graph.json` and still
    has valid provenance.
-2. **Resolve entities (cross-partial, do this first)**: before any id-keyed
-   merge, cluster nodes that refer to the **same real-world entity** even when
-   their ids differ.
+2. **Anchor page nodes first**: page-backed nodes keep canonical ids derived
+   from their wiki path. If multiple nodes point at the same `page_path`, merge
+   them into that page node and union aliases/metadata.
+3. **Resolve extracted aliases**: before any remaining id-keyed merge, cluster
+   extracted nodes that refer to the **same real-world entity** even when their
+   ids differ.
    - Treat as the same entity: case/spacing/punctuation variants, accent
      differences, English/Korean variants of one name, slug variants
      (`transformer` ≈ `transformer-model` ≈ `트랜스포머`), and any node whose
      label or alias matches another node's `[[wikilink]]` target.
-   - For each cluster pick one **canonical id** via `normalize(name)`:
-     lowercase, spaces -> `-`, remove accents. Preserve every other surface
-     form in the canonical node's `aliases` (keep original English/Korean text).
+   - If a matching page node exists, use that page node id as canonical. If no
+     page exists, pick one canonical id via `normalize(name)`: lowercase, spaces
+     -> `-`, remove accents. Preserve every other surface form in the canonical
+     node's `aliases` (keep original English/Korean text).
    - Build an alias table `surface form -> canonical id`, then **rewrite every
      edge endpoint** (`src`/`dst`) from a member id to its canonical id.
-3. **Merge node properties**: merge nodes that share the canonical `id`. Conflict
+4. **Merge node properties**: merge nodes that share the canonical `id`. Conflict
    priority: `wiki/` source > `raw/` source. If source grade is equal, the more
    recently updated value wins. Union `tags`, `sources`, and `aliases`.
-4. **Normalize edges**: deduplicate by `(src, dst, type)`. Accumulate weight by
+5. **Normalize edges**: deduplicate by `(src, dst, type)`. Accumulate weight by
    occurrence count. If an endpoint is still missing from the node set, resolve
-   it through the step-2 alias table before considering it dangling; drop an
+   it through the step-3 alias table before considering it dangling; drop an
    edge only when no canonical node can be found.
-5. **Apply graph budget**: after dedupe, prune low-confidence inferred edges,
+6. **Apply graph budget**: after dedupe, prune low-confidence inferred edges,
    isolated derived nodes, and over-budget per-source/per-leaf nodes according
    to `graph.extraction`. Never prune the last provenance anchor for a source
    page.
-6. **Recompute communities**: run the selected graphify community algorithm once more on the merged graph. Absorb communities that are too small (`size < minCommunitySize`) into adjacent communities.
-7. **Output**: standard `wiki/graph/graph.json` schema below plus
+7. **Recompute communities**: run the selected graphify community algorithm once more on the merged graph. Absorb communities that are too small (`size < minCommunitySize`) into adjacent communities.
+8. **Output**: standard `wiki/graph/graph.json` schema below plus
    `GRAPH_REPORT.md`. Enforce the invariant that every `edges[].src`/`dst`
    exists in `nodes[].id`, and report how many dangling edges were resolved or
    dropped in `GRAPH_REPORT.md`. Also report nodes/edges pruned by the CLIO
@@ -237,23 +274,25 @@ responsible for reconciling them.
   "built_at": "YYYY-MM-DDTHH:MM:SS",
   "nodes": [
     {
-      "id": "andrej-karpathy",
-      "label": "Andrej Karpathy",
-      "type": "entity",
-      "tags": ["person", "researcher"],
-      "sources": ["wiki/sources/2026/2026-05/karpathy-llm-wiki.md"],
+      "id": "sources/articles/karpathy/llm-wiki",
+      "label": "Karpathy LLM Wiki",
+      "type": "source",
+      "page_path": "wiki/sources/articles/karpathy/llm-wiki.md",
+      "raw_path": "raw/articles/karpathy/llm-wiki.md",
+      "tags": ["llm-wiki"],
+      "sources": ["wiki/sources/articles/karpathy/llm-wiki.md"],
       "community": 3,
       "centrality": 0.42,
-      "aliases": ["Karpathy"]
+      "aliases": ["LLM Wiki"]
     }
   ],
   "edges": [
     {
-      "src": "andrej-karpathy",
-      "dst": "llm-wiki-pattern",
-      "type": "authored",
+      "src": "sources/articles/karpathy/llm-wiki",
+      "dst": "concepts/llm-wiki-pattern",
+      "type": "links_to",
       "weight": 1,
-      "sources": ["wiki/sources/2026/2026-05/karpathy-llm-wiki.md"]
+      "sources": ["wiki/sources/articles/karpathy/llm-wiki.md"]
     }
   ],
   "communities": [
@@ -306,7 +345,7 @@ responsible for reconciling them.
 ### `query`
 1. Extract keyword/entity candidates from the question.
 2. Match candidate nodes in `graph.json`; collect 1-hop neighbors and adjacent nodes inside the community.
-3. Read the `wiki/sources/<YYYY>/<YYYY-MM>/...` and `wiki/concepts/...` pages cited by the collected nodes. This follows the same page-reading rules as `wiki-query`.
+3. Read the `wiki/sources/<raw-relative-path>.md` and `wiki/concepts/...` pages cited by the collected nodes. This follows the same page-reading rules as `wiki-query`.
 4. Write the answer. Cite as `(graph: community #C, node "Label")` together with wikilinks.
 5. With `--save` or user consent, feed the answer back into `wiki/answers/` using the same schema as `wiki-query`.
 
@@ -335,7 +374,7 @@ User:
 
 Skill behavior:
 1. Check graphify execution path -> global `graphify` or `python3 -m graphify` works.
-2. Find leaves: `wiki/sources/2026/2026-05/`, `wiki/entities/`, `wiki/concepts/`, `wiki/answers/`, `raw/articles/karpathy/` -> 5 chunks.
+2. Find leaves: `wiki/sources/articles/karpathy/`, `wiki/entities/`, `wiki/concepts/`, `wiki/answers/`, `raw/articles/karpathy/` -> 5 chunks.
 3. Create session Markdown and chunk checklist.
 4. Call the selected graphify CLI for each chunk -> create 5 `parts/<hash>.json` files.
 5. Merge -> `graph.json` with 38 nodes, 64 edges, 5 communities, plus `GRAPH_REPORT.md`.

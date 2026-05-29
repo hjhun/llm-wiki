@@ -19,7 +19,7 @@ Code Wiki graph updates and Korean wiki writing.
 
 Read material newly dropped by the user into `raw/` and perform the following.
 
-1. Write one `wiki/sources/<YYYY>/<YYYY-MM>/<slug>.md` summary page per original source, treating `wiki/sources/` as a dated provenance ledger rather than the main topic taxonomy.
+1. Write one `wiki/sources/<raw-relative-path>.md` summary page per original source, mirroring the logical `raw/` directory structure instead of filing sources by ingest/source date.
 2. Create or update related entity/concept pages, reusing existing pages instead of creating near-duplicates (see Step 2.3).
 3. If a leaf is code-heavy, keep the normal LLM Wiki ingest contract: write provenance/source summaries and progress state, then let the separate `wiki-graphify update` workflow build the code knowledge graph from the immutable code under `raw/`.
 4. Refresh `wiki/sources/index.md` as a compact source catalog organized by metadata facets such as topic, entity, source kind, source date, raw path prefix, status, and recent updates.
@@ -197,15 +197,16 @@ For exactly **one** sub-chunk whose `status === "pending"`:
      symlink, treat the target as read-only source material and continue to
      cite/store only the logical `raw/...` path.
    - If the file is larger than `chunking.maxBytesPerFile`, read only `head (N/2)` + a marker + `tail (N/2)` bytes. Record `truncated: true` in the per-leaf JSON.
-   - Write `wiki/sources/<YYYY>/<YYYY-MM>/<slug>.md` for that file with the required frontmatter (`title`, `type: source`, `tags`, `sources: [raw/...]`, `updated`) and optional source-page field `source_date: YYYY-MM-DD | YYYY-MM`.
-   - Add source facets when knowable: `source_kind`, `raw_path`, `language`, `topics`, `entities`, `concepts`, `projects`, `claims`, and `status`. These fields drive retrieval and cataloging; do not encode topic taxonomy in the source file path.
-   - Choose `<YYYY>/<YYYY-MM>` by this priority: explicit `source_date` or source text date -> raw path/metadata date -> raw file mtime -> ingest date. If only the year is known, use that year with the fallback month from the next available source.
+   - Write `wiki/sources/<raw-relative-path>.md` for that file with the required frontmatter (`title`, `type: source`, `tags`, `sources: [raw/...]`, `updated`) and optional source-page fields such as `source_date: YYYY-MM-DD | YYYY-MM` and `ingested_at: YYYY-MM-DDTHH:MM:SS`.
+   - Derive the source path by stripping the leading `raw/` and replacing the original extension with `.md`: `raw/articles/foo.pdf` -> `wiki/sources/articles/foo.md`. If a source page summarizes a directory or logical source group, use `wiki/sources/<raw-relative-dir>/index.md`.
+   - Add source facets when knowable: `source_kind`, `raw_path`, `language`, `topics`, `entities`, `concepts`, `projects`, `claims`, and `status`. These fields drive retrieval and cataloging; do not encode date or topic taxonomy in the source file path.
+   - Preserve dates as metadata only. Choose `source_date` by this priority: explicit source text date -> raw path/metadata date -> raw file mtime -> ingest date. If only the year is known, store the year or `YYYY-MM` when the month is knowable; do not create date folders from it.
    - Body: one-line gist → key points (max 12 bullets) → quotes → wiki connections (`[[Entity]]`, `[[Concept]]`, and useful `[[wiki/maps/<topic>]]` trails) → source path/URL.
    - For code files, keep the source summary lightweight: identify the file or
      group as code evidence, note obvious project/module context from filenames
      or manifests, and defer detailed symbols, dependencies, and line-level
      structure to graphify.
-   - Update the per-leaf JSON entry: `processed: true`, `summary_page: "wiki/sources/<YYYY>/<YYYY-MM>/<slug>.md"`.
+   - Update the per-leaf JSON entry: `processed: true`, `summary_page: "wiki/sources/<raw-relative-path>.md"`.
    - **Discard the file body from working memory** before opening the next file. Do not keep two file bodies in context simultaneously.
 3. If the sub-chunk is code-heavy, keep Code Wiki work graph-first:
    - Do **not** create mirrored `wiki/code/<project>/<relative-file>.md` pages
@@ -226,12 +227,12 @@ For exactly **one** sub-chunk whose `status === "pending"`:
    - **Reuse before creating.** Before adding a new `wiki/entities/` or `wiki/concepts/` page, check `wiki/index.md` for an existing page naming the same target — including case, spacing, punctuation, and English/Korean variants (`Transformer` ≈ `트랜스포머` ≈ `transformer-model`). If one exists, update it and link with the index's exact `[[Page Name]]`. Create a new page only when no existing page covers the target. Parallel workers each see only part of the input, so this is the main safeguard against near-duplicate pages — and therefore against duplicate, disconnected graph nodes.
 5. **Contradictions**: if a new claim disagrees with an existing wiki page, add a block quote on that page:
    ```markdown
-   > ⚠️ Conflicts with [[wiki/sources/<YYYY>/<YYYY-MM>/<slug>]]: this source claims X. Follow-up review needed.
+   > ⚠️ Conflicts with [[wiki/sources/articles/foo]]: this source claims X. Follow-up review needed.
    ```
 6. Append a single chunk entry to `wiki/log.md`:
    ```markdown
    ## [YYYY-MM-DD HH:MM] ingest | <leaf path> | sub-chunk <id>
-   - Changed files: `wiki/sources/2026/2026-05/foo.md`, `wiki/entities/bar.md`
+   - Changed files: `wiki/sources/articles/foo.md`, `wiki/entities/bar.md`
    - Notes: <files done>/<files total> in leaf
    ```
 7. Mark the sub-chunk `status: "done"`, set `ended_at`, and record `source_pages_written`. For code/mixed leaves, do not block completion on `wiki/code` page creation. If this was the leaf's last sub-chunk, set `leaves[<leafPath>].status = "done"` **and queue the merge pass**: add the leaf's immediate parent directory (a POSIX path ending in `/`; use `raw/` for a leaf sitting directly under `raw/`) to `merge_pass.pending_parents` unless it is already listed. This is the only place `pending_parents` is filled — Step 3 and the `/ingest-loop` backend driver both rely on it to know merge work is outstanding, so skipping it leaves the loop unable to detect completion. Persist `.state.json`.
@@ -306,7 +307,7 @@ Primary Code Wiki graph artifacts:
 - `wiki/graph/parts/<sha1(leafPath)>.json` — partial graph for a raw code leaf.
 - `wiki/graph/graph.json` — merged graph across wiki and raw code evidence.
 - `wiki/graph/GRAPH_REPORT.md` — human-readable graph report.
-- `wiki/sources/<YYYY>/<YYYY-MM>/<slug>.md` — provenance summary for raw code,
+- `wiki/sources/<raw-relative-path>.md` — provenance summary for raw code,
   logs, tests, or runtime evidence.
 
 Optional human-readable code pages may still be created when they are useful
@@ -443,7 +444,7 @@ User:
 Skill behavior on call #1:
 1. Create session file, take the lock.
 2. Enumerate: one leaf `raw/articles/karpathy/`, one sub-chunk `c1` with one file.
-3. Step 2: read the file, write `wiki/sources/2026/2026-05/karpathy-llm-wiki.md`, update concept pages `wiki/concepts/llm-wiki-pattern.md`, `wiki/concepts/memex.md`, and entity pages `wiki/entities/andrej-karpathy.md`, `wiki/entities/vannevar-bush.md` from takeaways.
+3. Step 2: read the file, write `wiki/sources/articles/karpathy/llm-wiki.md`, update concept pages `wiki/concepts/llm-wiki-pattern.md`, `wiki/concepts/memex.md`, and entity pages `wiki/entities/andrej-karpathy.md`, `wiki/entities/vannevar-bush.md` from takeaways.
 4. Mark sub-chunk `done`, leaf `done`. Update `.state.json`, regen DASHBOARD. Release lock. Return.
 
 Call #2 (`/ingest` again with no arg):

@@ -86,7 +86,7 @@ Answer the user's question in this order.
    - If the user explicitly requests a format with `--format=table|marp|chart` or natural language ("표로", "슬라이드로", "차트로", "as a table", "as slides", "as a chart"), use that format.
    - Otherwise, answer in Markdown (`--format=md`) with headings, paragraphs, bullets, and citations as appropriate.
 2. Cite every factual claim. Formats:
-   - Wikilink: `... ([[wiki/sources/2026/2026-05/foo]])`.
+   - Wikilink: `... ([[wiki/sources/articles/foo]])`.
    - Original source: `... (raw/articles/foo/bar.md L42-58)`.
    - Code location: `` `raw/repos/foo/src/server.ts:L42-L88` `` plus an
      Explorer link: `[open](/explorer?ws=raw&path=repos/foo/src/server.ts&line=42)`.
@@ -107,7 +107,7 @@ Answer the user's question in this order.
    the answer and recommend re-running `/ingest raw/<project>` to persist it.
 5. If a source is not in the wiki, explicitly say "source unknown" or withhold the answer.
 6. Always append these two lines at the end:
-   - **Cited pages**: `[[wiki/sources/2026/2026-05/foo]], [[wiki/concepts/bar]]` ...
+   - **Cited pages**: `[[wiki/sources/articles/foo]], [[wiki/concepts/bar]]` ...
    - **Save**: `[ ] wiki/answers/<suggested-slug>.md` toggle, which feeds the answer back when the user clicks it.
 
 ### Step 4 - Feedback into the Wiki (User Consent or `--save`)
@@ -129,7 +129,7 @@ Answer the user's question in this order.
    ```markdown
    ## [YYYY-MM-DD HH:MM] query | <question summary>
    - Feedback: `wiki/answers/<slug>.md`
-   - Citations: `wiki/sources/2026/2026-05/foo.md`, `wiki/concepts/bar.md`
+   - Citations: `wiki/sources/articles/foo.md`, `wiki/concepts/bar.md`
    ```
 4. Show a "Saved. Open in Explorer?" link card to the user.
 

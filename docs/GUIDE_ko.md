@@ -580,7 +580,7 @@ lint가 확인하는 항목:
 - orphan page
 - contradiction candidate
 - stale claim
-- source chronology layout
+- source raw-mirror layout
 - graph/wiki mismatch
 - 민감정보 패턴
 

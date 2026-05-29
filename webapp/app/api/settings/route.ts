@@ -46,6 +46,7 @@ const Body = z.object({
       minCommunitySize: z.number().int().min(1).max(1000),
       extraction: z
         .object({
+          primaryNodeModel: z.enum(["page-title"]).optional(),
           profile: z.enum(["wiki", "code", "deep"]).optional(),
           scope: z.enum(["wiki", "wiki+raw"]).optional(),
           maxNodesPerLeaf: z.number().int().min(1).max(100_000).optional(),

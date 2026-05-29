@@ -35,7 +35,7 @@
 | `raw/chat/` | User via Chat UI | Append-only capture | User-approved external captures from Chat, such as browser/search/tool findings. These are source candidates for later `/ingest`, not full conversation logs. |
 | `raw/.trash/` | LLM via `/preprocess`, UI soft-delete | Append-only quarantine | Files moved out of `raw/` by `/preprocess` or by the Explorer's delete button. Filename is `<ISO8601>_<basename>`; recoverable. |
 | `wiki/` | LLM | LLM may freely write/update | Main wiki body. All generated artifacts go here. |
-| `wiki/sources/` | LLM | LLM | Provenance ledger: one dated summary page per original source plus a generated `wiki/sources/index.md` catalog for topic/entity/source-kind lookup. |
+| `wiki/sources/` | LLM | LLM | Provenance ledger: one summary page per original `raw/` source, mirroring the logical `raw/` directory structure, plus a generated `wiki/sources/index.md` catalog for topic/entity/source-kind/date lookup. |
 | `wiki/maps/` | LLM | LLM | Optional associative trails and topic maps that connect sources, entities, concepts, answers, and open questions. |
 | `wiki/code/` | LLM | LLM | Optional human-readable code syntheses such as project overviews or saved answers. Not required for ingest completion; source-code structure is represented primarily by graphify artifacts under `wiki/graph/`. |
 | `wiki/answers/` | LLM | LLM | Pages fed back from query answers. |
@@ -59,7 +59,7 @@ Each operation maps to one or more project skills. If these rules conflict with 
 - Always follow the **leaf-directory chunks + merge pass** principle (Section 7).
 - Trigger: manual (`/ingest`, `/ingest-loop`) or **automatic** via the Settings → Auto Ingest panel (`raw/` file events or interval schedule). Manual Chat/API runs may wrap the same per-unit `wiki-ingest` contract in the multi-agent coordinator; targeted `/ingest-loop <raw-path>` must keep that raw scope across all rounds. The auto trigger is driven by the manager in `webapp/lib/auto-ingest/`, which calls `runIngestLoop()` directly; by default (`skipIfBusy: true`) it is skipped while `.lock` exists.
 - Outputs:
-  - `wiki/sources/<YYYY>/<YYYY-MM>/<slug>.md` summary page with YAML frontmatter
+  - `wiki/sources/<raw-relative-path>.md` summary page with YAML frontmatter, mirroring the logical `raw/` path
   - Updated `wiki/sources/index.md` source catalog when source pages are added or changed
   - Optional `wiki/maps/<topic>.md` associative trail pages when a source belongs to an ongoing research thread
   - New or updated related entity/concept pages
@@ -93,7 +93,7 @@ Each operation maps to one or more project skills. If these rules conflict with 
 - Treat `raw/` code as immutable source evidence. Do not format, build, patch, delete, or vendor-prune it during Code Wiki operations.
 - Always follow the **leaf-directory chunks + merge pass** principle (Section 7), using the normal `wiki/.progress/ingest/` state. There is no separate user-facing Code Wiki command.
 - Outputs:
-  - `wiki/sources/<YYYY>/<YYYY-MM>/<slug>.md` source summaries for code files or code groups
+  - `wiki/sources/<raw-relative-path>.md` source summaries for code files or code groups
   - `wiki/graph/parts/<path-hash>.json` partial graph artifacts for code leaves
   - `wiki/graph/graph.json` and `wiki/graph/GRAPH_REPORT.md` after `wiki-graphify update`
   - optional human-readable syntheses under `wiki/code/<project>/` or `wiki/answers/` when explicitly useful
@@ -115,7 +115,7 @@ Each operation maps to one or more project skills. If these rules conflict with 
 ### 4.1 Page Types
 - **Entity**: individual people, places, organizations, products, works, and similar targets.
 - **Concept**: topics, theories, patterns.
-- **Source**: one page per original source (`wiki/sources/<YYYY>/<YYYY-MM>/`).
+- **Source**: one page per original source, stored under `wiki/sources/` by mirroring its logical `raw/` path.
 - **Map**: associative trail or topic map under `wiki/maps/` that links sources, entities, concepts, answers, and open questions.
 - **Answer**: fed-back query answer (`wiki/answers/`).
 - **Comparison/Analysis**: synthesis page comparing or analyzing two or more targets.
@@ -130,17 +130,19 @@ Each operation maps to one or more project skills. If these rules conflict with 
 title: <page title>
 type: entity | concept | source | answer | comparison | analysis | code | architecture | map | index | log
 tags: [tag1, tag2]
-sources: [wiki/sources/<YYYY>/<YYYY-MM>/<slug>.md, ...]
+sources: [wiki/sources/<raw-relative-path>.md, ...]
 updated: YYYY-MM-DD
 source_date: YYYY-MM-DD | YYYY-MM        # optional, source pages only
 ---
 ```
 
-Source pages should be stored under `wiki/sources/<YYYY>/<YYYY-MM>/` as a
-stable provenance ledger, not as the primary knowledge taxonomy. Choose the
-date by this priority: explicit `source_date` or source text date -> raw
-path/metadata date -> raw file mtime -> ingest date. If only the year is known,
-use that year with the fallback month from the next available source.
+Source pages should be stored under `wiki/sources/` by mirroring the logical
+`raw/` path. Examples: `raw/articles/foo.md` ->
+`wiki/sources/articles/foo.md`, `raw/books/bar/ch1.pdf` ->
+`wiki/sources/books/bar/ch1.md`, and a directory-level source summary may use
+`wiki/sources/<raw-relative-dir>/index.md`. Dates are metadata, not directory
+taxonomy: preserve them in `source_date`, `ingested_at`, `updated`, and the
+generated source catalog.
 
 For source pages, add source-specific frontmatter when knowable:
 
@@ -157,8 +159,9 @@ status: summarized | partial | needs_review
 ```
 
 Use these facets for retrieval and cataloging. Do not move source pages into
-topic folders just because a source is about a topic; one source can belong to
-many topics, entities, concepts, and maps.
+date or topic folders just because a source is old or belongs to a topic; one
+source can belong to many topics, entities, concepts, and maps while keeping
+its raw-mirrored provenance path stable.
 
 ### 4.3 Source Catalog and Maps
 
@@ -175,10 +178,10 @@ many topics, entities, concepts, and maps.
 ### 4.4 Writing Rules
 - Use **wikilinks** `[[Page Name]]` or relative Markdown links for all internal links.
 - Use external URLs only when the user provided them or they exist in `raw/`. **Do not guess URLs.**
-- When citing, put the source on the same line or in a footnote. Example: `... according to the source ([[wiki/sources/2026/2026-05/foo]]).`
+- When citing, put the source on the same line or in a footnote. Example: `... according to the source ([[wiki/sources/articles/foo]]).`
 - If a contradiction is found, add a block quote to the affected page:
   ```markdown
-  > ⚠️ Conflicts with [[wiki/sources/2026/2026-05/bar]]: this source claims X. Follow-up review needed.
+  > ⚠️ Conflicts with [[wiki/sources/articles/bar]]: this source claims X. Follow-up review needed.
   ```
 - Instead of deleting a page, move it to `wiki/archive/<original-path>` and leave a one-line reason.
 
@@ -193,7 +196,7 @@ many topics, entities, concepts, and maps.
 - Format, with a one-line heading and optional body:
   ```markdown
   ## [YYYY-MM-DD HH:MM] ingest | <source title or folder name>
-  - Changed files: `wiki/sources/2026/2026-05/foo.md`, `wiki/concepts/bar.md`
+  - Changed files: `wiki/sources/articles/foo.md`, `wiki/concepts/bar.md`
   - Notes: N chunks, merge pass complete
   ```
 - Operation types: `ingest`, `query`, `lint`, `graph`.
@@ -237,18 +240,20 @@ This applies to ingest, Code Wiki ingest, preprocess planning, and graphify. Nev
 ## 8. Graph Integration
 
 - Graph creation, update, and query operations must go through the [`wiki-graphify`](.agents/skills/wiki-graphify/SKILL.md) skill.
-- `wiki-graphify` reuses the global graphify extraction style, but applies the
-  CLIO-bounded `graph.extraction` profile from config. The default profile is a
-  compact wiki topology graph: source/entity/concept/project/map nodes and
-  explicit links/facets first, not one node per heading, paragraph, rationale
-  snippet, helper function, or incidental noun.
+- `wiki-graphify` builds an Obsidian-like page graph first: each Markdown page's
+  title/path is a stable node, and `[[wikilink]]`, Markdown links, frontmatter
+  `sources`, `raw_path`, and explicit facets become edges. graphify extraction
+  is a bounded enrichment layer, not the primary node model.
+- The default profile is a compact page-title topology graph: source/entity/
+  concept/project/map page nodes and explicit links/facets first, not one node
+  per heading, paragraph, rationale snippet, helper function, or incidental noun.
 - Code Wiki is graph-first: graphify reads code evidence under `raw/` plus generated wiki/source pages and writes graph nodes that connect code symbols, files, modules, concepts, and source summaries.
 - The web app Graph tab does not execute graphify directly. It sends `wiki-graphify build/update` requests to the coding agent CLI selected in Settings, and the coding agent follows this repository's rules and skills to run graphify, chunk processing, and the merge pass.
 - Wiki pages must not call the `graphify` binary directly. The coding agent running `wiki-graphify` chooses the execution path: global `graphify`, or `python3 -m graphify` when needed.
 - `wiki-query` may optionally use graph context from `wiki/graph/GRAPH_REPORT.md`, node adjacency, or `wiki-graphify query` as an auxiliary candidate/context source; it must still ground final answers in wiki/source pages.
 - At the end of an ingest merge pass, calling `wiki-graphify update` is recommended, depending on user settings. Ingest-time scoped `update` is adaptive: `graph.autoUpdateStrategy=auto` should refresh completed leaf partials and merge the full parts set only when leaf/file/byte/sub-chunk thresholds indicate a large workload, while small ingests rely on the final `update`.
-- If `/lint --fix` reorganizes existing source pages into dated source
-  directories, update affected wiki references and then run `wiki-graphify
+- If `/lint --fix` reorganizes existing dated source pages into raw-mirrored
+  source paths, update affected wiki references and then run `wiki-graphify
   update` as a separate graph operation when `wiki/graph/graph.json` exists.
 
 ## 9. Hard Rules
@@ -302,7 +307,7 @@ Mental checklist for one ingest run:
 
 - [ ] Did you list leaf directories and direct-file pseudo-leaves from the input tree?
 - [ ] Is the chunk within the file-count and byte limits?
-- [ ] Did you write `wiki/sources/<YYYY>/<YYYY-MM>/<slug>.md` for each chunk?
+- [ ] Did you write `wiki/sources/<raw-relative-path>.md` for each chunk?
 - [ ] Did you append one line to `wiki/log.md` for each chunk?
 - [ ] Did you organize parent pages, `wiki/sources/index.md`, useful `wiki/maps/` pages, and `wiki/index.md` in the merge pass?
 - [ ] Optional: did you call `wiki-graphify update`?

@@ -24,6 +24,7 @@
   "graph": {
     "minCommunitySize": 3,
     "extraction": {
+      "primaryNodeModel": "page-title",
       "profile": "wiki",
       "scope": "wiki",
       "maxNodesPerLeaf": 40,
