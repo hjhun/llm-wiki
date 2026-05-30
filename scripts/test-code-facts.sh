@@ -17,6 +17,7 @@ mkdir -p \
   "${TMP_ROOT}/raw/repos/demo/rust" \
   "${TMP_ROOT}/raw/repos/demo/tests"
 cp "${ROOT_DIR}/scripts/code-facts.mjs" "${TMP_ROOT}/scripts/code-facts.mjs"
+cp "${ROOT_DIR}/scripts/merge-graph-parts.mjs" "${TMP_ROOT}/scripts/merge-graph-parts.mjs"
 
 cat > "${TMP_ROOT}/raw/repos/demo/package.json" <<'JSON'
 {
@@ -99,12 +100,25 @@ RS
   --out wiki/graph/facts/demo.json \
   --graph-out wiki/graph/parts/demo.json)
 
-node - "${TMP_ROOT}/wiki/graph/facts/demo.json" "${TMP_ROOT}/wiki/graph/parts/demo.json" <<'NODE'
+(cd "${TMP_ROOT}" && node scripts/merge-graph-parts.mjs \
+  --parts wiki/graph/parts \
+  --out wiki/graph/graph.json \
+  --report wiki/graph/GRAPH_REPORT.md >/dev/null)
+
+node - \
+  "${TMP_ROOT}/wiki/graph/facts/demo.json" \
+  "${TMP_ROOT}/wiki/graph/parts/demo.json" \
+  "${TMP_ROOT}/wiki/graph/graph.json" \
+  "${TMP_ROOT}/wiki/graph/GRAPH_REPORT.md" <<'NODE'
 const fs = require("node:fs");
 const factsPath = process.argv[2];
-const graphPath = process.argv[3];
+const partPath = process.argv[3];
+const finalGraphPath = process.argv[4];
+const reportPath = process.argv[5];
 const doc = JSON.parse(fs.readFileSync(factsPath, "utf8"));
-const graph = JSON.parse(fs.readFileSync(graphPath, "utf8"));
+const part = JSON.parse(fs.readFileSync(partPath, "utf8"));
+const graph = JSON.parse(fs.readFileSync(finalGraphPath, "utf8"));
+const report = fs.readFileSync(reportPath, "utf8");
 
 function assert(condition, message) {
   if (!condition) {
@@ -152,6 +166,11 @@ assert(relations.some((relation) =>
   relation.dst === "module:demo:external:serde"
 ), "Cargo dependency edge missing");
 assert(relations.some((relation) =>
+  relation.type === "handles_route" &&
+  relation.src.startsWith("route:demo:GET:") &&
+  relation.dst.includes("symbol:raw/repos/demo/app/api/items/route.ts:function:GET")
+), "route should point at GET handler symbol");
+assert(relations.some((relation) =>
   relation.type === "calls" &&
   relation.src.includes("symbol:raw/repos/demo/app/api/items/route.ts:function:GET") &&
   relation.dst.includes("symbol:raw/repos/demo/lib/items.ts:function:loadItems")
@@ -167,14 +186,52 @@ assert(relations.some((relation) =>
 ), "Python symbol-level tested_by missing");
 assert(doc.diagnostics.files_seen === 9, "expected nine fixture files");
 assert(doc.diagnostics.files_parsed === 9, "expected nine parsed files");
-assert(graph.version === 1, "graph version should be 1");
-assert(graph.leaf_path === "raw/repos/demo/", "graph leaf path should match facts");
-assert(Array.isArray(graph.nodes) && graph.nodes.length > 0, "graph nodes missing");
-assert(Array.isArray(graph.edges) && graph.edges.length > 0, "graph edges missing");
-assert(graph.nodes.some((node) => node.id === "project:demo"), "graph project missing");
-assert(graph.edges.some((edge) => edge.type === "handles_route"), "graph route edge missing");
-assert(graph.edges.some((edge) => edge.type === "calls"), "graph call edge missing");
-assert(graph.edges.every((edge) => edge.src && edge.dst), "graph edge endpoint missing");
+assert(part.version === 1, "partial graph version should be 1");
+assert(part.leaf_path === "raw/repos/demo/", "partial graph leaf path should match facts");
+assert(Array.isArray(part.nodes) && part.nodes.length > 0, "partial graph nodes missing");
+assert(Array.isArray(part.edges) && part.edges.length > 0, "partial graph edges missing");
+assert(part.nodes.some((node) => node.id === "project:demo"), "partial graph project missing");
+assert(part.edges.some((edge) => edge.type === "handles_route"), "partial graph route edge missing");
+assert(part.edges.some((edge) => edge.type === "calls"), "partial graph call edge missing");
+assert(part.edges.every((edge) => edge.src && edge.dst), "partial graph edge endpoint missing");
+
+const graphNodeIds = new Set(graph.nodes.map((node) => node.id));
+const graphEdges = graph.edges;
+assert(graph.version === 1, "merged graph version should be 1");
+assert(graph.source === "clio-graph-parts", "merged graph source should be set");
+assert(Array.isArray(graph.nodes) && graph.nodes.length > 0, "merged graph nodes missing");
+assert(Array.isArray(graph.edges) && graph.edges.length > 0, "merged graph edges missing");
+assert(Array.isArray(graph.communities) && graph.communities.length > 0, "communities missing");
+assert(graph.nodes.every((node) => Number.isFinite(node.centrality)), "node centrality missing");
+assert(graph.nodes.every((node) => node.community), "node community missing");
+assert(graphEdges.every((edge) => graphNodeIds.has(edge.src) && graphNodeIds.has(edge.dst)), "dangling merged graph edge");
+assert(graphEdges.some((edge) =>
+  edge.type === "contains" &&
+  edge.src === "project:demo" &&
+  edge.dst === "module:demo:repos/demo"
+), "structure query edge missing");
+assert(graphEdges.some((edge) =>
+  edge.type === "calls" &&
+  edge.src.includes("symbol:raw/repos/demo/app/api/items/route.ts:function:GET") &&
+  edge.dst.includes("symbol:raw/repos/demo/lib/items.ts:function:loadItems")
+), "impact query call edge missing");
+assert(graphEdges.some((edge) =>
+  edge.type === "handles_route" &&
+  edge.src.startsWith("route:demo:GET:") &&
+  edge.dst.includes("symbol:raw/repos/demo/app/api/items/route.ts:function:GET")
+), "API route query edge missing");
+assert(graphEdges.some((edge) =>
+  edge.type === "tested_by" &&
+  edge.src.includes("symbol:raw/repos/demo/python/service.py:function:run_service")
+), "testing query edge missing");
+assert(graphEdges.some((edge) =>
+  edge.type === "uses_env" &&
+  edge.src.includes("symbol:raw/repos/demo/app/api/items/route.ts:function:GET") &&
+  edge.dst === "env:demo:ITEM_BUCKET" &&
+  edge.source_location?.start_line === 4
+), "debugging query env edge missing");
+assert(report.includes("## Summary"), "graph report summary missing");
+assert(report.includes("Dangling edges dropped: 0"), "graph report should mention no dangling edges");
 NODE
 
 printf '[code-facts] ok\n'

@@ -597,7 +597,7 @@ function extractCalls(text, rawPath, relations, fileId, localSymbols, importedTa
   }
 }
 
-function extractJsRoutes(text, rawPath, project, contentHash, entities, relations, fileId) {
+function extractJsRoutes(text, rawPath, project, contentHash, entities, relations, fileId, symbolLookup) {
   const routeRe = /\bexport\s+(?:async\s+)?function\s+(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)\s*\(/g;
   for (const match of text.matchAll(routeRe)) {
     const method = match[1];
@@ -619,11 +619,12 @@ function extractJsRoutes(text, rawPath, project, contentHash, entities, relation
       source_location: { start_line: startLine },
       metadata: { method, route_pattern: routePattern || "/" },
     }));
+    const handlerId = symbolLookup.get(symbolKey(rawPath, method)) ?? fileId;
     addUnique(relations, relation(
-      relationId("handles_route", routeId, fileId, rawPath, startLine),
+      relationId("handles_route", routeId, handlerId, rawPath, startLine),
       "handles_route",
       routeId,
-      fileId,
+      handlerId,
       rawPath,
       { source_location: { start_line: startLine } },
     ));
@@ -673,7 +674,7 @@ function extractTests(text, ext, rawPath, project, contentHash, entities, relati
   return testIds;
 }
 
-function extractEnvReads(text, rawPath, project, contentHash, entities, relations, fileId) {
+function extractEnvReads(text, rawPath, project, contentHash, entities, relations, fileId, localSymbols) {
   const patterns = [
     /\bprocess\.env\.([A-Za-z_][A-Za-z0-9_]*)/g,
     /\bos\.environ(?:\.get)?\(\s*["']([A-Za-z_][A-Za-z0-9_]*)["']/g,
@@ -689,10 +690,11 @@ function extractEnvReads(text, rawPath, project, contentHash, entities, relation
         kind: "env",
         confidence: 0.9,
       }));
+      const readerId = nearestSymbolId(localSymbols, startLine, fileId);
       addUnique(relations, relation(
-        relationId("uses_env", fileId, id, rawPath, startLine),
+        relationId("uses_env", readerId, id, rawPath, startLine),
         "uses_env",
-        fileId,
+        readerId,
         id,
         rawPath,
         { confidence: 0.9, source_location: { start_line: startLine } },
@@ -779,7 +781,7 @@ async function main() {
     for (const symbol of symbols) symbolLookup.set(symbolKey(rawPath, symbol.name), symbol.id);
     const importedTargets = extractImports(text, ext, rawPath, project, contentHash, entities, relations, fileId, knownFiles);
     extractManifestConfig(text, rawPath, project, contentHash, entities, relations, fileId);
-    extractJsRoutes(text, rawPath, project, contentHash, entities, relations, fileId);
+    extractJsRoutes(text, rawPath, project, contentHash, entities, relations, fileId, symbolLookup);
     const testIds = extractTests(text, ext, rawPath, project, contentHash, entities, relations, fileId);
     for (const testId of testIds) {
       for (const target of importedTargets) {
@@ -796,7 +798,7 @@ async function main() {
         }
       }
     }
-    extractEnvReads(text, rawPath, project, contentHash, entities, relations, fileId);
+    extractEnvReads(text, rawPath, project, contentHash, entities, relations, fileId, symbols);
     fileAnalyses.push({ text, ext, rawPath, fileId, symbols, importedTargets });
   }
 

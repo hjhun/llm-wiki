@@ -282,6 +282,8 @@ candidate context, not sufficient proof by itself.
 - Update `webapp/lib/graph.ts` graph operation prompt to prefer Code Facts for
   raw code leaves.
 - Transform Code Facts into `wiki/graph/parts/<sha1(leafPath)>.json`.
+- Provide a deterministic merge helper for Code Facts partials that writes
+  `wiki/graph/graph.json` and `wiki/graph/GRAPH_REPORT.md`.
 - Ensure the final merge still rewrites `wiki/graph/graph.json` from all valid
   parts.
 
@@ -300,6 +302,8 @@ candidate context, not sufficient proof by itself.
   source locations.
 - Verify fallback behavior for malformed or unsupported files.
 - Verify graph prompt text includes the Code Facts contract.
+- Verify merged `graph.json` can support fixture checks for structure, impact,
+  API/route, testing, and debugging-oriented navigation.
 
 ## Risks And Mitigations
 

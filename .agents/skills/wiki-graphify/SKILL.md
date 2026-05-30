@@ -226,6 +226,10 @@ This follows the same principle as `wiki-ingest`.
      `wiki/graph/parts/<sha1(leaf path)>.json` with `scripts/code-facts.mjs
      --graph-out`. Enrich or prune that partial with graphify code extraction
      only when it fits the active profile.
+   - For Code Facts partials, `node scripts/merge-graph-parts.mjs --parts
+     wiki/graph/parts --out wiki/graph/graph.json --report
+     wiki/graph/GRAPH_REPORT.md` is the deterministic project-local merge
+     helper. Use it when no richer graphify package merge path is needed.
    - Options: use supported graphify CLI commands where they fit, or call installed `graphify` Python package modules directly. Choose the narrowest input shape supported by the selected executable/package.
 3. **Record state**: update `wiki/graph/.state.json` with leaf path -> `{built_at, content_hash, part_file}`.
 4. **Merge pass**: combine all partial graphs into final `graph.json`. See merge algorithm below.
