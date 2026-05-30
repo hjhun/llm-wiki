@@ -156,6 +156,16 @@ The matching partial graph remains under
 graphs gives CLIO a small, inspectable intermediate artifact without making
 the facts the user-facing knowledge model.
 
+The first implementation may generate both artifacts in one deterministic
+extractor call:
+
+```bash
+node scripts/code-facts.mjs raw/repos/foo/src \
+  --leaf raw/repos/foo/src/ \
+  --out wiki/graph/facts/<sha1(leafPath)>.json \
+  --graph-out wiki/graph/parts/<sha1(leafPath)>.json
+```
+
 ### Stable ID Rules
 
 Entity IDs should be deterministic:
@@ -253,6 +263,8 @@ candidate context, not sufficient proof by itself.
 - Produce Code Facts JSON for a raw leaf.
 - Persist facts to `wiki/graph/facts/<sha1(leafPath)>.json` when called from a
   graph operation.
+- Emit a base partial graph to `wiki/graph/parts/<sha1(leafPath)>.json` from
+  the same facts when `--graph-out` is supplied.
 - Support TypeScript/JavaScript, Python, and Rust with parser-backed or
   conservative fallback extraction.
 - Include diagnostics and confidence fields.

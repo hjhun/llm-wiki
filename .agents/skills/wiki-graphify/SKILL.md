@@ -181,11 +181,10 @@ Profiles:
 - `code`: use graphify's code extraction path for `raw/` code evidence, then
   keep project/module/file and public API nodes first. For raw code leaves,
   first run CLIO's Code Facts extractor when available:
-  `node scripts/code-facts.mjs <raw-leaf> --leaf <leafPath> --out wiki/graph/facts/<sha1(leafPath)>.json`.
-  Transform those facts into graph nodes and edges instead of storing full AST
-  nodes. Limit file/function/class symbols with `maxCodeSymbolsPerFile`; drop
-  private/local/helper symbols unless they are central or cited by a wiki/source
-  page.
+  `node scripts/code-facts.mjs <raw-leaf> --leaf <leafPath> --out wiki/graph/facts/<sha1(leafPath)>.json --graph-out wiki/graph/parts/<sha1(leafPath)>.json`.
+  Use the generated partial as the base graph instead of storing full AST nodes.
+  Limit file/function/class symbols with `maxCodeSymbolsPerFile`; drop private/
+  local/helper symbols unless they are central or cited by a wiki/source page.
 - `deep`: allow richer global graphify behavior for deliberate investigations.
   Even in this profile, preserve leaf-first output under `wiki/graph/` and
   enforce provenance, confidence, and merge invariants.
@@ -223,8 +222,10 @@ This follows the same principle as `wiki-ingest`.
 2. **Build partial graphs**: for each leaf, use the selected graphify execution path with only the files in that leaf. Reuse graphify package modules where possible (`detect`, `extract`, `build`, `cluster`, `report`, `export`), then apply the CLIO extraction profile before writing the partial.
    - Output path: `wiki/graph/parts/<sha1(leaf path)>.json`.
    - For code leaves under `raw/`, first write Code Facts to
-     `wiki/graph/facts/<sha1(leaf path)>.json`, then derive the partial graph
-     from facts plus any graphify code extraction that fits the active profile.
+     `wiki/graph/facts/<sha1(leaf path)>.json` and a base partial graph to
+     `wiki/graph/parts/<sha1(leaf path)>.json` with `scripts/code-facts.mjs
+     --graph-out`. Enrich or prune that partial with graphify code extraction
+     only when it fits the active profile.
    - Options: use supported graphify CLI commands where they fit, or call installed `graphify` Python package modules directly. Choose the narrowest input shape supported by the selected executable/package.
 3. **Record state**: update `wiki/graph/.state.json` with leaf path -> `{built_at, content_hash, part_file}`.
 4. **Merge pass**: combine all partial graphs into final `graph.json`. See merge algorithm below.

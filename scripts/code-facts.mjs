@@ -24,18 +24,30 @@ const EXTRACTOR_VERSION = 1;
 
 function usage() {
   console.error(
-    "Usage: node scripts/code-facts.mjs raw/<path> [--out <path>] [--leaf raw/<path>/]",
+    [
+      "Usage: node scripts/code-facts.mjs raw/<path>",
+      "  [--out <facts.json>]",
+      "  [--graph-out <partial-graph.json>]",
+      "  [--leaf raw/<path>/]",
+    ].join("\n"),
   );
 }
 
 const args = process.argv.slice(2);
 const target = args.find((arg) => !arg.startsWith("--"));
 const outArgIndex = args.indexOf("--out");
+const graphOutArgIndex = args.indexOf("--graph-out");
 const leafArgIndex = args.indexOf("--leaf");
 const outPath = outArgIndex >= 0 ? args[outArgIndex + 1] : null;
+const graphOutPath = graphOutArgIndex >= 0 ? args[graphOutArgIndex + 1] : null;
 const leafPathArg = leafArgIndex >= 0 ? args[leafArgIndex + 1] : null;
 
-if (!target || (outArgIndex >= 0 && !outPath) || (leafArgIndex >= 0 && !leafPathArg)) {
+if (
+  !target ||
+  (outArgIndex >= 0 && !outPath) ||
+  (graphOutArgIndex >= 0 && !graphOutPath) ||
+  (leafArgIndex >= 0 && !leafPathArg)
+) {
   usage();
   process.exit(2);
 }
@@ -168,6 +180,65 @@ function addUnique(map, item) {
 
 function relationId(type, src, dst, rawPath, line = "") {
   return `${type}:${src}->${dst}:${rawPath}${line ? `:L${line}` : ""}`;
+}
+
+function graphNodeFromEntity(item) {
+  const tags = ["code", item.type];
+  if (item.kind) tags.push(item.kind);
+  return {
+    id: item.id,
+    label: item.name,
+    type: item.type,
+    tags: [...new Set(tags)],
+    sources: [item.raw_path].filter(Boolean),
+    raw_path: item.raw_path,
+    source_file: item.raw_path,
+    source_location: item.source_location ?? null,
+    project: item.project,
+    aliases: item.type === "symbol" ? [item.name] : [],
+    confidence: item.confidence,
+    metadata: {
+      ...(item.kind ? { kind: item.kind } : {}),
+      ...(item.metadata ?? {}),
+      parser: item.parser,
+      content_hash: item.content_hash,
+    },
+  };
+}
+
+function graphEdgeFromRelation(item) {
+  return {
+    src: item.src,
+    dst: item.dst,
+    type: item.type,
+    weight: item.confidence ?? 1,
+    sources: [item.raw_path].filter(Boolean),
+    source_file: item.raw_path ?? null,
+    source_location: item.source_location ?? null,
+    confidence: item.confidence,
+    metadata: {
+      ...(item.metadata ?? {}),
+      parser: item.parser,
+    },
+  };
+}
+
+function graphFromFacts(facts) {
+  return {
+    version: 1,
+    built_at: facts.generated_at,
+    leaf_path: facts.leaf_path,
+    leaf_hash: facts.leaf_hash,
+    source: "clio-code-facts",
+    nodes: facts.entities.map(graphNodeFromEntity),
+    edges: facts.relations.map(graphEdgeFromRelation),
+    communities: [],
+    diagnostics: {
+      ...facts.diagnostics,
+      entities: facts.entities.length,
+      relations: facts.relations.length,
+    },
+  };
 }
 
 function jsSymbolPatterns() {
@@ -509,6 +580,13 @@ async function main() {
     await fs.writeFile(outAbs, json, "utf8");
   } else {
     process.stdout.write(json);
+  }
+
+  if (graphOutPath) {
+    const graphOutAbs = path.resolve(projectRoot, graphOutPath);
+    const graphJson = `${JSON.stringify(graphFromFacts(result), null, 2)}\n`;
+    await fs.mkdir(path.dirname(graphOutAbs), { recursive: true });
+    await fs.writeFile(graphOutAbs, graphJson, "utf8");
   }
 }
 

@@ -35,12 +35,18 @@ test("loads items", async () => {
 });
 TS
 
-(cd "${TMP_ROOT}" && node scripts/code-facts.mjs raw/repos/demo --leaf raw/repos/demo/ --out wiki/graph/facts/demo.json)
+(cd "${TMP_ROOT}" && node scripts/code-facts.mjs \
+  raw/repos/demo \
+  --leaf raw/repos/demo/ \
+  --out wiki/graph/facts/demo.json \
+  --graph-out wiki/graph/parts/demo.json)
 
-node - "${TMP_ROOT}/wiki/graph/facts/demo.json" <<'NODE'
+node - "${TMP_ROOT}/wiki/graph/facts/demo.json" "${TMP_ROOT}/wiki/graph/parts/demo.json" <<'NODE'
 const fs = require("node:fs");
 const factsPath = process.argv[2];
+const graphPath = process.argv[3];
 const doc = JSON.parse(fs.readFileSync(factsPath, "utf8"));
+const graph = JSON.parse(fs.readFileSync(graphPath, "utf8"));
 
 function assert(condition, message) {
   if (!condition) {
@@ -67,6 +73,13 @@ assert(relationTypes.has("tested_by"), "tested_by relation missing");
 assert(relationTypes.has("uses_env"), "uses_env relation missing");
 assert(doc.diagnostics.files_seen === 3, "expected three fixture files");
 assert(doc.diagnostics.files_parsed === 3, "expected three parsed files");
+assert(graph.version === 1, "graph version should be 1");
+assert(graph.leaf_path === "raw/repos/demo/", "graph leaf path should match facts");
+assert(Array.isArray(graph.nodes) && graph.nodes.length > 0, "graph nodes missing");
+assert(Array.isArray(graph.edges) && graph.edges.length > 0, "graph edges missing");
+assert(graph.nodes.some((node) => node.id === "project:demo"), "graph project missing");
+assert(graph.edges.some((edge) => edge.type === "handles_route"), "graph route edge missing");
+assert(graph.edges.every((edge) => edge.src && edge.dst), "graph edge endpoint missing");
 NODE
 
 printf '[code-facts] ok\n'
