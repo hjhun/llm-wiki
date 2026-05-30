@@ -197,8 +197,10 @@ Initial language support should target the repository's likely needs:
 
 - TypeScript / JavaScript: functions, classes, components, imports, exports,
   Next.js route handlers, environment/config reads.
-- Python: modules, classes, functions, imports, common test definitions.
-- Rust: modules, structs, enums, traits, functions, `use` dependencies, tests.
+- Python: modules, classes, functions, imports including relative
+  `from .module import name`, common test definitions, and environment reads.
+- Rust: modules, structs, enums, traits, functions, public exports, `use`
+  dependencies, tests, and environment reads.
 
 The first implementation does not need full call graph precision. It should
 prioritize reliable definitions, imports/exports, routes, tests, and source

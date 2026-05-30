@@ -291,14 +291,32 @@ function importPatterns(ext) {
   if (ext === ".py") {
     return [
       /^\s*import\s+([A-Za-z_][\w.]*)/gm,
-      /^\s*from\s+([A-Za-z_][\w.]*)\s+import\b/gm,
+      /^\s*from\s+(\.*[A-Za-z_][\w.]*)\s+import\b/gm,
     ];
   }
   if (ext === ".rs") return [/\buse\s+([^;]+);/g];
   return [];
 }
 
-function resolveRelativeImport(rawPath, specifier, knownFiles) {
+function resolvePythonImport(rawPath, specifier, knownFiles) {
+  if (!specifier.startsWith(".")) return null;
+  const match = /^(\.+)(.*)$/.exec(specifier);
+  if (!match) return null;
+  const [, dots, rest] = match;
+  let base = path.posix.dirname(rawPath);
+  for (let i = 1; i < dots.length; i += 1) base = path.posix.dirname(base);
+  const modulePath = rest
+    ? path.posix.join(base, rest.replace(/\./g, "/"))
+    : base;
+  const candidates = [
+    `${modulePath}.py`,
+    `${modulePath}/__init__.py`,
+  ];
+  return candidates.find((candidate) => knownFiles.has(candidate)) ?? null;
+}
+
+function resolveRelativeImport(rawPath, specifier, ext, knownFiles) {
+  if (ext === ".py") return resolvePythonImport(rawPath, specifier, knownFiles);
   if (!specifier.startsWith(".")) return null;
   const base = path.posix.normalize(path.posix.join(path.posix.dirname(rawPath), specifier));
   const matches = [
@@ -344,9 +362,23 @@ function jsExportPatterns() {
   ];
 }
 
+function rustExportPatterns() {
+  return [
+    /\bpub(?:\([^)]*\))?\s+(?:async\s+)?fn\s+([A-Za-z_]\w*)\s*\(/g,
+    /\bpub(?:\([^)]*\))?\s+struct\s+([A-Za-z_]\w*)/g,
+    /\bpub(?:\([^)]*\))?\s+enum\s+([A-Za-z_]\w*)/g,
+    /\bpub(?:\([^)]*\))?\s+trait\s+([A-Za-z_]\w*)/g,
+  ];
+}
+
+function exportPatterns(ext) {
+  if ([".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"].includes(ext)) return jsExportPatterns();
+  if (ext === ".rs") return rustExportPatterns();
+  return [];
+}
+
 function extractExports(text, ext, rawPath, relations, fileId, symbolLookup) {
-  if (![".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"].includes(ext)) return;
-  for (const re of jsExportPatterns()) {
+  for (const re of exportPatterns(ext)) {
     for (const match of text.matchAll(re)) {
       const name = match[1];
       if (!name) continue;
@@ -396,7 +428,7 @@ function extractImports(text, ext, rawPath, project, contentHash, entities, rela
       const specifier = (match[1] ?? "").trim();
       if (!specifier) continue;
       const startLine = lineOfIndex(text, match.index ?? 0);
-      const resolved = resolveRelativeImport(rawPath, specifier, knownFiles);
+      const resolved = resolveRelativeImport(rawPath, specifier, ext, knownFiles);
       const importedNames = importedNamesFromStatement(match[0], ext);
       let dst;
       if (resolved) {
