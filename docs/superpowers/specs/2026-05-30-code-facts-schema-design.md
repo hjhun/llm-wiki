@@ -201,6 +201,8 @@ Initial language support should target the repository's likely needs:
   `from .module import name`, common test definitions, and environment reads.
 - Rust: modules, structs, enums, traits, functions, public exports, `use`
   dependencies, tests, and environment reads.
+- Manifests/config: `package.json` and `Cargo.toml` config anchors plus
+  declared package dependencies as `depends_on` edges.
 
 The first implementation does not need full call graph precision. It should
 prioritize reliable definitions, imports/exports, routes, tests, and source
@@ -230,6 +232,7 @@ Graph edges map directly from facts:
   a known symbol and the caller line can be mapped to the nearest local symbol
 - `handles_route`: route -> handler symbol
 - `tested_by`: symbol/file/module -> test
+- `depends_on`: manifest config -> declared external dependency
 - `reads_config` / `uses_env`: code -> config/environment
 - `implements`: code symbol -> documented concept when evidence exists
 

@@ -18,6 +18,27 @@ mkdir -p \
   "${TMP_ROOT}/raw/repos/demo/tests"
 cp "${ROOT_DIR}/scripts/code-facts.mjs" "${TMP_ROOT}/scripts/code-facts.mjs"
 
+cat > "${TMP_ROOT}/raw/repos/demo/package.json" <<'JSON'
+{
+  "name": "demo",
+  "dependencies": {
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "vitest": "^2.0.0"
+  }
+}
+JSON
+
+cat > "${TMP_ROOT}/raw/repos/demo/Cargo.toml" <<'TOML'
+[package]
+name = "demo-rust"
+version = "0.1.0"
+
+[dependencies]
+serde = "1"
+TOML
+
 cat > "${TMP_ROOT}/raw/repos/demo/app/api/items/route.ts" <<'TS'
 import { loadItems } from "../../../lib/items";
 
@@ -100,6 +121,10 @@ assert(doc.version === 1, "version should be 1");
 assert(doc.leaf_path === "raw/repos/demo/", "leaf path should be preserved");
 assert(doc.project === "demo", "project should be inferred from raw/repos/<name>");
 assert(entityIds.has("project:demo"), "project entity missing");
+assert(entityIds.has("config:demo:raw/repos/demo/package.json"), "package config entity missing");
+assert(entityIds.has("config:demo:raw/repos/demo/Cargo.toml"), "Cargo config entity missing");
+assert(entityIds.has("module:demo:external:zod"), "package dependency entity missing");
+assert(entityIds.has("module:demo:external:serde"), "Cargo dependency entity missing");
 assert([...entityIds].some((id) => id.includes("symbol:raw/repos/demo/lib/items.ts:function:loadItems")), "loadItems symbol missing");
 assert([...entityIds].some((id) => id.includes("symbol:raw/repos/demo/python/helpers.py:function:transform")), "Python transform symbol missing");
 assert([...entityIds].some((id) => id.includes("symbol:raw/repos/demo/rust/lib.rs:function:load_items")), "Rust load_items symbol missing");
@@ -115,6 +140,17 @@ assert(relationTypes.has("calls"), "calls relation missing");
 assert(relationTypes.has("handles_route"), "handles_route relation missing");
 assert(relationTypes.has("tested_by"), "tested_by relation missing");
 assert(relationTypes.has("uses_env"), "uses_env relation missing");
+assert(relationTypes.has("depends_on"), "depends_on relation missing");
+assert(relations.some((relation) =>
+  relation.type === "depends_on" &&
+  relation.src === "config:demo:raw/repos/demo/package.json" &&
+  relation.dst === "module:demo:external:zod"
+), "package dependency edge missing");
+assert(relations.some((relation) =>
+  relation.type === "depends_on" &&
+  relation.src === "config:demo:raw/repos/demo/Cargo.toml" &&
+  relation.dst === "module:demo:external:serde"
+), "Cargo dependency edge missing");
 assert(relations.some((relation) =>
   relation.type === "calls" &&
   relation.src.includes("symbol:raw/repos/demo/app/api/items/route.ts:function:GET") &&
@@ -129,8 +165,8 @@ assert(relations.some((relation) =>
   relation.type === "tested_by" &&
   relation.src.includes("symbol:raw/repos/demo/python/service.py:function:run_service")
 ), "Python symbol-level tested_by missing");
-assert(doc.diagnostics.files_seen === 7, "expected seven fixture files");
-assert(doc.diagnostics.files_parsed === 7, "expected seven parsed files");
+assert(doc.diagnostics.files_seen === 9, "expected nine fixture files");
+assert(doc.diagnostics.files_parsed === 9, "expected nine parsed files");
 assert(graph.version === 1, "graph version should be 1");
 assert(graph.leaf_path === "raw/repos/demo/", "graph leaf path should match facts");
 assert(Array.isArray(graph.nodes) && graph.nodes.length > 0, "graph nodes missing");

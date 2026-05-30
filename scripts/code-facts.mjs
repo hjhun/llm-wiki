@@ -87,6 +87,11 @@ function moduleName(rawPath) {
   return meaningful.slice(0, -1).join("/") || path.posix.dirname(rawPath);
 }
 
+function manifestKind(rawPath) {
+  const base = path.posix.basename(rawPath);
+  return CODE_MANIFESTS.has(base) ? base : null;
+}
+
 async function statSafe(abs) {
   try {
     return await fs.stat(abs);
@@ -416,6 +421,102 @@ function importedSymbolIds(target, symbolLookup) {
     .filter(Boolean);
 }
 
+function addExternalModule(entities, project, rawPath, contentHash, name, metadata = {}) {
+  const id = `module:${project}:external:${name}`;
+  addUnique(entities, entity(id, "module", name, project, rawPath, contentHash, {
+    confidence: 0.85,
+    metadata: { external: true, ...metadata },
+  }));
+  return id;
+}
+
+function packageJsonDependencies(text) {
+  try {
+    const parsed = JSON.parse(text);
+    const deps = [];
+    for (const field of ["dependencies", "devDependencies", "peerDependencies", "optionalDependencies"]) {
+      const value = parsed[field];
+      if (!value || typeof value !== "object" || Array.isArray(value)) continue;
+      for (const [name, version] of Object.entries(value)) {
+        deps.push({ name, version: String(version), kind: field });
+      }
+    }
+    return {
+      name: typeof parsed.name === "string" ? parsed.name : null,
+      dependencies: deps,
+    };
+  } catch {
+    return { name: null, dependencies: [] };
+  }
+}
+
+function cargoDependencies(text) {
+  const deps = [];
+  let inDependencies = false;
+  const packageName = /^\s*name\s*=\s*"([^"]+)"/m.exec(text)?.[1] ?? null;
+  for (const line of text.split(/\r?\n/)) {
+    const section = /^\s*\[([^\]]+)]\s*$/.exec(line);
+    if (section) {
+      inDependencies = section[1] === "dependencies";
+      continue;
+    }
+    if (!inDependencies) continue;
+    const dep = /^\s*([A-Za-z0-9_-]+)\s*=/.exec(line);
+    if (dep) deps.push({ name: dep[1], kind: "dependencies" });
+  }
+  return { name: packageName, dependencies: deps };
+}
+
+function extractManifestConfig(text, rawPath, project, contentHash, entities, relations, fileId) {
+  const kind = manifestKind(rawPath);
+  if (!kind) return;
+  const configId = `config:${project}:${rawPath}`;
+  const manifest = kind === "package.json"
+    ? packageJsonDependencies(text)
+    : kind === "Cargo.toml"
+      ? cargoDependencies(text)
+      : { name: null, dependencies: [] };
+  addUnique(entities, entity(configId, "config", manifest.name ?? kind, project, rawPath, contentHash, {
+    kind,
+    parser: kind === "package.json" ? "json-manifest" : "static-regex",
+    confidence: 0.9,
+    metadata: {
+      manifest: kind,
+      dependency_count: manifest.dependencies.length,
+    },
+  }));
+  addUnique(relations, relation(
+    relationId("defines", fileId, configId, rawPath),
+    "defines",
+    fileId,
+    configId,
+    rawPath,
+    { confidence: 0.9, metadata: { manifest: kind } },
+  ));
+  for (const dep of manifest.dependencies) {
+    const depId = addExternalModule(entities, project, rawPath, contentHash, dep.name, {
+      manifest: kind,
+      dependency_kind: dep.kind,
+      ...(dep.version ? { version: dep.version } : {}),
+    });
+    addUnique(relations, relation(
+      relationId("depends_on", configId, depId, rawPath),
+      "depends_on",
+      configId,
+      depId,
+      rawPath,
+      {
+        confidence: 0.85,
+        metadata: {
+          manifest: kind,
+          dependency_kind: dep.kind,
+          ...(dep.version ? { version: dep.version } : {}),
+        },
+      },
+    ));
+  }
+}
+
 function importedNamesFromStatement(statement, ext) {
   if ([".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"].includes(ext)) {
     const named = /\{([^}]+)\}/.exec(statement);
@@ -450,11 +551,10 @@ function extractImports(text, ext, rawPath, project, contentHash, entities, rela
         dst = `file:${resolved}`;
         importedTargets.push({ dst, resolved, names: importedNames, line: startLine });
       } else {
-        dst = `module:${project}:external:${specifier}`;
-        addUnique(entities, entity(dst, "module", specifier, project, rawPath, contentHash, {
-          confidence: specifier.startsWith(".") ? 0.45 : 0.7,
-          metadata: { external: !specifier.startsWith("."), specifier },
-        }));
+        dst = addExternalModule(entities, project, rawPath, contentHash, specifier, {
+          specifier,
+          external: !specifier.startsWith("."),
+        });
       }
       addUnique(relations, relation(
         relationId("imports", fileId, dst, rawPath, startLine),
@@ -678,6 +778,7 @@ async function main() {
     const symbols = extractSymbols(text, ext, rawPath, project, contentHash, entities, relations, fileId);
     for (const symbol of symbols) symbolLookup.set(symbolKey(rawPath, symbol.name), symbol.id);
     const importedTargets = extractImports(text, ext, rawPath, project, contentHash, entities, relations, fileId, knownFiles);
+    extractManifestConfig(text, rawPath, project, contentHash, entities, relations, fileId);
     extractJsRoutes(text, rawPath, project, contentHash, entities, relations, fileId);
     const testIds = extractTests(text, ext, rawPath, project, contentHash, entities, relations, fileId);
     for (const testId of testIds) {
