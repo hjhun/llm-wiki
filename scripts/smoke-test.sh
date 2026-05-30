@@ -29,6 +29,8 @@ require_file "CLAUDE.md"
 require_file "README.md"
 require_file "setup.sh"
 require_file "scripts/install.sh"
+require_file "scripts/code-facts.mjs"
+require_file "scripts/test-code-facts.sh"
 require_file "clio-skill/skills.sh"
 require_file "clio-skill/clio/SKILL.md"
 require_file ".github/workflows/release.yml"
@@ -57,6 +59,11 @@ bash -n "${ROOT_DIR}/setup.sh"
 
 log "checking scripts/install.sh syntax"
 bash -n "${ROOT_DIR}/scripts/install.sh"
+
+log "checking Code Facts extractor"
+node --check "${ROOT_DIR}/scripts/code-facts.mjs"
+bash -n "${ROOT_DIR}/scripts/test-code-facts.sh"
+"${ROOT_DIR}/scripts/test-code-facts.sh" >/dev/null
 
 log "checking clio-skill installer syntax"
 bash -n "${ROOT_DIR}/clio-skill/skills.sh"

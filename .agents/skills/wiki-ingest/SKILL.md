@@ -305,6 +305,8 @@ per source file.
 Primary Code Wiki graph artifacts:
 
 - `wiki/graph/parts/<sha1(leafPath)>.json` — partial graph for a raw code leaf.
+- `wiki/graph/facts/<sha1(leafPath)>.json` — normalized Code Facts extracted
+  from raw code before graph conversion.
 - `wiki/graph/graph.json` — merged graph across wiki and raw code evidence.
 - `wiki/graph/GRAPH_REPORT.md` — human-readable graph report.
 - `wiki/sources/<raw-relative-path>.md` — provenance summary for raw code,

@@ -21,6 +21,7 @@ graph first, then enrich it with bounded graphify extraction when useful.
 
 - `wiki/graph/graph.json` — normalized node/edge graph.
 - `wiki/graph/GRAPH_REPORT.md` — summary of god nodes, community structure, and key paths.
+- `wiki/graph/facts/<path-hash>.json` — normalized Code Facts for raw code leaves before graph conversion.
 - `wiki/graph/parts/<path-hash>.json` — partial graph per leaf directory before merge.
 - `wiki/graph/.state.json` — leaf path -> last build time/hash.
 
@@ -178,9 +179,13 @@ Profiles:
   retrieval anchor. Do not create nodes for headings, paragraphs, individual
   claims, rationale snippets, or every mentioned noun.
 - `code`: use graphify's code extraction path for `raw/` code evidence, then
-  keep project/module/file and public API nodes first. Limit file/function/class
-  symbols with `maxCodeSymbolsPerFile`; drop private/local/helper symbols unless
-  they are central or cited by a wiki/source page.
+  keep project/module/file and public API nodes first. For raw code leaves,
+  first run CLIO's Code Facts extractor when available:
+  `node scripts/code-facts.mjs <raw-leaf> --leaf <leafPath> --out wiki/graph/facts/<sha1(leafPath)>.json`.
+  Transform those facts into graph nodes and edges instead of storing full AST
+  nodes. Limit file/function/class symbols with `maxCodeSymbolsPerFile`; drop
+  private/local/helper symbols unless they are central or cited by a wiki/source
+  page.
 - `deep`: allow richer global graphify behavior for deliberate investigations.
   Even in this profile, preserve leaf-first output under `wiki/graph/` and
   enforce provenance, confidence, and merge invariants.
@@ -217,6 +222,9 @@ This follows the same principle as `wiki-ingest`.
 1. **Find leaf directories**: list directories with no child directories in `wiki/` and optionally `raw/`. Also treat files that live directly inside a non-leaf directory as a small pseudo-leaf for that directory, so root files such as `wiki/index.md` and `wiki/log.md` are not skipped.
 2. **Build partial graphs**: for each leaf, use the selected graphify execution path with only the files in that leaf. Reuse graphify package modules where possible (`detect`, `extract`, `build`, `cluster`, `report`, `export`), then apply the CLIO extraction profile before writing the partial.
    - Output path: `wiki/graph/parts/<sha1(leaf path)>.json`.
+   - For code leaves under `raw/`, first write Code Facts to
+     `wiki/graph/facts/<sha1(leaf path)>.json`, then derive the partial graph
+     from facts plus any graphify code extraction that fits the active profile.
    - Options: use supported graphify CLI commands where they fit, or call installed `graphify` Python package modules directly. Choose the narrowest input shape supported by the selected executable/package.
 3. **Record state**: update `wiki/graph/.state.json` with leaf path -> `{built_at, content_hash, part_file}`.
 4. **Merge pass**: combine all partial graphs into final `graph.json`. See merge algorithm below.
