@@ -202,8 +202,8 @@ Initial language support should target the repository's likely needs:
 
 The first implementation does not need full call graph precision. It should
 prioritize reliable definitions, imports/exports, routes, tests, and source
-locations. Call edges can be added conservatively when parser evidence is
-strong.
+locations. Call edges should be added conservatively, such as when a named
+import resolves to a known symbol and the imported name is called in the file.
 
 ## Graph Integration
 
@@ -224,7 +224,7 @@ Graph edges map directly from facts:
 
 - `contains`: project -> module -> file -> symbol
 - `imports` / `exports`: file or symbol dependency structure
-- `calls`: symbol-to-symbol call relationship when reliable
+- `calls`: call relationship when a named import resolves to a known symbol
 - `handles_route`: route -> handler symbol
 - `tested_by`: symbol/file/module -> test
 - `reads_config` / `uses_env`: code -> config/environment

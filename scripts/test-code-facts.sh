@@ -68,6 +68,8 @@ assert(entityIds.has("env:demo:ITEM_BUCKET"), "environment entity missing");
 assert(relationTypes.has("contains"), "contains relation missing");
 assert(relationTypes.has("defines"), "defines relation missing");
 assert(relationTypes.has("imports"), "imports relation missing");
+assert(relationTypes.has("exports"), "exports relation missing");
+assert(relationTypes.has("calls"), "calls relation missing");
 assert(relationTypes.has("handles_route"), "handles_route relation missing");
 assert(relationTypes.has("tested_by"), "tested_by relation missing");
 assert(relationTypes.has("uses_env"), "uses_env relation missing");
@@ -79,6 +81,7 @@ assert(Array.isArray(graph.nodes) && graph.nodes.length > 0, "graph nodes missin
 assert(Array.isArray(graph.edges) && graph.edges.length > 0, "graph edges missing");
 assert(graph.nodes.some((node) => node.id === "project:demo"), "graph project missing");
 assert(graph.edges.some((edge) => edge.type === "handles_route"), "graph route edge missing");
+assert(graph.edges.some((edge) => edge.type === "calls"), "graph call edge missing");
 assert(graph.edges.every((edge) => edge.src && edge.dst), "graph edge endpoint missing");
 NODE
 

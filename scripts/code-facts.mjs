@@ -182,6 +182,10 @@ function relationId(type, src, dst, rawPath, line = "") {
   return `${type}:${src}->${dst}:${rawPath}${line ? `:L${line}` : ""}`;
 }
 
+function symbolKey(rawPath, name) {
+  return `${rawPath}\0${name}`;
+}
+
 function graphNodeFromEntity(item) {
   const tags = ["code", item.type];
   if (item.kind) tags.push(item.kind);
@@ -306,7 +310,7 @@ function resolveRelativeImport(rawPath, specifier, knownFiles) {
 }
 
 function extractSymbols(text, ext, rawPath, project, contentHash, entities, relations, fileId) {
-  const symbolIds = [];
+  const symbols = [];
   for (const { kind, re } of symbolPatterns(ext)) {
     for (const match of text.matchAll(re)) {
       const name = match[1];
@@ -325,10 +329,64 @@ function extractSymbols(text, ext, rawPath, project, contentHash, entities, rela
         rawPath,
         { source_location: { start_line: startLine } },
       ));
-      symbolIds.push(id);
+      symbols.push({ id, name, kind, line: startLine });
     }
   }
-  return symbolIds;
+  return symbols;
+}
+
+function jsExportPatterns() {
+  return [
+    /\bexport\s+(?:async\s+)?function\s+([A-Za-z_$][\w$]*)\s*\(/g,
+    /\bexport\s+class\s+([A-Za-z_$][\w$]*)/g,
+    /\bexport\s+(?:const|let|var)\s+([A-Za-z_$][\w$]*)\b/g,
+    /\bexport\s+(?:interface|type)\s+([A-Za-z_$][\w$]*)\b/g,
+  ];
+}
+
+function extractExports(text, ext, rawPath, relations, fileId, symbolLookup) {
+  if (![".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"].includes(ext)) return;
+  for (const re of jsExportPatterns()) {
+    for (const match of text.matchAll(re)) {
+      const name = match[1];
+      if (!name) continue;
+      const symbolId = symbolLookup.get(symbolKey(rawPath, name));
+      if (!symbolId) continue;
+      const startLine = lineOfIndex(text, match.index ?? 0);
+      addUnique(relations, relation(
+        relationId("exports", fileId, symbolId, rawPath, startLine),
+        "exports",
+        fileId,
+        symbolId,
+        rawPath,
+        {
+          confidence: 0.85,
+          source_location: { start_line: startLine },
+          metadata: { name },
+        },
+      ));
+    }
+  }
+}
+
+function importedNamesFromStatement(statement, ext) {
+  if ([".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"].includes(ext)) {
+    const named = /\{([^}]+)\}/.exec(statement);
+    if (!named) return [];
+    return named[1]
+      .split(",")
+      .map((part) => part.trim().split(/\s+as\s+/i)[0]?.trim())
+      .filter(Boolean);
+  }
+  if (ext === ".py") {
+    const fromImport = /^\s*from\s+[A-Za-z_][\w.]*\s+import\s+(.+)$/m.exec(statement);
+    if (!fromImport) return [];
+    return fromImport[1]
+      .split(",")
+      .map((part) => part.trim().split(/\s+as\s+/i)[0]?.trim())
+      .filter((name) => /^[A-Za-z_]\w*$/.test(name));
+  }
+  return [];
 }
 
 function extractImports(text, ext, rawPath, project, contentHash, entities, relations, fileId, knownFiles) {
@@ -339,10 +397,11 @@ function extractImports(text, ext, rawPath, project, contentHash, entities, rela
       if (!specifier) continue;
       const startLine = lineOfIndex(text, match.index ?? 0);
       const resolved = resolveRelativeImport(rawPath, specifier, knownFiles);
+      const importedNames = importedNamesFromStatement(match[0], ext);
       let dst;
       if (resolved) {
         dst = `file:${resolved}`;
-        importedTargets.push(dst);
+        importedTargets.push({ dst, resolved, names: importedNames, line: startLine });
       } else {
         dst = `module:${project}:external:${specifier}`;
         addUnique(entities, entity(dst, "module", specifier, project, rawPath, contentHash, {
@@ -356,11 +415,38 @@ function extractImports(text, ext, rawPath, project, contentHash, entities, rela
         fileId,
         dst,
         rawPath,
-        { source_location: { start_line: startLine }, metadata: { specifier } },
+        { source_location: { start_line: startLine }, metadata: { specifier, imported_names: importedNames } },
       ));
     }
   }
   return importedTargets;
+}
+
+function extractCalls(text, rawPath, relations, fileId, importedTargets, symbolLookup) {
+  for (const target of importedTargets) {
+    if (!target.resolved) continue;
+    for (const name of target.names) {
+      const symbolId = symbolLookup.get(symbolKey(target.resolved, name));
+      if (!symbolId) continue;
+      const callRe = new RegExp(`\\b${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*\\(`, "g");
+      for (const match of text.matchAll(callRe)) {
+        const startLine = lineOfIndex(text, match.index ?? 0);
+        if (startLine === target.line) continue;
+        addUnique(relations, relation(
+          relationId("calls", fileId, symbolId, rawPath, startLine),
+          "calls",
+          fileId,
+          symbolId,
+          rawPath,
+          {
+            confidence: 0.7,
+            source_location: { start_line: startLine },
+            metadata: { name, resolved_from: target.resolved },
+          },
+        ));
+      }
+    }
+  }
 }
 
 function extractJsRoutes(text, rawPath, project, contentHash, entities, relations, fileId) {
@@ -475,6 +561,8 @@ async function main() {
   const knownFiles = new Set(filesAbs.map((abs) => relProject(abs)));
   const entities = new Map();
   const relations = new Map();
+  const symbolLookup = new Map();
+  const fileAnalyses = [];
   const diagnostics = {
     files_seen: filesAbs.length,
     files_parsed: 0,
@@ -539,16 +627,17 @@ async function main() {
 
     diagnostics.files_parsed += 1;
     diagnostics.files_with_fallback += 1;
-    extractSymbols(text, ext, rawPath, project, contentHash, entities, relations, fileId);
+    const symbols = extractSymbols(text, ext, rawPath, project, contentHash, entities, relations, fileId);
+    for (const symbol of symbols) symbolLookup.set(symbolKey(rawPath, symbol.name), symbol.id);
     const importedTargets = extractImports(text, ext, rawPath, project, contentHash, entities, relations, fileId, knownFiles);
     extractJsRoutes(text, rawPath, project, contentHash, entities, relations, fileId);
     const testIds = extractTests(text, ext, rawPath, project, contentHash, entities, relations, fileId);
     for (const testId of testIds) {
       for (const target of importedTargets) {
         addUnique(relations, relation(
-          relationId("tested_by", target, testId, rawPath),
+          relationId("tested_by", target.dst, testId, rawPath),
           "tested_by",
-          target,
+          target.dst,
           testId,
           rawPath,
           { confidence: 0.65 },
@@ -556,6 +645,12 @@ async function main() {
       }
     }
     extractEnvReads(text, rawPath, project, contentHash, entities, relations, fileId);
+    fileAnalyses.push({ text, ext, rawPath, fileId, importedTargets });
+  }
+
+  for (const analysis of fileAnalyses) {
+    extractExports(analysis.text, analysis.ext, analysis.rawPath, relations, analysis.fileId, symbolLookup);
+    extractCalls(analysis.text, analysis.rawPath, relations, analysis.fileId, analysis.importedTargets, symbolLookup);
   }
 
   const result = {

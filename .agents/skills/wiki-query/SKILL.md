@@ -69,12 +69,26 @@ Answer the user's question in this order.
 4. If relevant `wiki/maps/**` pages exist, read the best matching maps as associative trails. Treat maps as navigation and synthesis, then follow their links to source/entity/concept pages before making factual claims.
 5. If `wiki-search-qmd` is active, delegate the same question and receive additional candidates via BM25 + vector + reranking.
 6. If graph context is active, inspect `wiki/graph/graph.json` and `wiki/graph/GRAPH_REPORT.md` or ask `wiki-graphify query "<question>"` for related nodes, 1-hop neighbors, communities, and cited pages. Treat these as candidate/context clues, not final evidence.
+   - For Code Wiki questions backed by Code Facts, pick graph candidates by
+     question intent before opening raw code:
+     - Structure or ownership: `contains`, `defines`, `imports`, communities.
+     - Impact analysis: inbound/outbound `calls`, `imports`, `exports`,
+       `depends_on`, plus nearby `tested_by`.
+     - API/route behavior: `handles_route`, handler `calls`, `uses_env`, and
+       tests connected by `tested_by`.
+     - Testing coverage: `tested_by`, public/exported symbols without nearby
+       tests, and test-file `imports`.
+     - Debugging: stack trace path/line -> nearest file/symbol node -> local
+       `calls`, `imports`, `uses_env`, and `tested_by` neighborhood.
 7. If there are too many candidates (>20), filter by the one-line summaries in the index, source catalog facets, qmd scores when present, and graph relationship clues when present; keep the top 10.
 
 ### Step 2 - Read Pages
 1. Read candidate pages. Use frontmatter `sources:` to drill down one level into original summary pages.
 2. Follow wikilinks `[[...]]` to adjacent pages one hop further. Use two or more hops only when the question clearly requires it.
 3. If graph context is active, add relationship clues from `wiki/graph/GRAPH_REPORT.md` or `wiki-graphify query`, such as hub nodes, 1-hop neighbors, and communities.
+   - For Code Facts graph nodes, prefer nodes and edges that carry
+     `raw_path`, `source_file`, and `source_location`. Use those as navigation
+     to source summaries or targeted raw spans before making final claims.
 4. For code questions, prefer `wiki/code/<project>/locations.md` and module/API
    pages before opening raw files. If a requested symbol is not indexed, use
    `rg` against the relevant logical `raw/...` tree and read only the matching
