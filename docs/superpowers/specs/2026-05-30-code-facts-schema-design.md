@@ -226,7 +226,8 @@ Graph edges map directly from facts:
 
 - `contains`: project -> module -> file -> symbol
 - `imports` / `exports`: file or symbol dependency structure
-- `calls`: call relationship when a named import resolves to a known symbol
+- `calls`: symbol-to-symbol call relationship when a named import resolves to
+  a known symbol and the caller line can be mapped to the nearest local symbol
 - `handles_route`: route -> handler symbol
 - `tested_by`: symbol/file/module -> test
 - `reads_config` / `uses_env`: code -> config/environment

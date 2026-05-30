@@ -94,6 +94,7 @@ function assert(condition, message) {
 
 const entityIds = new Set(doc.entities.map((entity) => entity.id));
 const relationTypes = new Set(doc.relations.map((relation) => relation.type));
+const relations = doc.relations;
 
 assert(doc.version === 1, "version should be 1");
 assert(doc.leaf_path === "raw/repos/demo/", "leaf path should be preserved");
@@ -114,6 +115,20 @@ assert(relationTypes.has("calls"), "calls relation missing");
 assert(relationTypes.has("handles_route"), "handles_route relation missing");
 assert(relationTypes.has("tested_by"), "tested_by relation missing");
 assert(relationTypes.has("uses_env"), "uses_env relation missing");
+assert(relations.some((relation) =>
+  relation.type === "calls" &&
+  relation.src.includes("symbol:raw/repos/demo/app/api/items/route.ts:function:GET") &&
+  relation.dst.includes("symbol:raw/repos/demo/lib/items.ts:function:loadItems")
+), "TypeScript symbol-level call missing");
+assert(relations.some((relation) =>
+  relation.type === "calls" &&
+  relation.src.includes("symbol:raw/repos/demo/python/service.py:function:run_service") &&
+  relation.dst.includes("symbol:raw/repos/demo/python/helpers.py:function:transform")
+), "Python symbol-level call missing");
+assert(relations.some((relation) =>
+  relation.type === "tested_by" &&
+  relation.src.includes("symbol:raw/repos/demo/python/service.py:function:run_service")
+), "Python symbol-level tested_by missing");
 assert(doc.diagnostics.files_seen === 7, "expected seven fixture files");
 assert(doc.diagnostics.files_parsed === 7, "expected seven parsed files");
 assert(graph.version === 1, "graph version should be 1");

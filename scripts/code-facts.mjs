@@ -291,7 +291,7 @@ function importPatterns(ext) {
   if (ext === ".py") {
     return [
       /^\s*import\s+([A-Za-z_][\w.]*)/gm,
-      /^\s*from\s+(\.*[A-Za-z_][\w.]*)\s+import\b/gm,
+      /^\s*from\s+(\.*[A-Za-z_][\w.]*)\s+import\s+([^\n]+)/gm,
     ];
   }
   if (ext === ".rs") return [/\buse\s+([^;]+);/g];
@@ -401,6 +401,21 @@ function extractExports(text, ext, rawPath, relations, fileId, symbolLookup) {
   }
 }
 
+function nearestSymbolId(symbols, line, fallbackId) {
+  let best = null;
+  for (const symbol of symbols) {
+    if (symbol.line <= line && (!best || symbol.line > best.line)) best = symbol;
+  }
+  return best?.id ?? fallbackId;
+}
+
+function importedSymbolIds(target, symbolLookup) {
+  if (!target.resolved) return [];
+  return target.names
+    .map((name) => symbolLookup.get(symbolKey(target.resolved, name)))
+    .filter(Boolean);
+}
+
 function importedNamesFromStatement(statement, ext) {
   if ([".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"].includes(ext)) {
     const named = /\{([^}]+)\}/.exec(statement);
@@ -411,7 +426,7 @@ function importedNamesFromStatement(statement, ext) {
       .filter(Boolean);
   }
   if (ext === ".py") {
-    const fromImport = /^\s*from\s+[A-Za-z_][\w.]*\s+import\s+(.+)$/m.exec(statement);
+    const fromImport = /^\s*from\s+\.*[A-Za-z_][\w.]*\s+import\s+(.+)$/m.exec(statement);
     if (!fromImport) return [];
     return fromImport[1]
       .split(",")
@@ -454,7 +469,7 @@ function extractImports(text, ext, rawPath, project, contentHash, entities, rela
   return importedTargets;
 }
 
-function extractCalls(text, rawPath, relations, fileId, importedTargets, symbolLookup) {
+function extractCalls(text, rawPath, relations, fileId, localSymbols, importedTargets, symbolLookup) {
   for (const target of importedTargets) {
     if (!target.resolved) continue;
     for (const name of target.names) {
@@ -464,16 +479,17 @@ function extractCalls(text, rawPath, relations, fileId, importedTargets, symbolL
       for (const match of text.matchAll(callRe)) {
         const startLine = lineOfIndex(text, match.index ?? 0);
         if (startLine === target.line) continue;
+        const callerId = nearestSymbolId(localSymbols, startLine, fileId);
         addUnique(relations, relation(
-          relationId("calls", fileId, symbolId, rawPath, startLine),
+          relationId("calls", callerId, symbolId, rawPath, startLine),
           "calls",
-          fileId,
+          callerId,
           symbolId,
           rawPath,
           {
             confidence: 0.7,
             source_location: { start_line: startLine },
-            metadata: { name, resolved_from: target.resolved },
+            metadata: { name, resolved_from: target.resolved, caller_file: rawPath },
           },
         ));
       }
@@ -666,23 +682,34 @@ async function main() {
     const testIds = extractTests(text, ext, rawPath, project, contentHash, entities, relations, fileId);
     for (const testId of testIds) {
       for (const target of importedTargets) {
-        addUnique(relations, relation(
-          relationId("tested_by", target.dst, testId, rawPath),
-          "tested_by",
-          target.dst,
-          testId,
-          rawPath,
-          { confidence: 0.65 },
-        ));
+        const testedTargets = importedSymbolIds(target, symbolLookup);
+        for (const testedTarget of testedTargets.length > 0 ? testedTargets : [target.dst]) {
+          addUnique(relations, relation(
+            relationId("tested_by", testedTarget, testId, rawPath),
+            "tested_by",
+            testedTarget,
+            testId,
+            rawPath,
+            { confidence: testedTargets.length > 0 ? 0.75 : 0.65 },
+          ));
+        }
       }
     }
     extractEnvReads(text, rawPath, project, contentHash, entities, relations, fileId);
-    fileAnalyses.push({ text, ext, rawPath, fileId, importedTargets });
+    fileAnalyses.push({ text, ext, rawPath, fileId, symbols, importedTargets });
   }
 
   for (const analysis of fileAnalyses) {
     extractExports(analysis.text, analysis.ext, analysis.rawPath, relations, analysis.fileId, symbolLookup);
-    extractCalls(analysis.text, analysis.rawPath, relations, analysis.fileId, analysis.importedTargets, symbolLookup);
+    extractCalls(
+      analysis.text,
+      analysis.rawPath,
+      relations,
+      analysis.fileId,
+      analysis.symbols,
+      analysis.importedTargets,
+      symbolLookup,
+    );
   }
 
   const result = {
