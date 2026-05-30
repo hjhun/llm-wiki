@@ -70,3 +70,6 @@ Thumbs.db
 *.tmp
 .cache/
 coverage/
+
+# ── Brainstorming visual companion ────────────────────────────
+.superpowers/

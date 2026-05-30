@@ -3,21 +3,21 @@
 @tailwind utilities;
 
 :root {
-  --color-bg: 239 244 252;
-  --color-bg-subtle: 225 234 247;
-  --color-bg-panel: 255 255 255;
-  --color-line: 190 204 224;
-  --color-ink: 18 25 38;
-  --color-ink-dim: 75 88 108;
-  --color-ink-faint: 117 132 154;
-  --color-accent: 79 70 229;
-  --color-accent-soft: 221 214 254;
-  --color-success: 16 142 105;
-  --color-warning: 190 111 10;
-  --color-danger: 210 47 86;
-  --color-info: 8 145 178;
+  --color-bg: 9 13 19;
+  --color-bg-subtle: 14 20 29;
+  --color-bg-panel: 17 24 35;
+  --color-line: 42 54 72;
+  --color-ink: 225 234 245;
+  --color-ink-dim: 154 168 188;
+  --color-ink-faint: 96 113 136;
+  --color-accent: 45 226 191;
+  --color-accent-soft: 17 45 43;
+  --color-success: 52 211 153;
+  --color-warning: 247 201 72;
+  --color-danger: 251 113 133;
+  --color-info: 138 164 255;
 
-  color-scheme: light;
+  color-scheme: dark;
 }
 
 :root[data-theme="light"] {
@@ -39,19 +39,19 @@
 }
 
 :root[data-theme="dark"] {
-  --color-bg: 11 13 16;
-  --color-bg-subtle: 19 22 26;
-  --color-bg-panel: 24 28 34;
-  --color-line: 38 43 51;
-  --color-ink: 231 235 240;
-  --color-ink-dim: 138 147 160;
-  --color-ink-faint: 91 100 112;
-  --color-accent: 122 162 255;
-  --color-accent-soft: 59 74 122;
+  --color-bg: 9 13 19;
+  --color-bg-subtle: 14 20 29;
+  --color-bg-panel: 17 24 35;
+  --color-line: 42 54 72;
+  --color-ink: 225 234 245;
+  --color-ink-dim: 154 168 188;
+  --color-ink-faint: 96 113 136;
+  --color-accent: 45 226 191;
+  --color-accent-soft: 17 45 43;
   --color-success: 52 211 153;
-  --color-warning: 251 191 36;
+  --color-warning: 247 201 72;
   --color-danger: 251 113 133;
-  --color-info: 56 189 248;
+  --color-info: 138 164 255;
 
   color-scheme: dark;
 }
@@ -69,10 +69,13 @@ body {
 :root body,
 :root[data-theme="default"] body {
   background:
-    radial-gradient(circle at 12% -8%, rgb(45 212 191 / 0.34), transparent 28rem),
-    radial-gradient(circle at 82% 0%, rgb(129 140 248 / 0.34), transparent 30rem),
-    radial-gradient(circle at 18% 104%, rgb(244 114 182 / 0.16), transparent 26rem),
-    linear-gradient(180deg, rgb(250 252 255), rgb(var(--color-bg)) 22rem);
+    linear-gradient(rgb(255 255 255 / 0.032) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(255 255 255 / 0.024) 1px, transparent 1px),
+    linear-gradient(180deg, rgb(14 23 34), rgb(var(--color-bg)) 18rem);
+  background-size:
+    32px 32px,
+    32px 32px,
+    auto;
 }
 
 :root[data-theme="light"] body {
@@ -80,7 +83,14 @@ body {
 }
 
 :root[data-theme="dark"] body {
-  background: rgb(var(--color-bg));
+  background:
+    linear-gradient(rgb(255 255 255 / 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(255 255 255 / 0.022) 1px, transparent 1px),
+    linear-gradient(180deg, rgb(13 19 28), rgb(var(--color-bg)) 18rem);
+  background-size:
+    32px 32px,
+    32px 32px,
+    auto;
 }
 
 button,
@@ -135,13 +145,17 @@ select {
 }
 
 .chat-message-user {
-  border-color: rgb(var(--color-accent) / 0.34);
-  background-color: rgb(var(--color-accent-soft) / 0.72);
+  border-color: rgb(var(--color-info) / 0.38);
+  background:
+    linear-gradient(90deg, rgb(var(--color-info) / 0.13), transparent 52%),
+    rgb(var(--color-bg-panel) / 0.82);
 }
 
 .chat-message-assistant {
-  border-color: rgb(var(--color-success) / 0.34);
-  background-color: rgb(var(--color-success) / 0.12);
+  border-color: rgb(var(--color-accent) / 0.36);
+  background:
+    linear-gradient(90deg, rgb(var(--color-accent) / 0.13), transparent 52%),
+    rgb(var(--color-bg-panel) / 0.82);
 }
 
 .chat-message-system {
@@ -151,8 +165,10 @@ select {
 }
 
 .chat-progress-card {
-  border-color: rgb(var(--color-warning) / 0.36);
-  background-color: rgb(var(--color-warning) / 0.12);
+  border-color: rgb(var(--color-warning) / 0.42);
+  background:
+    linear-gradient(90deg, rgb(var(--color-warning) / 0.13), transparent 46%),
+    rgb(var(--color-bg-panel) / 0.9);
   color: rgb(var(--color-ink));
 }
 
@@ -170,10 +186,10 @@ select {
   --agent-accent: rgb(var(--color-info));
   position: relative;
   overflow: hidden;
-  border-color: color-mix(in srgb, var(--agent-accent) 34%, rgb(var(--color-line)));
+  border-color: color-mix(in srgb, var(--agent-accent) 40%, rgb(var(--color-line)));
   background:
-    linear-gradient(90deg, color-mix(in srgb, var(--agent-accent) 12%, transparent), transparent 42%),
-    rgb(var(--color-bg-panel) / 0.72);
+    linear-gradient(90deg, color-mix(in srgb, var(--agent-accent) 15%, transparent), transparent 48%),
+    rgb(var(--color-bg-panel) / 0.82);
 }
 
 .chat-agent-card::before {

@@ -61,19 +61,19 @@ export default function SessionList({
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      <div className="border-b border-line p-2">
+      <div className="border-b border-line bg-bg-panel/52 p-3">
         <Button
           onClick={onNew}
           variant="primary"
           icon={MessageSquarePlus}
-          className="w-full"
+          className="h-9 w-full"
         >
           {t.chat.newChat}
         </Button>
         <div className="mt-2">
           <AgentMascot running={running} />
         </div>
-        <div className="mt-2 grid grid-cols-[1fr_auto] gap-2">
+        <div className="mt-3 grid grid-cols-[1fr_auto] gap-2">
           <Button
             onClick={toggleAll}
             disabled={sessions.length === 0 || deleting}
@@ -96,7 +96,7 @@ export default function SessionList({
           </Button>
         </div>
       </div>
-      <div className="min-h-0 flex-1 overflow-auto py-1">
+      <div className="min-h-0 flex-1 overflow-auto px-2 py-2">
         {sessions.length === 0 ? (
           <EmptyState
             title={t.chat.noSessions}
@@ -110,10 +110,10 @@ export default function SessionList({
               <div
                 key={s.path}
                 className={cx(
-                  "grid w-full grid-cols-[auto_minmax(0,1fr)] gap-2 px-3 py-2 text-left text-xs transition-colors",
+                  "mb-1 grid w-full grid-cols-[auto_minmax(0,1fr)] gap-2 rounded-md border px-3 py-2.5 text-left text-xs transition-colors",
                   active
-                    ? "bg-bg-panel text-ink shadow-[inset_3px_0_0_rgb(var(--color-accent))]"
-                    : "text-ink-dim hover:bg-bg-panel/60 hover:text-ink",
+                    ? "border-accent/42 bg-[linear-gradient(90deg,rgb(var(--color-accent)_/_0.15),rgb(var(--color-bg-panel)_/_0.88))] text-ink shadow-[inset_3px_0_0_rgb(var(--color-accent)),0_10px_22px_rgb(0_0_0_/_0.12)]"
+                    : "border-transparent text-ink-dim hover:border-line/80 hover:bg-bg-panel/62 hover:text-ink",
                 )}
               >
                 <span className="pt-0.5">

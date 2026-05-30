@@ -12,9 +12,9 @@ type ButtonSize = "sm" | "md";
 
 const BUTTON_VARIANTS: Record<ButtonVariant, string> = {
   primary:
-    "border-transparent bg-[linear-gradient(135deg,rgb(var(--color-accent)),rgb(var(--color-info)))] text-white shadow-[0_10px_24px_rgb(var(--color-accent)_/_0.22)] hover:brightness-105",
+    "border-transparent bg-[linear-gradient(135deg,rgb(var(--color-accent)),rgb(var(--color-success)))] text-slate-950 shadow-[0_12px_28px_rgb(var(--color-accent)_/_0.18)] hover:brightness-105",
   secondary:
-    "border-line bg-bg-panel/78 text-ink-dim shadow-sm hover:border-ink-faint/60 hover:bg-bg-panel hover:text-ink",
+    "border-line bg-bg-panel/78 text-ink-dim shadow-sm hover:border-accent/50 hover:bg-bg-panel hover:text-ink",
   ghost:
     "border-transparent bg-transparent text-ink-dim hover:bg-bg-panel/70 hover:text-ink",
   danger:
@@ -95,7 +95,7 @@ export function PageHeader({
   actions?: ReactNode;
 }) {
   return (
-    <header className="flex min-h-14 shrink-0 items-center justify-between gap-4 border-b border-line bg-bg-panel/70 px-4 py-2 shadow-sm backdrop-blur-xl">
+    <header className="flex min-h-14 shrink-0 items-center justify-between gap-4 border-b border-line bg-bg-panel/76 px-4 py-2 shadow-[0_8px_26px_rgb(0_0_0_/_0.14)] backdrop-blur-xl">
       <div className="min-w-0">
         {eyebrow ? (
           <div className="font-mono text-[10px] uppercase tracking-widest text-ink-faint">
@@ -109,7 +109,7 @@ export function PageHeader({
           </div>
         ) : null}
       </div>
-      {actions ? <div className="flex shrink-0 items-center gap-2">{actions}</div> : null}
+      {actions ? <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">{actions}</div> : null}
     </header>
   );
 }
@@ -130,7 +130,7 @@ export function Panel({
   return (
     <section
       className={cx(
-        "rounded-md border border-line bg-bg-panel/82 shadow-[0_14px_38px_rgb(15_23_42_/_0.08)] backdrop-blur-xl",
+        "rounded-md border border-line bg-bg-panel/82 shadow-[0_18px_46px_rgb(0_0_0_/_0.16)] backdrop-blur-xl",
         className,
       )}
     >

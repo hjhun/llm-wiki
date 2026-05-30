@@ -79,14 +79,14 @@ export default function Sidebar({
   return (
     <aside
       className={cx(
-        "flex h-screen shrink-0 flex-col border-r border-line bg-bg-panel/60 shadow-[12px_0_36px_rgb(15_23_42_/_0.08)] backdrop-blur-xl transition-[width]",
-        collapsed ? "w-16" : "w-56",
+        "flex h-screen shrink-0 flex-col border-r border-line bg-bg-panel/72 shadow-[16px_0_42px_rgb(0_0_0_/_0.18)] backdrop-blur-xl transition-[width]",
+        collapsed ? "w-[4.25rem]" : "w-60",
       )}
     >
       <div className={collapsed ? "px-2 pb-3 pt-6" : "px-5 pb-3 pt-6"}>
         <div className="flex items-start justify-between gap-2">
           <div className={cx("min-w-0", collapsed ? "sr-only" : "")}>
-            <div className="font-mono text-xs uppercase tracking-widest text-ink">
+            <div className="font-mono text-xs uppercase tracking-widest text-accent">
               {BRAND_NAME}
             </div>
             {appSubtitle ? (
@@ -95,7 +95,9 @@ export default function Sidebar({
               </div>
             ) : null}
             <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-ink-faint">
-              <span>{t.sidebar.local}</span>
+              <span className="rounded border border-accent/30 bg-accent/10 px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-widest text-accent">
+                {t.sidebar.local}
+              </span>
               <span className="font-mono text-[10px] uppercase tracking-widest text-ink-dim">
                 {t.sidebar.version} v{packageJson.version}
               </span>
@@ -110,7 +112,7 @@ export default function Sidebar({
         </div>
       </div>
 
-      <nav className="flex flex-col gap-1 px-2 pt-2">
+      <nav className="flex flex-col gap-1.5 px-2 pt-2">
         {TABS.map((tab) => {
           const active =
             pathname === tab.href || pathname?.startsWith(`${tab.href}/`);
@@ -127,8 +129,8 @@ export default function Sidebar({
                   ? "h-10 items-center justify-center px-0 py-0"
                   : "flex-col px-3 py-2.5",
                 active
-                  ? "border-accent/25 bg-[linear-gradient(135deg,rgb(var(--color-accent-soft)_/_0.78),rgb(var(--color-bg-panel)_/_0.92))] text-ink shadow-sm"
-                  : "border-transparent text-ink-dim hover:border-line/70 hover:bg-bg-panel/60 hover:text-ink",
+                  ? "border-accent/45 bg-[linear-gradient(135deg,rgb(var(--color-accent)_/_0.16),rgb(var(--color-bg-panel)_/_0.94))] text-ink shadow-[inset_3px_0_0_rgb(var(--color-accent)),0_10px_24px_rgb(0_0_0_/_0.12)]"
+                  : "border-transparent text-ink-dim hover:border-line/80 hover:bg-bg-panel/70 hover:text-ink",
               )}
             >
               {tab.key === "settings" ? (
@@ -163,7 +165,7 @@ export default function Sidebar({
       >
         <div
           className={cx(
-            "rounded-md border border-line bg-bg/50 p-1 shadow-[inset_0_1px_0_rgb(255_255_255_/_0.03)]",
+            "rounded-md border border-line bg-bg/50 p-1 shadow-[inset_0_1px_0_rgb(255_255_255_/_0.04)]",
             collapsed ? "flex flex-col gap-1" : "",
           )}
           aria-label={t.common.language}
@@ -186,7 +188,7 @@ export default function Sidebar({
                 className={cx(
                   "h-7 rounded text-[11px] font-medium transition-colors disabled:opacity-50",
                   language === code
-                    ? "bg-accent text-bg"
+                    ? "bg-accent text-slate-950"
                     : "text-ink-dim hover:bg-bg-panel hover:text-ink",
                 )}
                 aria-pressed={language === code}
@@ -203,7 +205,7 @@ export default function Sidebar({
           disabled={loggingOut}
           title={collapsed ? t.sidebar.logout : undefined}
           className={cx(
-            "inline-flex h-9 items-center justify-center gap-2 rounded-md border border-line bg-bg/60 px-3 text-xs text-ink-dim hover:bg-bg-panel hover:text-ink disabled:opacity-50",
+            "inline-flex h-9 items-center justify-center gap-2 rounded-md border border-line bg-bg/60 px-3 text-xs text-ink-dim hover:border-accent/50 hover:bg-bg-panel hover:text-ink disabled:opacity-50",
             collapsed ? "px-0" : "",
           )}
         >

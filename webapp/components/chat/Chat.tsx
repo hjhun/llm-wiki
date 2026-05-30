@@ -652,8 +652,8 @@ export default function Chat() {
   );
 
   return (
-    <div className="flex h-full w-full overflow-hidden">
-      <aside className="flex w-64 shrink-0 flex-col border-r border-line bg-bg-subtle">
+    <div className="flex h-full w-full overflow-hidden bg-bg/72">
+      <aside className="flex w-72 shrink-0 flex-col border-r border-line bg-bg-panel/54">
         <div className="min-h-0 flex-1">
           <SessionList
             sessions={sessions}
@@ -683,7 +683,7 @@ export default function Chat() {
             {error}
           </div>
         ) : null}
-        <div className="min-h-0 flex-1 overflow-auto">
+        <div className="min-h-0 flex-1 overflow-auto bg-[linear-gradient(180deg,rgb(var(--color-bg)_/_0.72),rgb(var(--color-bg-subtle)_/_0.42))]">
           <MessageList
             messages={active?.messages ?? []}
             pending={pending}

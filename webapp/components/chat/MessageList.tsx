@@ -87,7 +87,7 @@ export default function MessageList({
       progress.agents.length > 0);
 
   return (
-    <div className="flex min-h-full flex-col gap-3 px-6 py-5">
+    <div className="mx-auto flex min-h-full w-full max-w-6xl flex-col gap-3 px-5 py-5 lg:px-8">
       {messages.length === 0 && !pending ? (
         <EmptyState
           title={t.chat.guideTitle}
@@ -112,7 +112,7 @@ export default function MessageList({
           <article
             key={i}
             className={[
-              "rounded-md border px-4 py-3 text-sm leading-relaxed shadow-[inset_0_1px_0_rgb(255_255_255_/_0.03)]",
+              "rounded-md border px-4 py-3 text-sm leading-relaxed shadow-[0_12px_30px_rgb(0_0_0_/_0.12),inset_0_1px_0_rgb(255_255_255_/_0.04)]",
               ROLE_STYLE[m.role] ?? "border-line",
               "chat-message",
             ].join(" ")}
@@ -145,7 +145,7 @@ export default function MessageList({
         );
       })}
       {showProgress ? (
-        <article className="chat-progress-card rounded-md border px-4 py-3 text-[12.5px] shadow-[inset_0_1px_0_rgb(255_255_255_/_0.04)]">
+        <article className="chat-progress-card rounded-md border px-4 py-3 text-[12.5px] shadow-[0_16px_34px_rgb(0_0_0_/_0.15),inset_0_1px_0_rgb(255_255_255_/_0.04)]">
           <header className="chat-progress-title mb-2 flex items-center justify-between gap-2 text-[11px]">
             <div className="flex items-center gap-2">
               <CircleDotDashed aria-hidden className="h-3.5 w-3.5 animate-spin" />
@@ -237,7 +237,7 @@ export default function MessageList({
         </article>
       ) : null}
       {pending ? (
-        <article className="rounded-md border border-line bg-bg-subtle px-4 py-3 text-sm">
+        <article className="rounded-md border border-line bg-bg-panel/80 px-4 py-3 text-sm shadow-[0_12px_28px_rgb(0_0_0_/_0.12)]">
           <header className="mb-1 flex items-center gap-2 text-[11px] text-ink-faint">
             <span className="font-mono uppercase tracking-widest">agent</span>
             <span>{t.chat.processing}</span>

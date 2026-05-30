@@ -54,7 +54,7 @@ export default function Composer({
   }
 
   return (
-    <div className="relative border-t border-line bg-bg-subtle px-4 py-3">
+    <div className="relative border-t border-line bg-bg-panel/78 px-4 py-3 shadow-[0_-14px_36px_rgb(0_0_0_/_0.16)] backdrop-blur-xl">
       {showPlus ? (
         <div className="absolute bottom-full left-4 mb-2 w-80 rounded-md border border-line bg-bg-panel p-2 shadow-2xl">
           <div className="mb-1 flex items-center gap-1.5 px-2 text-[10px] uppercase tracking-widest text-ink-faint">
@@ -97,7 +97,7 @@ export default function Composer({
         </div>
       ) : null}
 
-      <div className="flex items-end gap-2">
+      <div className="mx-auto flex max-w-6xl items-end gap-2">
         <IconButton
           onClick={() => setShowPlus((v) => !v)}
           label={t.chat.commandMenu}
@@ -117,7 +117,7 @@ export default function Composer({
             if (e.key === "Escape") setShowPlus(false);
           }}
           placeholder={t.chat.placeholder}
-          className="block w-full resize-none rounded-md border border-line bg-bg px-3 py-2.5 text-sm leading-relaxed text-ink outline-none transition-colors placeholder:text-ink-faint focus:border-accent"
+          className="block w-full resize-none rounded-md border border-line bg-bg px-3 py-2.5 text-sm leading-relaxed text-ink outline-none transition-colors placeholder:text-ink-faint focus:border-accent focus:shadow-[0_0_0_3px_rgb(var(--color-accent)_/_0.14)]"
         />
         {cancel ? (
           <IconButton
@@ -139,7 +139,7 @@ export default function Composer({
           className="h-10 w-10 shrink-0"
         />
       </div>
-      <div className="mt-1 px-1 text-[10px] text-ink-faint">
+      <div className="mx-auto mt-1 max-w-6xl px-1 text-[10px] text-ink-faint">
         {t.chat.hint}
       </div>
     </div>
