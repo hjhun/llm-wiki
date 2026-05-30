@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Check, Pencil, X } from "lucide-react";
+import { Activity, Check, Database, ListChecks, Pencil, X } from "lucide-react";
 import AutoIngestBanner from "./AutoIngestBanner";
 import AutoLintHint from "./AutoLintHint";
 import Composer from "./Composer";
@@ -48,6 +48,113 @@ function detectKind(message: string): ChatKind {
   if (head.startsWith("wiki-graphify ")) return "graph";
   if (head.startsWith("/")) return "chat";
   return "query";
+}
+
+function latestUserMessage(messages: ChatMessage[] | undefined): string {
+  const found = [...(messages ?? [])].reverse().find((m) => m.role === "user");
+  return found?.content ?? "";
+}
+
+function operationTarget(kind: ChatKind | null, message: string): string {
+  const trimmed = message.trim();
+  if (kind === "lint") return "wiki/";
+  if (kind === "graph") return "wiki/graph/";
+  if (kind === "preprocess") {
+    return trimmed.replace(/^\/preprocess\b/i, "").trim() || "raw/";
+  }
+  if (kind === "ingest" || kind === "ingest-loop") {
+    return trimmed.replace(/^\/(?:ingest-loop|ingest)\b/i, "").trim() || "raw/";
+  }
+  return "wiki/";
+}
+
+function operationLabel(kind: ChatKind | null): string {
+  if (!kind) return "agent";
+  return kind;
+}
+
+function currentWork(progress: ChatProgress | null): string | null {
+  const activeAgent =
+    progress?.agents.find(
+      (agent) =>
+        agent.status === "running" || agent.status === "consolidating",
+    ) ?? progress?.agents.at(-1);
+  return (
+    activeAgent?.detail ??
+    progress?.summary ??
+    progress?.log.at(-1)?.detail ??
+    null
+  );
+}
+
+function activeRound(progress: ChatProgress | null): number | null {
+  const agent =
+    progress?.agents.find(
+      (candidate) =>
+        candidate.status === "running" || candidate.status === "consolidating",
+    ) ?? progress?.agents.at(-1);
+  return agent?.round ?? null;
+}
+
+function RunningOperationBar({
+  kind,
+  target,
+  progress,
+}: {
+  kind: ChatKind | null;
+  target: string;
+  progress: ChatProgress | null;
+}) {
+  const { t } = useLanguage();
+  const label = operationLabel(kind);
+  const activeTarget = progress?.active ?? target;
+  const work = currentWork(progress) ?? t.chat.processing;
+  const round = activeRound(progress);
+
+  return (
+    <div
+      className="chat-operation-bar px-4 py-2"
+      data-kind={kind ?? "agent"}
+      aria-live="polite"
+    >
+      <div className="mx-auto flex max-w-6xl flex-col gap-2 md:flex-row md:items-center md:justify-between">
+        <div className="flex min-w-0 items-center gap-2">
+          <Activity aria-hidden className="h-4 w-4 shrink-0 animate-pulse text-accent" />
+          <span className="chat-operation-kicker shrink-0 font-mono text-[10px] uppercase tracking-widest">
+            {t.chat.operationStatus}
+          </span>
+          <span className="shrink-0 rounded border border-line bg-bg/60 px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-widest text-ink-dim">
+            {label}
+          </span>
+          {round ? (
+            <span className="shrink-0 font-mono text-[10px] uppercase tracking-widest text-ink-faint">
+              {t.chat.operationRound(round)}
+            </span>
+          ) : null}
+        </div>
+        <div className="grid min-w-0 flex-1 gap-1 md:grid-cols-[minmax(9rem,0.7fr)_minmax(14rem,1.3fr)]">
+          <div className="flex min-w-0 items-center gap-1.5">
+            <Database aria-hidden className="h-3.5 w-3.5 shrink-0 text-ink-faint" />
+            <span className="chat-operation-label shrink-0 text-[11px]">
+              {t.chat.operationTarget}
+            </span>
+            <span className="chat-operation-target min-w-0 truncate font-mono text-[11px]">
+              {activeTarget}
+            </span>
+          </div>
+          <div className="flex min-w-0 items-center gap-1.5">
+            <ListChecks aria-hidden className="h-3.5 w-3.5 shrink-0 text-ink-faint" />
+            <span className="chat-operation-label shrink-0 text-[11px]">
+              {t.chat.operationCurrent}
+            </span>
+            <span className="chat-operation-current min-w-0 truncate text-[11.5px]">
+              {work}
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export default function Chat() {
@@ -650,6 +757,10 @@ export default function Chat() {
       ) : null}
     </>
   );
+  const runningTarget = operationTarget(
+    activeKind,
+    latestUserMessage(active?.messages),
+  );
 
   return (
     <div className="flex h-full w-full overflow-hidden bg-bg/72">
@@ -690,6 +801,14 @@ export default function Chat() {
             progress={progress}
           />
         </div>
+
+        {pending ? (
+          <RunningOperationBar
+            kind={activeKind}
+            target={runningTarget}
+            progress={progress}
+          />
+        ) : null}
 
         <Composer
           disabled={pending}

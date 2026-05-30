@@ -69,7 +69,7 @@ function FallbackVoxelCatMascot({ running }: { running: boolean }) {
       <svg
         className="agent-voxel"
         data-running={running ? "true" : "false"}
-        viewBox="0 0 120 140"
+        viewBox="0 0 136 140"
         width="128"
         height="150"
         role="img"
@@ -91,10 +91,19 @@ function FallbackVoxelCatMascot({ running }: { running: boolean }) {
         />
         <g className="agent-voxel-bob">
           <g className="agent-voxel-tail">
-            <g transform="rotate(-30 88 91)">
-              <rect x="80" y="86" width="24" height="12" rx="2" />
-              <rect x="100" y="67" width="13" height="31" rx="2" />
-              <rect x="91" y="57" width="18" height="12" rx="2" />
+            <g transform="translate(76 53) rotate(-4 22 48)">
+              <path
+                className="agent-voxel-tail-base"
+                d="M2 59 H19 V46 H31 V31 H43 V16 H58 V30 H48 V45 H36 V60 H23 V73 H2 Z"
+              />
+              <path
+                className="agent-voxel-tail-shade"
+                d="M19 46 H31 V31 H43 V16 H51 V25 H40 V40 H29 V55 H19 Z"
+              />
+              <path
+                className="agent-voxel-tail-tip"
+                d="M43 16 H58 V30 H48 V45 H36 V60 H27 V51 H39 V36 H50 V25 H43 Z"
+              />
             </g>
           </g>
           <rect

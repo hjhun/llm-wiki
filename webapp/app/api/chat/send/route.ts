@@ -207,6 +207,40 @@ function inferKind(message: string): ChatKindInput {
   return "query";
 }
 
+function operationTargetFromMessage(kind: ChatKindInput, message: string): string {
+  const trimmed = message.trim();
+  if (kind === "lint") return "wiki/";
+  if (kind === "graph") return "wiki/graph/";
+  if (kind === "preprocess") {
+    const target = trimmed.replace(/^\/preprocess\b/i, "").trim();
+    return target || "raw/";
+  }
+  if (kind === "ingest" || kind === "ingest-loop") {
+    const target = trimmed.replace(/^\/(?:ingest-loop|ingest)\b/i, "").trim();
+    return target || "raw/";
+  }
+  return "wiki/";
+}
+
+function initialOperationSummary(kind: ChatKindInput, target: string): string {
+  if (kind === "lint") {
+    return `lint 준비: ${target}의 링크, frontmatter, stale claim을 점검합니다.`;
+  }
+  if (kind === "ingest-loop") {
+    return `ingest-loop 준비: ${target} leaf와 source coverage를 반복 정비합니다.`;
+  }
+  if (kind === "ingest") {
+    return `ingest 준비: ${target} source page와 merge 상태를 정비합니다.`;
+  }
+  if (kind === "preprocess") {
+    return `preprocess 준비: ${target} 노이즈 제거 계획을 점검합니다.`;
+  }
+  if (kind === "graph") {
+    return `graph 준비: ${target} 그래프 산출물을 갱신합니다.`;
+  }
+  return `${kind} 준비: ${target}에서 필요한 증거를 확인합니다.`;
+}
+
 function normalizeKind(message: string, requested?: ChatKindInput): ChatKindInput {
   const inferred = inferKind(message);
   if (!requested || requested === "chat") return inferred;
@@ -330,6 +364,16 @@ export async function POST(req: Request) {
 
   void (async () => {
     send({ type: "start", sessionPath });
+    const operationTarget = operationTargetFromMessage(
+      kind,
+      parsed.data.message,
+    );
+    send({
+      type: "progress",
+      phase: "state",
+      summary: initialOperationSummary(kind, operationTarget),
+      active: operationTarget,
+    });
 
     const kindTimeout = cfg.cli.timeouts[kind];
     const stopWatcher =

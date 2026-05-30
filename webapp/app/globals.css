@@ -237,6 +237,35 @@ select {
   color: rgb(var(--color-warning) / 0.78);
 }
 
+.chat-operation-bar {
+  border-top: 1px solid rgb(var(--color-line));
+  background:
+    linear-gradient(90deg, rgb(var(--color-accent) / 0.16), transparent 58%),
+    rgb(var(--color-bg-panel) / 0.92);
+  box-shadow:
+    0 -12px 30px rgb(0 0 0 / 0.14),
+    inset 0 1px 0 rgb(255 255 255 / 0.04);
+}
+
+.chat-operation-bar[data-kind="lint"] {
+  background:
+    linear-gradient(90deg, rgb(var(--color-warning) / 0.15), transparent 58%),
+    rgb(var(--color-bg-panel) / 0.92);
+}
+
+.chat-operation-kicker,
+.chat-operation-label {
+  color: rgb(var(--color-ink-faint));
+}
+
+.chat-operation-target {
+  color: rgb(var(--color-ink));
+}
+
+.chat-operation-current {
+  color: rgb(var(--color-ink-dim));
+}
+
 @keyframes chat-agent-pulse {
   0%,
   100% {
@@ -320,6 +349,13 @@ select {
 :root[data-theme="dark"] .chat-progress-time,
 :root[data-theme="dark"] .chat-progress-separator {
   color: rgb(252 211 77 / 0.7);
+}
+
+:root[data-theme="dark"] .chat-operation-bar {
+  border-top-color: rgb(51 65 85 / 0.86);
+  background:
+    linear-gradient(90deg, rgb(45 226 191 / 0.12), transparent 58%),
+    rgb(15 23 42 / 0.92);
 }
 
 :root[data-theme="dark"] .status-ready {
@@ -476,10 +512,10 @@ select {
 .agent-voxel-paw {
   fill: #b8703c;
 }
-.agent-voxel-tail rect:nth-child(2) {
+.agent-voxel-tail-shade {
   fill: #9a643d;
 }
-.agent-voxel-tail rect:nth-child(3) {
+.agent-voxel-tail-tip {
   fill: #d8a15f;
 }
 .agent-voxel-body-shade {
