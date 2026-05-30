@@ -9,6 +9,8 @@ function usage() {
       "  [--parts wiki/graph/parts]",
       "  [--out wiki/graph/graph.json]",
       "  [--report wiki/graph/GRAPH_REPORT.md]",
+      "  [--state wiki/graph/.state.json]",
+      "  [--min-confidence 0.65]",
     ].join("\n"),
   );
 }
@@ -23,11 +25,16 @@ function option(name, fallback) {
 const partsDir = option("--parts", "wiki/graph/parts");
 const outPath = option("--out", "wiki/graph/graph.json");
 const reportPath = option("--report", "wiki/graph/GRAPH_REPORT.md");
+const statePath = option("--state", null);
+const minConfidenceRaw = option("--min-confidence", "0");
+const minConfidence = Number(minConfidenceRaw);
 
 if (
   (args.includes("--parts") && !option("--parts", null)) ||
   (args.includes("--out") && !option("--out", null)) ||
-  (args.includes("--report") && !option("--report", null))
+  (args.includes("--report") && !option("--report", null)) ||
+  (args.includes("--state") && !option("--state", null)) ||
+  !Number.isFinite(minConfidence)
 ) {
   usage();
   process.exit(2);
@@ -40,6 +47,15 @@ const unique = (values) => [...new Set(values.filter(Boolean))];
 async function readJson(file) {
   const text = await fs.readFile(file, "utf8");
   return JSON.parse(text);
+}
+
+async function readJsonIfExists(file) {
+  try {
+    return await readJson(file);
+  } catch (err) {
+    if (err?.code === "ENOENT") return null;
+    return null;
+  }
 }
 
 async function partFiles(dir) {
@@ -176,11 +192,20 @@ function graphReport(graph, stats) {
     `- Edges: ${graph.edges.length}`,
     `- Communities: ${graph.communities.length}`,
     `- Dangling edges dropped: ${stats.danglingEdgesDropped}`,
+    `- Low-confidence edges dropped: ${stats.lowConfidenceEdgesDropped}`,
     "",
     "## God Nodes",
     "",
     ...topNodes.map((node) =>
       `- ${node.label ?? node.id} (${node.id}) - centrality ${node.centrality ?? 0}`,
+    ),
+    "",
+    "## New Nodes",
+    "",
+    ...(
+      stats.newNodes.length > 0
+        ? stats.newNodes.slice(0, 50).map((node) => `- ${node.label ?? node.id} (${node.id})`)
+        : ["- None"]
     ),
     "",
     "## Communities",
@@ -192,9 +217,10 @@ function graphReport(graph, stats) {
     "## Extraction Budget",
     "",
     "- Profile: code facts partial merge",
+    `- Min confidence: ${stats.minConfidence}`,
     `- Nodes kept: ${graph.nodes.length}`,
     `- Edges kept: ${graph.edges.length}`,
-    `- Edges pruned: ${stats.danglingEdgesDropped}`,
+    `- Edges pruned: ${stats.danglingEdgesDropped + stats.lowConfidenceEdgesDropped}`,
     "",
     "## Isolated Nodes",
     "",
@@ -208,9 +234,18 @@ function graphReport(graph, stats) {
 
 async function main() {
   const files = await partFiles(partsDir);
+  const outAbs = path.resolve(cwd, outPath);
+  const previousGraph = await readJsonIfExists(outAbs);
+  const previousNodeIds = new Set(
+    Array.isArray(previousGraph?.nodes)
+      ? previousGraph.nodes.map((node) => node.id).filter(Boolean)
+      : [],
+  );
   const nodes = new Map();
   const edges = new Map();
+  const leafState = {};
   let danglingEdgesDropped = 0;
+  let lowConfidenceEdgesDropped = 0;
 
   for (const file of files) {
     const part = await readJson(file);
@@ -220,6 +255,15 @@ async function main() {
       : Array.isArray(part.links)
         ? part.links
         : [];
+    const relPartFile = toPosix(path.relative(cwd, file));
+    const leafPath = part.leaf_path ?? relPartFile;
+    leafState[leafPath] = {
+      built_at: part.built_at ?? new Date().toISOString(),
+      content_hash: part.leaf_hash ?? null,
+      part_file: relPartFile,
+      node_count: partNodes.length,
+      edge_count: partEdges.length,
+    };
 
     for (const node of partNodes) {
       if (!node?.id) continue;
@@ -235,6 +279,11 @@ async function main() {
   const nodeIds = new Set(nodes.keys());
   const validEdges = [];
   for (const edge of edges.values()) {
+    const confidence = edge.confidence ?? edge.weight ?? 1;
+    if (confidence < minConfidence) {
+      lowConfidenceEdgesDropped += 1;
+      continue;
+    }
     if (!nodeIds.has(edge.src) || !nodeIds.has(edge.dst)) {
       danglingEdgesDropped += 1;
       continue;
@@ -253,8 +302,8 @@ async function main() {
     edges: sortedEdges,
     communities,
   };
+  const newNodes = graph.nodes.filter((node) => !previousNodeIds.has(node.id));
 
-  const outAbs = path.resolve(cwd, outPath);
   const reportAbs = path.resolve(cwd, reportPath);
   await fs.mkdir(path.dirname(outAbs), { recursive: true });
   await fs.mkdir(path.dirname(reportAbs), { recursive: true });
@@ -262,7 +311,23 @@ async function main() {
   await fs.writeFile(reportAbs, graphReport(graph, {
     partsRead: files.length,
     danglingEdgesDropped,
+    lowConfidenceEdgesDropped,
+    minConfidence,
+    newNodes,
   }), "utf8");
+
+  if (statePath) {
+    const stateAbs = path.resolve(cwd, statePath);
+    await fs.mkdir(path.dirname(stateAbs), { recursive: true });
+    await fs.writeFile(stateAbs, `${JSON.stringify({
+      version: 1,
+      updated_at: graph.built_at,
+      graph_file: toPosix(path.relative(cwd, outAbs)),
+      report_file: toPosix(path.relative(cwd, reportAbs)),
+      parts_dir: toPosix(path.relative(cwd, path.resolve(cwd, partsDir))),
+      leaves: leafState,
+    }, null, 2)}\n`, "utf8");
+  }
 
   process.stdout.write(
     [

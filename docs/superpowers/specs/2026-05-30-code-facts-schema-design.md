@@ -145,6 +145,7 @@ into a partial graph.
     "files_parsed": 0,
     "files_with_fallback": 0,
     "files_failed": 0,
+    "parse_errors": [],
     "truncated": []
   }
 }
@@ -201,8 +202,9 @@ Initial language support should target the repository's likely needs:
   `from .module import name`, common test definitions, and environment reads.
 - Rust: modules, structs, enums, traits, functions, public exports, `use`
   dependencies, tests, and environment reads.
-- Manifests/config: `package.json` and `Cargo.toml` config anchors plus
-  declared package dependencies as `depends_on` edges.
+- Manifests/config: `package.json`, `Cargo.toml`, `pyproject.toml`, `go.mod`,
+  `Dockerfile`, `compose.yaml`, and `tsconfig.json` config anchors plus
+  declared package/image/config dependencies as `depends_on` edges.
 
 The first implementation does not need full call graph precision. It should
 prioritize reliable definitions, imports/exports, routes, tests, and source
@@ -283,7 +285,8 @@ candidate context, not sufficient proof by itself.
   raw code leaves.
 - Transform Code Facts into `wiki/graph/parts/<sha1(leafPath)>.json`.
 - Provide a deterministic merge helper for Code Facts partials that writes
-  `wiki/graph/graph.json` and `wiki/graph/GRAPH_REPORT.md`.
+  `wiki/graph/graph.json`, `wiki/graph/GRAPH_REPORT.md`, and optional
+  `wiki/graph/.state.json`.
 - Ensure the final merge still rewrites `wiki/graph/graph.json` from all valid
   parts.
 
@@ -301,6 +304,8 @@ candidate context, not sufficient proof by itself.
 - Verify that the extractor emits stable entities, relations, diagnostics, and
   source locations.
 - Verify fallback behavior for malformed or unsupported files.
+- Verify manifest/config extraction for package, Cargo, Python, Go, Docker,
+  Compose, and TypeScript config files.
 - Verify graph prompt text includes the Code Facts contract.
 - Verify merged `graph.json` can support fixture checks for structure, impact,
   API/route, testing, and debugging-oriented navigation.

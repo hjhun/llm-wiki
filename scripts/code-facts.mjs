@@ -444,9 +444,15 @@ function packageJsonDependencies(text) {
     return {
       name: typeof parsed.name === "string" ? parsed.name : null,
       dependencies: deps,
+      parser: "json-manifest",
     };
-  } catch {
-    return { name: null, dependencies: [] };
+  } catch (err) {
+    return {
+      name: null,
+      dependencies: [],
+      parser: "json-manifest",
+      parse_error: err?.message ?? "Invalid package.json",
+    };
   }
 }
 
@@ -464,25 +470,134 @@ function cargoDependencies(text) {
     const dep = /^\s*([A-Za-z0-9_-]+)\s*=/.exec(line);
     if (dep) deps.push({ name: dep[1], kind: "dependencies" });
   }
-  return { name: packageName, dependencies: deps };
+  return { name: packageName, dependencies: deps, parser: "static-regex" };
 }
 
-function extractManifestConfig(text, rawPath, project, contentHash, entities, relations, fileId) {
+function pythonRequirementName(value) {
+  const trimmed = value.trim().replace(/^["']|["']$/g, "");
+  const match = /^([A-Za-z0-9_.-]+)/.exec(trimmed);
+  return match?.[1] ?? null;
+}
+
+function quotedArrayValues(text, key) {
+  const re = new RegExp(`^\\s*${key}\\s*=\\s*\\[([\\s\\S]*?)^\\s*]`, "gm");
+  const values = [];
+  for (const match of text.matchAll(re)) {
+    for (const value of match[1].matchAll(/["']([^"']+)["']/g)) {
+      values.push(value[1]);
+    }
+  }
+  return values;
+}
+
+function pyprojectDependencies(text) {
+  const deps = [];
+  const packageName = /^\s*name\s*=\s*"([^"]+)"/m.exec(text)?.[1] ?? null;
+  for (const value of quotedArrayValues(text, "dependencies")) {
+    const name = pythonRequirementName(value);
+    if (name) deps.push({ name, version: value, kind: "dependencies" });
+  }
+  const optionalSection = /^\s*\[project\.optional-dependencies]\s*\n([\s\S]*?)(?=^\s*\[|\s*$)/m.exec(text)?.[1] ?? "";
+  for (const entry of optionalSection.matchAll(/^\s*([A-Za-z0-9_-]+)\s*=\s*\[([\s\S]*?)^\s*]/gm)) {
+    const group = entry[1];
+    for (const value of entry[2].matchAll(/["']([^"']+)["']/g)) {
+      const name = pythonRequirementName(value[1]);
+      if (name) deps.push({ name, version: value[1], kind: `optional:${group}` });
+    }
+  }
+  return { name: packageName, dependencies: deps, parser: "static-regex" };
+}
+
+function goModDependencies(text) {
+  const deps = [];
+  const moduleName = /^\s*module\s+(\S+)/m.exec(text)?.[1] ?? null;
+  for (const line of text.split(/\r?\n/)) {
+    const single = /^\s*require\s+([^\s()]+)\s+([^\s]+)/.exec(line);
+    if (single) deps.push({ name: single[1], version: single[2], kind: "require" });
+    const block = /^\s*([^\s()]+)\s+v[0-9][^\s]*/.exec(line);
+    if (block && !line.trim().startsWith("module")) {
+      const [, name] = block;
+      const version = line.trim().split(/\s+/)[1];
+      deps.push({ name, version, kind: "require" });
+    }
+  }
+  return { name: moduleName, dependencies: deps, parser: "static-regex" };
+}
+
+function dockerfileDependencies(text) {
+  const deps = [];
+  for (const match of text.matchAll(/^\s*FROM\s+([^\s]+)(?:\s+AS\s+\S+)?/gmi)) {
+    const name = match[1];
+    if (name && name !== "scratch") deps.push({ name, kind: "base_image" });
+  }
+  return { name: "Dockerfile", dependencies: deps, parser: "static-regex" };
+}
+
+function composeDependencies(text) {
+  const deps = [];
+  for (const match of text.matchAll(/^\s*image:\s*["']?([^"'\s]+)["']?\s*$/gm)) {
+    deps.push({ name: match[1], kind: "service_image" });
+  }
+  return { name: "compose.yaml", dependencies: deps, parser: "static-regex" };
+}
+
+function tsconfigDependencyName(value) {
+  if (value.startsWith(".")) return null;
+  const parts = value.split("/");
+  if (value.startsWith("@") && parts.length >= 2) return `${parts[0]}/${parts[1]}`;
+  return parts[0] || null;
+}
+
+function tsconfigDependencies(text) {
+  try {
+    const parsed = JSON.parse(text);
+    const deps = [];
+    if (typeof parsed.extends === "string") {
+      const name = tsconfigDependencyName(parsed.extends);
+      if (name) deps.push({ name, version: parsed.extends, kind: "extends" });
+    }
+    return { name: "tsconfig.json", dependencies: deps, parser: "json-manifest" };
+  } catch (err) {
+    return {
+      name: "tsconfig.json",
+      dependencies: [],
+      parser: "json-manifest",
+      parse_error: err?.message ?? "Invalid tsconfig.json",
+    };
+  }
+}
+
+function manifestDetails(kind, text) {
+  if (kind === "package.json") return packageJsonDependencies(text);
+  if (kind === "Cargo.toml") return cargoDependencies(text);
+  if (kind === "pyproject.toml") return pyprojectDependencies(text);
+  if (kind === "go.mod") return goModDependencies(text);
+  if (kind === "Dockerfile") return dockerfileDependencies(text);
+  if (kind === "compose.yaml") return composeDependencies(text);
+  if (kind === "tsconfig.json") return tsconfigDependencies(text);
+  return { name: null, dependencies: [], parser: "static-regex" };
+}
+
+function extractManifestConfig(text, rawPath, project, contentHash, entities, relations, fileId, diagnostics) {
   const kind = manifestKind(rawPath);
   if (!kind) return;
   const configId = `config:${project}:${rawPath}`;
-  const manifest = kind === "package.json"
-    ? packageJsonDependencies(text)
-    : kind === "Cargo.toml"
-      ? cargoDependencies(text)
-      : { name: null, dependencies: [] };
+  const manifest = manifestDetails(kind, text);
+  if (manifest.parse_error) {
+    diagnostics.parse_errors.push({
+      raw_path: rawPath,
+      parser: manifest.parser,
+      message: manifest.parse_error,
+    });
+  }
   addUnique(entities, entity(configId, "config", manifest.name ?? kind, project, rawPath, contentHash, {
     kind,
-    parser: kind === "package.json" ? "json-manifest" : "static-regex",
-    confidence: 0.9,
+    parser: manifest.parser,
+    confidence: manifest.parse_error ? 0.6 : 0.9,
     metadata: {
       manifest: kind,
       dependency_count: manifest.dependencies.length,
+      ...(manifest.parse_error ? { parse_error: manifest.parse_error } : {}),
     },
   }));
   addUnique(relations, relation(
@@ -718,6 +833,7 @@ async function main() {
     files_parsed: 0,
     files_with_fallback: 0,
     files_failed: 0,
+    parse_errors: [],
     truncated: [],
   };
 
@@ -780,7 +896,7 @@ async function main() {
     const symbols = extractSymbols(text, ext, rawPath, project, contentHash, entities, relations, fileId);
     for (const symbol of symbols) symbolLookup.set(symbolKey(rawPath, symbol.name), symbol.id);
     const importedTargets = extractImports(text, ext, rawPath, project, contentHash, entities, relations, fileId, knownFiles);
-    extractManifestConfig(text, rawPath, project, contentHash, entities, relations, fileId);
+    extractManifestConfig(text, rawPath, project, contentHash, entities, relations, fileId, diagnostics);
     extractJsRoutes(text, rawPath, project, contentHash, entities, relations, fileId, symbolLookup);
     const testIds = extractTests(text, ext, rawPath, project, contentHash, entities, relations, fileId);
     for (const testId of testIds) {

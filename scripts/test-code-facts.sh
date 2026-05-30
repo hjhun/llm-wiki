@@ -15,6 +15,7 @@ mkdir -p \
   "${TMP_ROOT}/raw/repos/demo/lib" \
   "${TMP_ROOT}/raw/repos/demo/python" \
   "${TMP_ROOT}/raw/repos/demo/rust" \
+  "${TMP_ROOT}/raw/repos/demo/bad" \
   "${TMP_ROOT}/raw/repos/demo/tests"
 cp "${ROOT_DIR}/scripts/code-facts.mjs" "${TMP_ROOT}/scripts/code-facts.mjs"
 cp "${ROOT_DIR}/scripts/merge-graph-parts.mjs" "${TMP_ROOT}/scripts/merge-graph-parts.mjs"
@@ -39,6 +40,61 @@ version = "0.1.0"
 [dependencies]
 serde = "1"
 TOML
+
+cat > "${TMP_ROOT}/raw/repos/demo/pyproject.toml" <<'TOML'
+[project]
+name = "demo-py"
+dependencies = [
+  "fastapi>=0.110",
+  "pydantic",
+]
+
+[project.optional-dependencies]
+dev = ["pytest"]
+TOML
+
+cat > "${TMP_ROOT}/raw/repos/demo/go.mod" <<'GO'
+module example.com/demo
+
+go 1.23
+
+require github.com/google/uuid v1.6.0
+
+require (
+  golang.org/x/sync v0.8.0
+)
+GO
+
+cat > "${TMP_ROOT}/raw/repos/demo/Dockerfile" <<'DOCKER'
+FROM node:22-alpine AS base
+FROM ghcr.io/example/demo-runtime:latest
+DOCKER
+
+cat > "${TMP_ROOT}/raw/repos/demo/compose.yaml" <<'YAML'
+services:
+  db:
+    image: postgres:16
+YAML
+
+cat > "${TMP_ROOT}/raw/repos/demo/tsconfig.json" <<'JSON'
+{
+  "extends": "@tsconfig/node22/tsconfig.json",
+  "references": [
+    { "path": "./tsconfig.app.json" }
+  ]
+}
+JSON
+
+cat > "${TMP_ROOT}/raw/repos/demo/bad/package.json" <<'JSON'
+{ "name": "broken",
+JSON
+
+cat > "${TMP_ROOT}/raw/repos/demo/bad/notes.txt" <<'TXT'
+This unsupported file should not become a Code Facts input.
+TXT
+
+node -e 'process.stdout.write("export const big = `" + "x".repeat(530000) + "`;\\n")' \
+  > "${TMP_ROOT}/raw/repos/demo/bad/large.ts"
 
 cat > "${TMP_ROOT}/raw/repos/demo/app/api/items/route.ts" <<'TS'
 import { loadItems } from "../../../lib/items";
@@ -100,25 +156,66 @@ RS
   --out wiki/graph/facts/demo.json \
   --graph-out wiki/graph/parts/demo.json)
 
+cat > "${TMP_ROOT}/wiki/graph/parts/noisy.json" <<'JSON'
+{
+  "version": 1,
+  "built_at": "2026-05-30T00:00:00.000Z",
+  "leaf_path": "raw/repos/demo/noisy/",
+  "leaf_hash": "noisy",
+  "source": "test-fixture",
+  "nodes": [
+    {
+      "id": "project:demo",
+      "label": "demo",
+      "type": "project",
+      "tags": ["code"],
+      "sources": ["raw/repos/demo"],
+      "aliases": ["demo-project"]
+    }
+  ],
+  "edges": [
+    {
+      "src": "project:demo",
+      "dst": "module:demo:external:zod",
+      "type": "depends_on",
+      "confidence": 0.1,
+      "weight": 0.1
+    },
+    {
+      "src": "project:demo",
+      "dst": "missing:node",
+      "type": "contains",
+      "confidence": 0.9,
+      "weight": 0.9
+    }
+  ]
+}
+JSON
+
 (cd "${TMP_ROOT}" && node scripts/merge-graph-parts.mjs \
   --parts wiki/graph/parts \
   --out wiki/graph/graph.json \
-  --report wiki/graph/GRAPH_REPORT.md >/dev/null)
+  --report wiki/graph/GRAPH_REPORT.md \
+  --min-confidence 0.65 \
+  --state wiki/graph/.state.json >/dev/null)
 
 node - \
   "${TMP_ROOT}/wiki/graph/facts/demo.json" \
   "${TMP_ROOT}/wiki/graph/parts/demo.json" \
   "${TMP_ROOT}/wiki/graph/graph.json" \
-  "${TMP_ROOT}/wiki/graph/GRAPH_REPORT.md" <<'NODE'
+  "${TMP_ROOT}/wiki/graph/GRAPH_REPORT.md" \
+  "${TMP_ROOT}/wiki/graph/.state.json" <<'NODE'
 const fs = require("node:fs");
 const factsPath = process.argv[2];
 const partPath = process.argv[3];
 const finalGraphPath = process.argv[4];
 const reportPath = process.argv[5];
+const statePath = process.argv[6];
 const doc = JSON.parse(fs.readFileSync(factsPath, "utf8"));
 const part = JSON.parse(fs.readFileSync(partPath, "utf8"));
 const graph = JSON.parse(fs.readFileSync(finalGraphPath, "utf8"));
 const report = fs.readFileSync(reportPath, "utf8");
+const state = JSON.parse(fs.readFileSync(statePath, "utf8"));
 
 function assert(condition, message) {
   if (!condition) {
@@ -137,8 +234,19 @@ assert(doc.project === "demo", "project should be inferred from raw/repos/<name>
 assert(entityIds.has("project:demo"), "project entity missing");
 assert(entityIds.has("config:demo:raw/repos/demo/package.json"), "package config entity missing");
 assert(entityIds.has("config:demo:raw/repos/demo/Cargo.toml"), "Cargo config entity missing");
+assert(entityIds.has("config:demo:raw/repos/demo/pyproject.toml"), "pyproject config entity missing");
+assert(entityIds.has("config:demo:raw/repos/demo/go.mod"), "go.mod config entity missing");
+assert(entityIds.has("config:demo:raw/repos/demo/Dockerfile"), "Dockerfile config entity missing");
+assert(entityIds.has("config:demo:raw/repos/demo/compose.yaml"), "compose config entity missing");
+assert(entityIds.has("config:demo:raw/repos/demo/tsconfig.json"), "tsconfig config entity missing");
 assert(entityIds.has("module:demo:external:zod"), "package dependency entity missing");
 assert(entityIds.has("module:demo:external:serde"), "Cargo dependency entity missing");
+assert(entityIds.has("module:demo:external:fastapi"), "pyproject dependency entity missing");
+assert(entityIds.has("module:demo:external:github.com/google/uuid"), "go dependency entity missing");
+assert(entityIds.has("module:demo:external:golang.org/x/sync"), "go block dependency entity missing");
+assert(entityIds.has("module:demo:external:node:22-alpine"), "Docker base dependency entity missing");
+assert(entityIds.has("module:demo:external:postgres:16"), "compose image dependency entity missing");
+assert(entityIds.has("module:demo:external:@tsconfig/node22"), "tsconfig extends dependency entity missing");
 assert([...entityIds].some((id) => id.includes("symbol:raw/repos/demo/lib/items.ts:function:loadItems")), "loadItems symbol missing");
 assert([...entityIds].some((id) => id.includes("symbol:raw/repos/demo/python/helpers.py:function:transform")), "Python transform symbol missing");
 assert([...entityIds].some((id) => id.includes("symbol:raw/repos/demo/rust/lib.rs:function:load_items")), "Rust load_items symbol missing");
@@ -166,6 +274,31 @@ assert(relations.some((relation) =>
   relation.dst === "module:demo:external:serde"
 ), "Cargo dependency edge missing");
 assert(relations.some((relation) =>
+  relation.type === "depends_on" &&
+  relation.src === "config:demo:raw/repos/demo/pyproject.toml" &&
+  relation.dst === "module:demo:external:fastapi"
+), "pyproject dependency edge missing");
+assert(relations.some((relation) =>
+  relation.type === "depends_on" &&
+  relation.src === "config:demo:raw/repos/demo/go.mod" &&
+  relation.dst === "module:demo:external:github.com/google/uuid"
+), "go.mod dependency edge missing");
+assert(relations.some((relation) =>
+  relation.type === "depends_on" &&
+  relation.src === "config:demo:raw/repos/demo/Dockerfile" &&
+  relation.dst === "module:demo:external:node:22-alpine"
+), "Dockerfile dependency edge missing");
+assert(relations.some((relation) =>
+  relation.type === "depends_on" &&
+  relation.src === "config:demo:raw/repos/demo/compose.yaml" &&
+  relation.dst === "module:demo:external:postgres:16"
+), "compose image dependency edge missing");
+assert(relations.some((relation) =>
+  relation.type === "depends_on" &&
+  relation.src === "config:demo:raw/repos/demo/tsconfig.json" &&
+  relation.dst === "module:demo:external:@tsconfig/node22"
+), "tsconfig extends dependency edge missing");
+assert(relations.some((relation) =>
   relation.type === "handles_route" &&
   relation.src.startsWith("route:demo:GET:") &&
   relation.dst.includes("symbol:raw/repos/demo/app/api/items/route.ts:function:GET")
@@ -184,8 +317,14 @@ assert(relations.some((relation) =>
   relation.type === "tested_by" &&
   relation.src.includes("symbol:raw/repos/demo/python/service.py:function:run_service")
 ), "Python symbol-level tested_by missing");
-assert(doc.diagnostics.files_seen === 9, "expected nine fixture files");
-assert(doc.diagnostics.files_parsed === 9, "expected nine parsed files");
+assert(doc.diagnostics.files_seen === 16, "expected sixteen fixture files");
+assert(doc.diagnostics.files_parsed === 15, "expected fifteen parsed files");
+assert(doc.diagnostics.files_failed === 0, "no fixture file should fail to read");
+assert(doc.diagnostics.truncated.includes("raw/repos/demo/bad/large.ts"), "large file should be truncated");
+assert(doc.diagnostics.parse_errors.some((item) =>
+  item.raw_path === "raw/repos/demo/bad/package.json" &&
+  item.parser === "json-manifest"
+), "malformed package.json parse error missing");
 assert(part.version === 1, "partial graph version should be 1");
 assert(part.leaf_path === "raw/repos/demo/", "partial graph leaf path should match facts");
 assert(Array.isArray(part.nodes) && part.nodes.length > 0, "partial graph nodes missing");
@@ -231,7 +370,13 @@ assert(graphEdges.some((edge) =>
   edge.source_location?.start_line === 4
 ), "debugging query env edge missing");
 assert(report.includes("## Summary"), "graph report summary missing");
-assert(report.includes("Dangling edges dropped: 0"), "graph report should mention no dangling edges");
+assert(report.includes("Dangling edges dropped: 1"), "graph report should mention dropped dangling edge");
+assert(report.includes("Low-confidence edges dropped: 1"), "graph report should mention low-confidence pruning");
+assert(report.includes("Min confidence: 0.65"), "graph report should mention active confidence threshold");
+assert(report.includes("## New Nodes"), "graph report new nodes section missing");
+assert(state.version === 1, "graph state version missing");
+assert(state.leaves["raw/repos/demo/"].part_file === "wiki/graph/parts/demo.json", "graph state leaf entry missing");
+assert(state.leaves["raw/repos/demo/"].node_count === part.nodes.length, "graph state node count mismatch");
 NODE
 
 printf '[code-facts] ok\n'

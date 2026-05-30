@@ -228,12 +228,18 @@ This follows the same principle as `wiki-ingest`.
      only when it fits the active profile.
    - For Code Facts partials, `node scripts/merge-graph-parts.mjs --parts
      wiki/graph/parts --out wiki/graph/graph.json --report
-     wiki/graph/GRAPH_REPORT.md` is the deterministic project-local merge
+     wiki/graph/GRAPH_REPORT.md --state wiki/graph/.state.json
+     --min-confidence <threshold>` is the deterministic project-local merge
      helper. Use it when no richer graphify package merge path is needed.
    - Options: use supported graphify CLI commands where they fit, or call installed `graphify` Python package modules directly. Choose the narrowest input shape supported by the selected executable/package.
 3. **Record state**: update `wiki/graph/.state.json` with leaf path -> `{built_at, content_hash, part_file}`.
 4. **Merge pass**: combine all partial graphs into final `graph.json`. See merge algorithm below.
 5. **Resume**: if interrupted, compare hashes recorded in `.state.json` with disk state and continue from unbuilt/changed leaves.
+
+The project-local merge helper records `leaf_path -> built_at/content_hash/
+part_file/node_count/edge_count` when `--state` is supplied. It also prunes
+dangling edges and edges below `--min-confidence`, then reports the counts in
+`GRAPH_REPORT.md`.
 
 ## Merge Algorithm
 
