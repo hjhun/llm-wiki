@@ -91,18 +91,18 @@ function FallbackVoxelCatMascot({ running }: { running: boolean }) {
         />
         <g className="agent-voxel-bob">
           <g className="agent-voxel-tail">
-            <g transform="translate(76 53) rotate(-4 22 48)">
+            <g transform="translate(72 58) rotate(-3 12 42)">
               <path
                 className="agent-voxel-tail-base"
-                d="M2 59 H19 V46 H31 V31 H43 V16 H58 V30 H48 V45 H36 V60 H23 V73 H2 Z"
+                d="M2 35 H15 V25 H31 V10 H48 V25 H37 V40 H21 V52 H2 Z"
               />
               <path
                 className="agent-voxel-tail-shade"
-                d="M19 46 H31 V31 H43 V16 H51 V25 H40 V40 H29 V55 H19 Z"
+                d="M15 25 H31 V10 H39 V19 H26 V34 H15 Z"
               />
               <path
                 className="agent-voxel-tail-tip"
-                d="M43 16 H58 V30 H48 V45 H36 V60 H27 V51 H39 V36 H50 V25 H43 Z"
+                d="M31 10 H48 V25 H37 V40 H29 V31 H39 V19 H31 Z"
               />
             </g>
           </g>
