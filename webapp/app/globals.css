@@ -216,6 +216,14 @@ select {
   background:
     linear-gradient(180deg, rgb(var(--color-bg)) 0%, rgb(var(--color-bg-subtle)) 100%);
   color: rgb(var(--color-ink-dim));
+  font-family:
+    "JetBrains Mono",
+    "Cascadia Mono",
+    "Cascadia Code",
+    Consolas,
+    "Liberation Mono",
+    "Courier New",
+    monospace;
   white-space: pre;
 }
 
