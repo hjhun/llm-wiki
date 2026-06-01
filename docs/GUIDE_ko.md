@@ -672,6 +672,10 @@ CLIO의 **Chat → /query** 흐름을 텔레그램 봇으로 노출할 수 있�
 - chat당 rate limit (60초당 5건).
 - `trusted` 권한 chat은 `/query --save <질문>` 으로 답변을 wiki/answers/에
   저장하고 wiki/log.md에 항목을 추가할 수 있습니다.
+  페이지를 쓰기 직전에 질문과 답변은 결정적 시크릿 마스킹 게이트를 거칩니다.
+  고신뢰 자격증명(API 키, 토큰, private key, JWT)은 `[REDACTED:<종류>]` 로
+  치환되고 그 내역은 `wiki/lint/<date>.md` 에 기록됩니다. 봇 회신에는 마스킹된
+  건수가 함께 표시됩니다.
 - 모든 상호작용은 `sessions/<YYYY-MM-DD>/telegram/<chatId>.jsonl` 에 기록됩니다.
 
 ### 봇 만들기

@@ -237,6 +237,9 @@ async function handleAction(
           });
           savedRelPath = saved.relPath;
           saveSuffix = `\n\n저장됨: \`${saved.relPath}\``;
+          if (saved.redactedCount > 0) {
+            saveSuffix += `\n⚠️ 민감정보 ${saved.redactedCount}건이 마스킹되어 저장되었습니다 (wiki/lint 기록).`;
+          }
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);
           noteError(`save-answer: ${message}`);

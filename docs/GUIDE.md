@@ -677,6 +677,11 @@ the wiki questions from a phone or a shared group without opening the web UI.
 - Per-chat rate limit (5 requests per 60 seconds).
 - `trusted` permission unlocks `/query --save <question>`, which writes the
   answer back to `wiki/answers/<slug>.md` and appends a `wiki/log.md` entry.
+  Before the page is written, the question and answer pass through a
+  deterministic secret-mask gate: high-confidence credentials (API keys,
+  tokens, private keys, JWTs) are replaced with `[REDACTED:<kind>]` and the
+  event is recorded in `wiki/lint/<date>.md`. The bot reply notes how many
+  secrets were masked.
 - Every interaction is logged to
   `sessions/<YYYY-MM-DD>/telegram/<chatId>.jsonl`.
 

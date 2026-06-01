@@ -4,6 +4,11 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { PROJECT_ROOT, WIKI_ROOT } from "../paths";
 import type { PublicQueryVisibleSource } from "../public-query";
+import {
+  redactSecrets,
+  summarizeFindings,
+  type SecretFinding,
+} from "../secret-scan";
 
 /**
  * `trusted` permission lets a Telegram chat preserve an answer in the
@@ -94,31 +99,77 @@ export type SaveAnswerInput = {
 export type SaveAnswerResult = {
   relPath: string;
   slug: string;
+  /** Number of high-confidence secrets masked before the page was written. */
+  redactedCount: number;
 };
+
+function fmtLintDate(date: Date): string {
+  return fmtDate(date);
+}
+
+/**
+ * Record an auto-mask event in the day's lint report so a human can review
+ * what was redacted. The report never contains the secret material itself —
+ * only the rule kind, count, and the target page.
+ */
+async function appendSecretLint(
+  findings: SecretFinding[],
+  answerRelPath: string,
+  chatId: number,
+  now: Date,
+): Promise<void> {
+  const summary = summarizeFindings(findings);
+  if (summary.length === 0) return;
+  const lintDir = path.join(WIKI_ROOT, "lint");
+  const lintPath = path.join(lintDir, `${fmtLintDate(now)}.md`);
+  const section = [
+    "",
+    `## [${fmtDateTime(now)}] secret-scan | telegram chat ${chatId}`,
+    `- Target: \`${answerRelPath}\``,
+    "- Action: auto-masked before save",
+    "- Findings:",
+    ...summary.map((s) => `  - ${s.kind} ×${s.count}`),
+    "",
+  ].join("\n");
+  await fs.mkdir(lintDir, { recursive: true });
+  await fs.appendFile(lintPath, section, "utf8").catch(() => undefined);
+}
 
 export async function saveAnswerToWiki(
   input: SaveAnswerInput,
 ): Promise<SaveAnswerResult> {
-  const slugBase = slugify(input.question);
+  // Fail-closed secret gate: mask high-confidence credentials in both the
+  // question and the answer before anything is persisted. The slug is derived
+  // from the redacted question so a leaked token never lands in a filename.
+  const questionScan = redactSecrets(input.question);
+  const answerScan = redactSecrets(input.answer);
+  const findings = [...questionScan.findings, ...answerScan.findings];
+  const safeInput: SaveAnswerInput = {
+    ...input,
+    question: questionScan.redacted,
+    answer: answerScan.redacted,
+  };
+
+  const slugBase = slugify(safeInput.question);
   const slug = await uniqueSlug(slugBase);
   const now = new Date();
   const frontmatter = [
     "---",
-    `title: ${input.question.replace(/\n+/g, " ").trim() || "Untitled"}`,
+    `title: ${safeInput.question.replace(/\n+/g, " ").trim() || "Untitled"}`,
     "type: answer",
     "tags: [telegram]",
-    `sources: ${buildSourceList(input.sources)}`,
-    `question: ${JSON.stringify(input.question)}`,
+    `sources: ${buildSourceList(safeInput.sources)}`,
+    `question: ${JSON.stringify(safeInput.question)}`,
     `asked_at: ${fmtDateTime(now)}`,
     `updated: ${fmtDate(now)}`,
-    `telegram_chat_id: ${input.chatId}`,
+    `telegram_chat_id: ${safeInput.chatId}`,
     "---",
     "",
   ].join("\n");
   const rel = path.join("wiki", "answers", `${slug}.md`);
   const abs = path.join(PROJECT_ROOT, rel);
   await fs.mkdir(path.dirname(abs), { recursive: true });
-  await fs.writeFile(abs, `${frontmatter}${bodyText(input)}\n`, "utf8");
+  await fs.writeFile(abs, `${frontmatter}${bodyText(safeInput)}\n`, "utf8");
 
   // Append a log entry mirroring wiki-query's Step 4 § log shape.
   const logPath = path.join(WIKI_ROOT, "log.md");
@@ -136,5 +187,8 @@ export async function saveAnswerToWiki(
   await fs
     .appendFile(logPath, logEntry, "utf8")
     .catch(() => undefined);
-  return { relPath: rel.split(path.sep).join("/"), slug };
+
+  const relPath = rel.split(path.sep).join("/");
+  await appendSecretLint(findings, relPath, input.chatId, now);
+  return { relPath, slug, redactedCount: findings.length };
 }
