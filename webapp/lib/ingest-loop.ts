@@ -22,12 +22,17 @@ import {
   CODE_EXTS,
   CODE_MANIFESTS,
   IGNORE_CODE_DIRS,
-  classifyLeafFromFiles,
+  collectLeafFiles,
   fileLooksLikeCode,
   fileLooksLikeRuntimeEvidence,
+  inferLeafKind,
   isIgnoredCodePath,
-  type LeafKind,
 } from "./ingest/leaf-classify";
+import {
+  leafMatchesScope,
+  parseStateJsonActionable,
+  summarizeIngestState,
+} from "./ingest/state";
 import {
   LOOP_STAGNATION_LIMIT,
   buildLoopContinuationPrompt,
@@ -55,6 +60,7 @@ export {
   formatStateSummary,
   LOOP_STAGNATION_LIMIT,
   EMPTY_SNAPSHOT,
+  summarizeIngestState,
 };
 export type { StateSummary, ProgressSnapshot, ProgressScope, LoopDecision };
 
@@ -83,43 +89,6 @@ export async function buildProgressReference(): Promise<string | null> {
 const ENTITY_REGISTRY_MAX = 400;
 const CODE_STATUS_MAX = 20;
 const RAW_CODE_SCAN_MAX_FILES = 5000;
-
-function collectLeafFiles(leafPath: string, leaf: Record<string, unknown>): string[] {
-  const files = new Set<string>();
-  const add = (value: unknown) => {
-    if (typeof value === "string" && value.trim()) {
-      files.add(value.replace(/\\/g, "/"));
-    }
-  };
-  if (Array.isArray(leaf.files)) {
-    for (const file of leaf.files) add(file);
-  }
-  if (Array.isArray(leaf.sub_chunks)) {
-    for (const rawSc of leaf.sub_chunks) {
-      const sc =
-        rawSc && typeof rawSc === "object"
-          ? (rawSc as Record<string, unknown>)
-          : null;
-      if (!sc || !Array.isArray(sc.files)) continue;
-      for (const file of sc.files) add(file);
-    }
-  }
-  if (files.size === 0) files.add(leafPath);
-  return [...files];
-}
-
-function inferLeafKind(leafPath: string, leaf: Record<string, unknown>): LeafKind {
-  const explicit = leaf.kind;
-  if (
-    explicit === "prose" ||
-    explicit === "code" ||
-    explicit === "mixed" ||
-    explicit === "ignore"
-  ) {
-    return explicit;
-  }
-  return classifyLeafFromFiles(collectLeafFiles(leafPath, leaf));
-}
 
 function collectCodeOutputs(leaf: Record<string, unknown>): string[] {
   const outputs = new Set<string>();
@@ -392,19 +361,6 @@ function expectedCodeDirectoryIndexPaths(
     }
   }
   return [...expected].sort();
-}
-
-function leafMatchesScope(
-  leafPath: string,
-  leaf: Record<string, unknown>,
-  rawScope?: string | null,
-): boolean {
-  const scope = normalizeRawScope(rawScope);
-  if (!scope) return true;
-  if (pathMatchesScope(leafPath, scope)) return true;
-  return collectLeafFiles(leafPath, leaf).some((filePath) =>
-    pathMatchesScope(filePath, scope),
-  );
 }
 
 /**
@@ -792,83 +748,6 @@ export async function lockFileExists(): Promise<boolean> {
   }
 }
 
-function stateLeafBelongsToSession(
-  leaf: Record<string, unknown>,
-  sessionPath: string,
-): boolean {
-  const lastSession = typeof leaf.last_session === "string" ? leaf.last_session : "";
-  return lastSession === sessionPath || lastSession === `sessions/${sessionPath}`;
-}
-
-export function summarizeIngestState(
-  raw: string,
-  options: { sessionPath?: string; rawScope?: string | null } = {},
-): StateSummary | null {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(raw);
-  } catch {
-    return null;
-  }
-  if (
-    !parsed ||
-    typeof parsed !== "object" ||
-    !("leaves" in parsed) ||
-    typeof (parsed as { leaves: unknown }).leaves !== "object" ||
-    (parsed as { leaves: unknown }).leaves == null
-  ) {
-    return null;
-  }
-  const leaves = (parsed as { leaves: Record<string, unknown> }).leaves;
-  const summary: StateSummary = {
-    total: 0,
-    done: 0,
-    in_progress: 0,
-    partial: 0,
-    pending: 0,
-    error: 0,
-    active_leaf: null,
-    active_subchunk: null,
-  };
-  for (const [leafPath, leafValue] of Object.entries(leaves)) {
-    const leaf = (leafValue ?? {}) as Record<string, unknown>;
-    if (
-      options.sessionPath &&
-      !stateLeafBelongsToSession(leaf, options.sessionPath)
-    ) {
-      continue;
-    }
-    if (!leafMatchesScope(leafPath, leaf, options.rawScope)) continue;
-    const status = typeof leaf.status === "string" ? leaf.status : "pending";
-    // A "stale" leaf is one whose source files vanished from disk
-    // (wiki-ingest §Step 1). It is not actionable work, so exclude it entirely
-    // — matching readProgressSnapshot — instead of letting it fall into the
-    // "pending" bucket, where it would permanently block the loop's completion
-    // check.
-    if (status === "stale") continue;
-    summary.total += 1;
-    if (status === "done") summary.done += 1;
-    else if (status === "in_progress") summary.in_progress += 1;
-    else if (status === "partial") summary.partial += 1;
-    else if (status === "error") summary.error += 1;
-    else summary.pending += 1;
-    if (summary.active_leaf == null && Array.isArray(leaf.sub_chunks)) {
-      for (const sc of leaf.sub_chunks as Array<Record<string, unknown>>) {
-        if (sc && typeof sc === "object" && sc.status === "in_progress") {
-          summary.active_leaf = leafPath;
-          summary.active_subchunk = {
-            id: String(sc.id ?? "?"),
-            status: "in_progress",
-          };
-          break;
-        }
-      }
-    }
-  }
-  if (options.sessionPath && summary.total === 0) return null;
-  return summary;
-}
-
 /**
  * Cap on the number of actionable leaves returned per call. The list seeds a
  * round-robin partition across workers; loop rounds revisit the file later, so
@@ -893,45 +772,6 @@ type ActionableCacheEntry = {
   data: string[] | null;
 };
 let actionableCache: ActionableCacheEntry | null = null;
-
-function parseStateJsonActionable(
-  raw: string,
-  rawScope: string | null | undefined,
-): string[] | null {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(raw);
-  } catch {
-    return null;
-  }
-  if (
-    !parsed ||
-    typeof parsed !== "object" ||
-    !("leaves" in parsed) ||
-    typeof (parsed as { leaves: unknown }).leaves !== "object" ||
-    (parsed as { leaves: unknown }).leaves == null
-  ) {
-    return null;
-  }
-  const leaves = (parsed as { leaves: Record<string, unknown> }).leaves;
-  // An empty `leaves` map means no enumeration has run yet, even though the
-  // state file exists. Treat it as bootstrap so worker 0 gets unrestricted
-  // scope and performs Step 1; otherwise every worker would receive an empty
-  // assignment and the loop would never enumerate `raw/`.
-  if (Object.keys(leaves).length === 0) {
-    return null;
-  }
-  const actionable: string[] = [];
-  for (const [leafPath, leafValue] of Object.entries(leaves)) {
-    const leaf = (leafValue ?? {}) as Record<string, unknown>;
-    const status = typeof leaf.status === "string" ? leaf.status : "pending";
-    if (status === "done" || status === "stale" || status === "error") continue;
-    if (!leafMatchesScope(leafPath, leaf, rawScope)) continue;
-    actionable.push(leafPath);
-  }
-  actionable.sort();
-  return actionable;
-}
 
 /**
  * Stream-scan `state.json` for actionable leaf paths without loading the full

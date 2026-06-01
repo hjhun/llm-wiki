@@ -104,3 +104,56 @@ export function classifyLeafFromFiles(files: string[]): LeafKind {
   if (codeCount === 0) return "prose";
   return codeCount === actionable.length ? "code" : "mixed";
 }
+
+/**
+ * Collect the file paths recorded for a leaf in `.state.json` — from the
+ * leaf's own `files` array and from each sub-chunk's `files`. Pure: reads only
+ * the state object, never the filesystem. Falls back to the leaf path itself
+ * when no files are recorded (a direct-file pseudo-leaf).
+ */
+export function collectLeafFiles(
+  leafPath: string,
+  leaf: Record<string, unknown>,
+): string[] {
+  const files = new Set<string>();
+  const add = (value: unknown) => {
+    if (typeof value === "string" && value.trim()) {
+      files.add(value.replace(/\\/g, "/"));
+    }
+  };
+  if (Array.isArray(leaf.files)) {
+    for (const file of leaf.files) add(file);
+  }
+  if (Array.isArray(leaf.sub_chunks)) {
+    for (const rawSc of leaf.sub_chunks) {
+      const sc =
+        rawSc && typeof rawSc === "object"
+          ? (rawSc as Record<string, unknown>)
+          : null;
+      if (!sc || !Array.isArray(sc.files)) continue;
+      for (const file of sc.files) add(file);
+    }
+  }
+  if (files.size === 0) files.add(leafPath);
+  return [...files];
+}
+
+/**
+ * Determine a leaf's kind, honoring an explicit `kind` field on the state
+ * object and otherwise classifying from the recorded files. Pure.
+ */
+export function inferLeafKind(
+  leafPath: string,
+  leaf: Record<string, unknown>,
+): LeafKind {
+  const explicit = leaf.kind;
+  if (
+    explicit === "prose" ||
+    explicit === "code" ||
+    explicit === "mixed" ||
+    explicit === "ignore"
+  ) {
+    return explicit;
+  }
+  return classifyLeafFromFiles(collectLeafFiles(leafPath, leaf));
+}
