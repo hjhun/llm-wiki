@@ -5,6 +5,7 @@ import path from "node:path";
 import { SESSIONS_ROOT } from "../paths";
 import type { CliName } from "../cli";
 import type { PublicQueryVisibleSource } from "../public-query";
+import { redactSecrets } from "../secret-scan";
 
 const TIME_ZONE = "Asia/Seoul";
 const TELEGRAM_LOG_DIR = "telegram";
@@ -50,21 +51,27 @@ export type TelegramSessionLogInput = {
   error?: string;
 };
 
+/** Mask a high-confidence secret out of a nullable persisted field. */
+function safeField(value: string | null | undefined): string | null {
+  if (value == null) return null;
+  return redactSecrets(value).redacted;
+}
+
 /**
- * Append a single Telegram interaction to
- * `sessions/<KST date>/telegram/<chatId>.jsonl`. One file per chat per
- * day keeps the audit trail easy to scan without leaking a separate
- * artifact per message.
+ * Build the JSON entry persisted for a Telegram interaction. Pure and
+ * filesystem-free so the redaction contract can be unit-tested.
+ *
+ * Secret masking applies to every free-text field a user or the LLM can
+ * fill (the inbound message, derived question, and answer) plus the error
+ * string. The `sessions/` audit trail is append-only (CLAUDE.md §9), so a
+ * credential pasted into chat must be masked here just like at the
+ * wiki/answers save boundary — there is no second chance to scrub it.
  */
-export async function appendTelegramSessionLog(
+export function buildTelegramSessionEntry(
   input: TelegramSessionLogInput,
-): Promise<string> {
-  const now = new Date();
-  const date = kstDatePath(now);
-  const rel = path.join(date, TELEGRAM_LOG_DIR, `${input.chatId}.jsonl`);
-  const abs = path.join(SESSIONS_ROOT, rel);
-  await fs.mkdir(path.dirname(abs), { recursive: true });
-  const entry = {
+  now: Date,
+): Record<string, unknown> {
+  return {
     time: readableKstTime(now),
     isoTime: now.toISOString(),
     kind: "telegram",
@@ -79,18 +86,35 @@ export async function appendTelegramSessionLog(
       : null,
     interaction: input.kind,
     conversation: {
-      message: input.rawMessage,
-      question: input.question ?? null,
-      answer: input.answer ?? null,
+      message: safeField(input.rawMessage),
+      question: safeField(input.question),
+      answer: safeField(input.answer),
     },
     result: {
       ok: input.ok,
-      error: input.error ?? null,
+      error: safeField(input.error),
       agent: input.agent ?? null,
       durationMs: input.durationMs ?? null,
       sources: input.sources ?? [],
     },
   };
+}
+
+/**
+ * Append a single Telegram interaction to
+ * `sessions/<KST date>/telegram/<chatId>.jsonl`. One file per chat per
+ * day keeps the audit trail easy to scan without leaking a separate
+ * artifact per message.
+ */
+export async function appendTelegramSessionLog(
+  input: TelegramSessionLogInput,
+): Promise<string> {
+  const now = new Date();
+  const date = kstDatePath(now);
+  const rel = path.join(date, TELEGRAM_LOG_DIR, `${input.chatId}.jsonl`);
+  const abs = path.join(SESSIONS_ROOT, rel);
+  await fs.mkdir(path.dirname(abs), { recursive: true });
+  const entry = buildTelegramSessionEntry(input, now);
   await fs.appendFile(abs, JSON.stringify(entry) + "\n", "utf8");
   return rel.split(path.sep).join("/");
 }
