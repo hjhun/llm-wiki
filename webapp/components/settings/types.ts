@@ -134,6 +134,7 @@ export type SettingsConfig = {
   };
   publicQuery: {
     enabled: boolean;
+    accessTokenSet: boolean;
     allowExternalLookup: boolean;
     sandboxEnabled: boolean;
     sandboxReadOnlyHomePaths: string[];

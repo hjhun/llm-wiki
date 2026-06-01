@@ -12,6 +12,7 @@ import {
   Trash2,
   UserRound,
 } from "lucide-react";
+import { useLanguage } from "../i18n";
 import AgentMascot from "../agent-panel/AgentMascot";
 import MarkdownContent from "../chat/MarkdownContent";
 import MessageCopyButton from "../chat/MessageCopyButton";
@@ -44,6 +45,7 @@ type PublicQueryResponse = {
 const LEGACY_MESSAGES_KEY = "clio.public.messages.v1";
 const CONVERSATIONS_KEY = "clio.public.conversations.v1";
 const VISITOR_ID_KEY = "clio.public.visitorId.v1";
+const ACCESS_TOKEN_KEY = "clio.public.accessToken.v1";
 const PUBLIC_HISTORY_LIMIT = 12;
 const PUBLIC_HISTORY_MESSAGE_LIMIT = 8000;
 
@@ -160,8 +162,10 @@ async function asError(res: Response): Promise<Error> {
 
 export default function PublicClioChat({
   appSubtitle,
+  accessRequired = false,
 }: {
   appSubtitle?: string;
+  accessRequired?: boolean;
 }) {
   const [conversations, setConversations] = useState<PublicConversation[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -170,6 +174,11 @@ export default function PublicClioChat({
   const [value, setValue] = useState("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [accessToken, setAccessToken] = useState<string | null>(null);
+  const [accessInput, setAccessInput] = useState("");
+  const [accessError, setAccessError] = useState<string | null>(null);
+  const { language } = useLanguage();
+  const isKorean = language === "ko";
   const taRef = useRef<HTMLTextAreaElement | null>(null);
   const endRef = useRef<HTMLDivElement | null>(null);
   const activeConversation =
@@ -183,8 +192,26 @@ export default function PublicClioChat({
     const loaded = loadConversations();
     setConversations(loaded);
     setActiveId(loaded[0]?.id ?? null);
+    try {
+      setAccessToken(sessionStorage.getItem(ACCESS_TOKEN_KEY));
+    } catch {
+      /* sessionStorage unavailable */
+    }
     setHydrated(true);
   }, []);
+
+  function submitAccessToken() {
+    const token = accessInput.trim();
+    if (!token) return;
+    try {
+      sessionStorage.setItem(ACCESS_TOKEN_KEY, token);
+    } catch {
+      /* sessionStorage unavailable; keep it in memory for this session */
+    }
+    setAccessToken(token);
+    setAccessInput("");
+    setAccessError(null);
+  }
 
   useEffect(() => {
     if (!hydrated) return;
@@ -262,7 +289,10 @@ export default function PublicClioChat({
     try {
       const res = await fetch("/api/public/query", {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: {
+          "content-type": "application/json",
+          ...(accessToken ? { "x-clio-access-token": accessToken } : {}),
+        },
         body: JSON.stringify({
           message,
           visitorId: getVisitorId(),
@@ -270,6 +300,18 @@ export default function PublicClioChat({
           history,
         }),
       });
+      if (res.status === 401) {
+        // Passphrase missing/incorrect — clear it and re-prompt.
+        try {
+          sessionStorage.removeItem(ACCESS_TOKEN_KEY);
+        } catch {
+          /* ignore */
+        }
+        setAccessToken(null);
+        setAccessError("passphrase");
+        setPending(false);
+        return;
+      }
       if (!res.ok) throw await asError(res);
       const data = (await res.json()) as PublicQueryResponse;
       appendMessage(conversationId, {
@@ -366,6 +408,53 @@ export default function PublicClioChat({
     }
     setSelectedIds(new Set());
     setError(null);
+  }
+
+  if (hydrated && accessRequired && !accessToken) {
+    return (
+      <main className="flex h-screen w-screen items-center justify-center bg-bg px-6 text-ink">
+        <form
+          className="w-full max-w-sm rounded-md border border-line bg-bg-panel/82 p-6 shadow-sm backdrop-blur-xl"
+          onSubmit={(e) => {
+            e.preventDefault();
+            submitAccessToken();
+          }}
+        >
+          <div className="flex items-center gap-2 text-ink">
+            <LockKeyhole className="h-4 w-4" />
+            <h1 className="text-lg font-semibold">
+              {isKorean ? "접근 패스프레이즈가 필요합니다" : "Access passphrase required"}
+            </h1>
+          </div>
+          {appSubtitle ? (
+            <div className="mt-1 text-xs text-ink-dim">{appSubtitle}</div>
+          ) : null}
+          <p className="mt-2 text-sm leading-relaxed text-ink-dim">
+            {isKorean
+              ? "이 공개 채팅은 관리자가 설정한 패스프레이즈로 보호됩니다. 패스프레이즈를 입력하세요."
+              : "This shared chat is protected by an administrator passphrase. Enter it to continue."}
+          </p>
+          <input
+            type="password"
+            autoFocus
+            value={accessInput}
+            onChange={(e) => setAccessInput(e.target.value)}
+            placeholder={isKorean ? "패스프레이즈" : "Passphrase"}
+            className="mt-4 w-full rounded border border-line bg-bg px-3 py-2 text-sm text-ink outline-none focus:border-accent"
+          />
+          {accessError ? (
+            <p className="mt-2 text-xs text-danger">
+              {isKorean
+                ? "패스프레이즈가 올바르지 않습니다. 다시 시도해주세요."
+                : "Incorrect passphrase. Please try again."}
+            </p>
+          ) : null}
+          <Button type="submit" disabled={!accessInput.trim()} className="mt-4 w-full">
+            {isKorean ? "계속" : "Continue"}
+          </Button>
+        </form>
+      </main>
+    );
   }
 
   return (

@@ -9,6 +9,7 @@ import {
   Gauge,
   KeyRound,
   LoaderCircle,
+  LockKeyhole,
   MessagesSquare,
   Package,
   RefreshCw,
@@ -106,6 +107,7 @@ export default function Settings() {
   const [releaseInfo, setReleaseInfo] = useState<ReleaseInfo | null>(null);
   const [updateResult, setUpdateResult] = useState<UpdateResult | null>(null);
   const [password, setPassword] = useState({ current: "", next: "" });
+  const [publicToken, setPublicToken] = useState("");
   const [activeTab, setActiveTab] = useState<SettingsTabId>("agent");
 
   const load = useCallback(async () => {
@@ -304,6 +306,32 @@ export default function Settings() {
       if (!res.ok) throw await asError(res);
       setPassword({ current: "", next: "" });
       setNotice(t.settings.passwordNotice);
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function savePublicToken(clear: boolean) {
+    if (!clear && !publicToken) return;
+    setBusy("publicToken");
+    setError(null);
+    setNotice(null);
+    try {
+      const res = await fetch("/api/settings/public-token", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ token: clear ? null : publicToken }),
+      });
+      if (!res.ok) throw await asError(res);
+      setPublicToken("");
+      setNotice(
+        clear
+          ? t.settings.publicQueryPassphraseCleared
+          : t.settings.publicQueryPassphraseSaved,
+      );
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -855,6 +883,44 @@ export default function Settings() {
                           className="h-4 w-4 accent-accent"
                         />
                       </label>
+                    </div>
+                    <div className="mt-3 space-y-2 rounded border border-line bg-bg px-3 py-3">
+                      <div>
+                        <span className="block text-sm font-medium text-ink">
+                          {t.settings.publicQueryPassphrase}
+                        </span>
+                        <span className="block text-xs text-ink-faint">
+                          {draft.publicQuery.accessTokenSet
+                            ? t.settings.publicQueryPassphraseOn
+                            : t.settings.publicQueryPassphraseDesc}
+                        </span>
+                      </div>
+                      <TextField
+                        label={t.settings.publicQueryPassphrase}
+                        type="password"
+                        value={publicToken}
+                        onChange={setPublicToken}
+                      />
+                      <div className="flex gap-2">
+                        <Button
+                          onClick={() => void savePublicToken(false)}
+                          disabled={busy != null || !publicToken}
+                          icon={LockKeyhole}
+                        >
+                          {busy === "publicToken"
+                            ? t.settings.changing
+                            : t.settings.publicQueryPassphraseSave}
+                        </Button>
+                        {draft.publicQuery.accessTokenSet ? (
+                          <Button
+                            variant="ghost"
+                            onClick={() => void savePublicToken(true)}
+                            disabled={busy != null}
+                          >
+                            {t.settings.publicQueryPassphraseClear}
+                          </Button>
+                        ) : null}
+                      </div>
                     </div>
                     <p className="mt-2 break-all font-mono text-[11px] text-ink-faint">
                       /clio

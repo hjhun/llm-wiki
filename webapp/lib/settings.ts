@@ -248,7 +248,17 @@ export async function readSettingsState() {
         passwordSet: cfg.auth.passwordHash != null,
         sessionTtlSec: cfg.auth.sessionTtlSec,
       },
-      publicQuery: cfg.publicQuery,
+      publicQuery: {
+        // The access passphrase is never sent to the client; only a flag.
+        // It is set/cleared via the dedicated /api/settings/public-token route.
+        enabled: cfg.publicQuery.enabled,
+        accessTokenSet:
+          typeof cfg.publicQuery.accessToken === "string" &&
+          cfg.publicQuery.accessToken.length > 0,
+        allowExternalLookup: cfg.publicQuery.allowExternalLookup,
+        sandboxEnabled: cfg.publicQuery.sandboxEnabled,
+        sandboxReadOnlyHomePaths: cfg.publicQuery.sandboxReadOnlyHomePaths,
+      },
       telegram: {
         // The bot token is never sent to the client; only a flag indicating
         // whether one is configured. Setting/clearing the token has its own
