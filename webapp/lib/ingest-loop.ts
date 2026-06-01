@@ -1163,12 +1163,23 @@ export function summarizeIngestState(
 export async function readActionableLeafPaths(
   rawScope?: string | null,
 ): Promise<string[] | null> {
+  const statePath = path.join(PROJECT_ROOT, PROGRESS_STATE_PATH);
+  // Guard against pathological state files. Long-running wikis can accumulate
+  // hundreds of thousands of leaf entries; parsing 100MB+ of JSON synchronously
+  // would block the /ingest-loop send pipeline for minutes. Above this
+  // threshold we treat the state as opaque and return `null`, which falls back
+  // to bootstrap semantics (no leaf partition for this round). The worker
+  // skill still honors any explicit scope passed by the user.
+  const MAX_STATE_BYTES = 32 * 1024 * 1024;
+  try {
+    const stat = await fs.stat(statePath);
+    if (stat.size > MAX_STATE_BYTES) return null;
+  } catch {
+    return null;
+  }
   let raw: string;
   try {
-    raw = await fs.readFile(
-      path.join(PROJECT_ROOT, PROGRESS_STATE_PATH),
-      "utf8",
-    );
+    raw = await fs.readFile(statePath, "utf8");
   } catch {
     return null;
   }
@@ -1185,9 +1196,16 @@ export async function readActionableLeafPaths(
     typeof (parsed as { leaves: unknown }).leaves !== "object" ||
     (parsed as { leaves: unknown }).leaves == null
   ) {
-    return [];
+    return null;
   }
   const leaves = (parsed as { leaves: Record<string, unknown> }).leaves;
+  // An empty `leaves` map means no enumeration has run yet, even though the
+  // state file exists. Treat it as bootstrap so worker 0 gets unrestricted
+  // scope and performs Step 1; otherwise every worker would receive an empty
+  // assignment and the loop would never enumerate `raw/`.
+  if (Object.keys(leaves).length === 0) {
+    return null;
+  }
   const actionable: string[] = [];
   for (const [leafPath, leafValue] of Object.entries(leaves)) {
     const leaf = (leafValue ?? {}) as Record<string, unknown>;

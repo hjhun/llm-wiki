@@ -453,7 +453,11 @@ async function runWorkerBatch(input: {
     input.workers.map(async (worker): Promise<WorkerRun> => {
       const leafScopeRef = partition
         ? buildLeafScopeReference(
-            partition.assignments[worker.index] ?? [],
+            // Preserve null (bootstrap / unrestricted) — `??` would coerce
+            // it to `[]` which is the "Empty assignment" no-op signal.
+            worker.index in partition.assignments
+              ? partition.assignments[worker.index]
+              : [],
             partition.hasState,
           )
         : null;
