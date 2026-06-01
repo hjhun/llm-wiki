@@ -11,6 +11,7 @@ export type RouterAction =
   | { kind: "ignore"; reason: string }
   | { kind: "static-help"; chatId: number; text: string }
   | { kind: "whoami"; chatId: number; text: string }
+  | { kind: "reset"; chatId: number }
   | { kind: "reject"; chatId: number; text: string; recordPending: boolean }
   | { kind: "non-text"; chatId: number; text: string }
   | {
@@ -39,6 +40,7 @@ function staticHelpText(): string {
     "/start - 안내 메시지",
     "/help - 이 도움말",
     "/whoami - 이 chat의 ID 표시 (관리자 승인 신청용)",
+    "/reset - 이 chat의 대화 컨텍스트 초기화 (승인된 chat만)",
   ].join("\n");
 }
 
@@ -88,6 +90,13 @@ export function classifyIncoming(
       text: cfg.rejectionMessage,
       recordPending: !pendingAlready(cfg, chatId),
     };
+  }
+
+  // /reset clears the per-chat conversation history we feed into
+  // runPublicQuery. The handler is responsible for the actual delete;
+  // the router just classifies.
+  if (text === "/reset") {
+    return { kind: "reset", chatId };
   }
 
   // Strip a leading "/query" or unknown leading slash so the user can be
