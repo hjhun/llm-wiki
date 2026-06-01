@@ -24,6 +24,10 @@ import {
   isOrchestratedKind,
   runMultiAgentOperation,
 } from "@/lib/multi-agent";
+import {
+  snapshotAnswerMtimes,
+  sweepAnswersForSecrets,
+} from "@/lib/answer-secret-sweep";
 
 const CHAT_KINDS = [
   "chat",
@@ -388,6 +392,11 @@ export async function POST(req: Request) {
       }
     };
 
+    // Baseline of wiki/answers before the agent runs. The agent may save an
+    // answer directly (web /query --save), bypassing the deterministic secret
+    // gate the Telegram path uses; we sweep files it touched once it finishes.
+    const answersBaseline = await snapshotAnswerMtimes();
+
     try {
       if (isOrchestratedKind(kind)) {
         // -------- Multi-agent wiki operations --------
@@ -486,6 +495,20 @@ export async function POST(req: Request) {
       send({ type: "error", sessionPath, error: msg });
     } finally {
       stopWatcher();
+      // Fail-closed backstop: mask any high-confidence secret the agent may
+      // have written into a wiki/answers file during this operation.
+      try {
+        const sweep = await sweepAnswersForSecrets(answersBaseline);
+        if (sweep.maskedFiles.length > 0) {
+          await appendMessage(
+            sessionPath,
+            "system",
+            `🔒 저장된 답변에서 비밀정보를 자동 마스킹했습니다: ${sweep.maskedFiles.join(", ")} (wiki/lint 기록).`,
+          ).catch(() => undefined);
+        }
+      } catch {
+        /* sweep is best-effort; never fail the request because of it */
+      }
     }
   })();
 
