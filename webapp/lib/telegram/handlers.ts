@@ -12,6 +12,7 @@ import {
   noteError,
   noteRejected,
   noteSkipped,
+  noteThrottled,
 } from "./runtime-state";
 import { appendTelegramSessionLog } from "./session-log";
 import { splitForTelegram } from "./splitter";
@@ -175,7 +176,7 @@ async function handleAction(
           `${Math.round(RATE_LIMIT_WINDOW_MS / 1000)}초 한도에 도달했습니다. ` +
           `${retrySec}초 뒤에 다시 시도해주세요.`;
         await send(token, action.chatId, text, cfgReplyMaxChars);
-        noteSkipped();
+        noteThrottled();
         await appendTelegramSessionLog({
           ...meta,
           kind: "throttled",

@@ -596,6 +596,25 @@ wiki/lint/YYYY-MM-DD.md
 
 If the same day has multiple reports, CLIO should create `_2`, `_3`, and so on rather than overwrite old reports.
 
+### Deterministic helper scripts
+
+A few maintenance tasks are backed by deterministic Node scripts so they do not
+drift across LLM runs. They are exposed as npm scripts from `webapp/` (each
+passes `--root ..` so it operates on the repository root):
+
+```bash
+cd webapp
+npm run wiki:sources-index          # rebuild wiki/sources/index.md from frontmatter
+npm run wiki:sources-index:check    # verify the catalog is up to date (exit 1 if stale)
+npm run wiki:mini-lint              # write a post-merge structural lint report
+npm run wiki:mini-lint:check        # exit 1 if duplicates/broken links/orphans exist
+```
+
+The `:check` variants are non-mutating gates suitable for CI or a pre-merge
+hook. `wiki:mini-lint` covers near-duplicate pages, broken wikilinks, and orphan
+synthesis pages; the LLM `/lint` workflow above still owns the deeper semantic
+checks.
+
 ### Auto Lint
 
 Auto Lint is configured in **Settings**. It has two signals:

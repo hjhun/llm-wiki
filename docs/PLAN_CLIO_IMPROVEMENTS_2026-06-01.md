@@ -146,9 +146,15 @@ webapp/lib/telegram/*.ts    ~1500 LOC  (신규, 테스트 0)
   - dangling 참조 정리: `wiki-ingest/SKILL.md`의 bare `wiki-images`를 실제 스킬 링크로 교체.
   - 라우팅 노출: `CLAUDE.md`·`AGENTS.md` §6 스킬 라우팅 표에 wiki-images 행 추가(두 파일 바이트 동기화 유지).
 
-검증: `npm test` 81 passed, `tsc --noEmit` 통과, `next build` 성공, `scripts/smoke-test.sh` 통과. CLAUDE.md ↔ AGENTS.md 동일성 확인.
+- **P4 부분 완료** (방향성 항목)
+  - **P4-1 운영 가시성**: Telegram 레이트리밋 hit를 generic skip과 분리해 별도 `throttled` 카운터로 추적(`runtime-state.ts`+`handlers.ts`), `/api/telegram/status`에 자동 노출, Settings `TelegramPanel`에 Stat 추가, i18n(ko/en) 라벨 추가, 단위 테스트 추가.
+  - **P4-2 결정적 스크립트 진입점**: `webapp/package.json`에 `wiki:sources-index[:check]`·`wiki:mini-lint[:check]` npm 스크립트 추가(각 `--root ..`). `:check`는 비변경 게이트.
+  - **P4-4 문서 동기화**: GUIDE/GUIDE_ko에 "결정적 헬퍼 스크립트" 절 추가. README의 Telegram 봇 언급은 이미 반영됨(`f217af2`) 확인.
+  - **P4-3 examples 확장(이미지+코드 혼합)**: 콘텐츠 작업 비중이 커서 이번엔 보류 — 후속.
 
-남은 항목(P4, ingest-loop의 상태 보존 클러스터 추가 분해)은 후속 작업.
+검증: `npm test` 84 passed, `tsc --noEmit` 통과, `next build` 성공, `scripts/smoke-test.sh` 통과. CLAUDE.md ↔ AGENTS.md 동일성 확인.
+
+남은 항목(P4-3 예제 확장, ingest-loop의 상태 보존 클러스터 추가 분해)은 후속 작업.
 
 ---
 

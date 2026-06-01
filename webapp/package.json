@@ -13,7 +13,11 @@
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "wiki:sources-index": "node ../scripts/build-sources-index.mjs --root ..",
+    "wiki:sources-index:check": "node ../scripts/build-sources-index.mjs --root .. --check",
+    "wiki:mini-lint": "node ../scripts/mini-lint.mjs --root ..",
+    "wiki:mini-lint:check": "node ../scripts/mini-lint.mjs --root .. --check"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",

@@ -10,6 +10,8 @@ export type TelegramRuntimeStats = {
   dispatched: number;
   rejected: number;
   skipped: number;
+  /** Messages dropped by the per-chat rate limiter (distinct from skipped). */
+  throttled: number;
   errors: number;
   lastWebhookAt: string | null;
   lastDispatchAt: string | null;
@@ -23,6 +25,7 @@ let stats: TelegramRuntimeStats = {
   dispatched: 0,
   rejected: 0,
   skipped: 0,
+  throttled: 0,
   errors: 0,
   lastWebhookAt: null,
   lastDispatchAt: null,
@@ -50,6 +53,10 @@ export function noteRejected(): void {
 
 export function noteSkipped(): void {
   stats.skipped += 1;
+}
+
+export function noteThrottled(): void {
+  stats.throttled += 1;
 }
 
 export function noteError(message: string): void {
