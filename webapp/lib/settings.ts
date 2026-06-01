@@ -249,6 +249,23 @@ export async function readSettingsState() {
         sessionTtlSec: cfg.auth.sessionTtlSec,
       },
       publicQuery: cfg.publicQuery,
+      telegram: {
+        // The bot token is never sent to the client; only a flag indicating
+        // whether one is configured. Setting/clearing the token has its own
+        // dedicated POST endpoints that ignore the GET payload.
+        enabled: cfg.telegram.enabled,
+        botTokenSet: typeof cfg.telegram.botToken === "string" && cfg.telegram.botToken.length > 0,
+        mode: cfg.telegram.mode,
+        webhookPublicUrl: cfg.telegram.webhookPublicUrl,
+        webhookSecretSet:
+          typeof cfg.telegram.webhookSecret === "string" && cfg.telegram.webhookSecret.length > 0,
+        allowlist: cfg.telegram.allowlist,
+        pending: cfg.telegram.pending,
+        rejectionMessage: cfg.telegram.rejectionMessage,
+        historyTurns: cfg.telegram.historyTurns,
+        replyMaxChars: cfg.telegram.replyMaxChars,
+        allowExternalLookup: cfg.telegram.allowExternalLookup,
+      },
       autoIngest: cfg.autoIngest,
       autoLint: cfg.autoLint,
     },

@@ -9,6 +9,7 @@ import {
   Gauge,
   KeyRound,
   LoaderCircle,
+  MessagesSquare,
   Package,
   RefreshCw,
   Save,
@@ -21,6 +22,7 @@ import { type Language, useLanguage } from "../i18n";
 import { useTheme } from "../theme";
 import AutoIngestPanel from "./AutoIngestPanel";
 import AutoLintPanel from "./AutoLintPanel";
+import TelegramPanel from "./TelegramPanel";
 import { Button, PageHeader, StatusBadge, cx } from "../ui";
 import type {
   CliInfo,
@@ -40,6 +42,7 @@ type SettingsTabId =
   | "agent"
   | "runtime"
   | "automation"
+  | "telegram"
   | "access"
   | "updates"
   | "diagnostics";
@@ -64,6 +67,11 @@ function cloneConfig(config: SettingsConfig): SettingsConfig {
     ui: { ...config.ui },
     auth: { ...config.auth },
     publicQuery: { ...config.publicQuery },
+    telegram: {
+      ...config.telegram,
+      allowlist: config.telegram.allowlist.map((entry) => ({ ...entry })),
+      pending: config.telegram.pending.map((entry) => ({ ...entry })),
+    },
     autoIngest: {
       ...config.autoIngest,
       watch: { ...config.autoIngest.watch },
@@ -162,6 +170,12 @@ export default function Settings() {
           label: t.settings.settingsTabAutomation,
           description: t.settings.settingsTabAutomationDesc,
           icon: Zap,
+        },
+        {
+          id: "telegram",
+          label: t.settings.settingsTabTelegram,
+          description: t.settings.settingsTabTelegramDesc,
+          icon: MessagesSquare,
         },
         {
           id: "access",
@@ -686,6 +700,27 @@ export default function Settings() {
                     }
                   />
                 </>
+              ) : null}
+
+              {activeTab === "telegram" ? (
+                <TelegramPanel
+                  draft={draft.telegram}
+                  onChange={(nextTelegram) =>
+                    updateDraft((next) => {
+                      next.telegram = {
+                        ...nextTelegram,
+                        allowlist: nextTelegram.allowlist.map((entry) => ({
+                          ...entry,
+                        })),
+                        pending: nextTelegram.pending.map((entry) => ({
+                          ...entry,
+                        })),
+                      };
+                    })
+                  }
+                  onNotice={(message) => setNotice(message)}
+                  onError={(message) => setError(message)}
+                />
               ) : null}
 
               {activeTab === "access" ? (

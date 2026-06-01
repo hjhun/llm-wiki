@@ -39,6 +39,36 @@ export type UpdateResult = {
   command: string;
 };
 
+export type TelegramAllowlistEntry = {
+  chatId: number;
+  kind: "private" | "group" | "channel";
+  label: string;
+  permission: "query" | "trusted";
+  approvedAt: string;
+};
+
+export type TelegramPendingEntry = {
+  chatId: number;
+  kind: "private" | "group" | "channel";
+  label: string;
+  firstSeenAt: string;
+  lastMessagePreview: string;
+};
+
+export type TelegramSettings = {
+  enabled: boolean;
+  botTokenSet: boolean;
+  mode: "polling" | "webhook";
+  webhookPublicUrl: string | null;
+  webhookSecretSet: boolean;
+  allowlist: TelegramAllowlistEntry[];
+  pending: TelegramPendingEntry[];
+  rejectionMessage: string;
+  historyTurns: number;
+  replyMaxChars: number;
+  allowExternalLookup: boolean;
+};
+
 export type SettingsConfig = {
   server: {
     port: number;
@@ -108,6 +138,7 @@ export type SettingsConfig = {
     sandboxEnabled: boolean;
     sandboxReadOnlyHomePaths: string[];
   };
+  telegram: TelegramSettings;
   autoIngest: {
     enabled: boolean;
     mode: "watch" | "schedule";

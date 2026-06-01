@@ -553,6 +553,74 @@ export const ConfigSchema = z.object({
       fix: true,
       skipIfBusy: true,
     }),
+  telegram: z
+    .object({
+      /**
+       * Telegram bot integration. When enabled, the webapp runs a polling
+       * worker that dispatches messages from allowlisted Telegram chats
+       * through the existing /query pipeline. See
+       * docs/PLAN_TELEGRAM_BOT_2026-06-01.md for the full design.
+       */
+      enabled: z.boolean().default(false),
+      /** Bot token issued by @BotFather. Never returned by GET endpoints. */
+      botToken: z.string().nullable().default(null),
+      mode: z.enum(["polling", "webhook"]).default("polling"),
+      /** Public URL the webhook mode registers with Telegram. */
+      webhookPublicUrl: z.string().nullable().default(null),
+      /** Required secret for the X-Telegram-Bot-Api-Secret-Token header. */
+      webhookSecret: z.string().nullable().default(null),
+      allowlist: z
+        .array(
+          z.object({
+            chatId: z.number(),
+            kind: z.enum(["private", "group", "channel"]),
+            label: z.string().default(""),
+            permission: z.enum(["query", "trusted"]).default("query"),
+            approvedAt: z.string(),
+          }),
+        )
+        .default([]),
+      /** Chats that contacted the bot but are still awaiting admin approval. */
+      pending: z
+        .array(
+          z.object({
+            chatId: z.number(),
+            kind: z.enum(["private", "group", "channel"]),
+            label: z.string().default(""),
+            firstSeenAt: z.string(),
+            lastMessagePreview: z.string().default(""),
+          }),
+        )
+        .default([]),
+      /** Reply text returned to unapproved chats on first contact. */
+      rejectionMessage: z
+        .string()
+        .default(
+          "이 봇은 승인된 chat에만 응답합니다. 관리자에게 chat ID 승인 요청을 보내주세요.",
+        ),
+      historyTurns: z.number().int().min(0).max(50).default(6),
+      replyMaxChars: z.number().int().min(200).max(4096).default(3500),
+      /**
+       * When true, Telegram-routed queries may use the same external lookup
+       * tools as publicQuery. Defaults to false because Telegram users come
+       * through a chat allowlist, not the LAN trust boundary.
+       */
+      allowExternalLookup: z.boolean().default(false),
+    })
+    .default({
+      enabled: false,
+      botToken: null,
+      mode: "polling",
+      webhookPublicUrl: null,
+      webhookSecret: null,
+      allowlist: [],
+      pending: [],
+      rejectionMessage:
+        "이 봇은 승인된 chat에만 응답합니다. 관리자에게 chat ID 승인 요청을 보내주세요.",
+      historyTurns: 6,
+      replyMaxChars: 3500,
+      allowExternalLookup: false,
+    }),
   automation: z
     .object({
       enabled: z.boolean().default(false),
@@ -631,6 +699,7 @@ const DEFAULT_CONFIG: Config = ConfigSchema.parse({
   ui: {},
   auth: {},
   publicQuery: {},
+  telegram: {},
   automation: {},
 });
 
