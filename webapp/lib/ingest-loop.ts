@@ -4,6 +4,7 @@ import path from "node:path";
 import { runCli, type CliName, type RunResult } from "./cli";
 import type { Config } from "./config";
 import { buildGraphifyPrompt } from "./graph";
+import { runPostMergeMiniLint } from "./post-merge-lint";
 import { maybeRefreshQmdIndex } from "./qmd";
 import {
   PROJECT_ROOT,
@@ -1763,6 +1764,14 @@ export async function runIngestLoop(
       if (incr.action === "update") {
         lastMergedSnap = snap;
       }
+      // Run the deterministic post-merge mini-lint exactly when the merge
+      // pass just completed. It is cheap (sub-second on typical wikis) and
+      // catches duplicate concept/entity titles, broken wikilinks, and
+      // orphan synthesis pages that parallel ingest workers can introduce.
+      if (snap.mergeDone && !prevSnap.mergeDone) {
+        const lint = await runPostMergeMiniLint({ signal });
+        if (lint.note) aggregateReply += lint.note;
+      }
     }
     prevSnap = snap;
 
@@ -1825,6 +1834,15 @@ export async function runIngestLoop(
       if (final.note) finalReply += final.note;
     } else {
       finalReply += `\n\n---\n\n[auto graph] 루프 중에 full merge가 이미 실행되어 final merge는 생략합니다.`;
+    }
+
+    // Final post-merge mini-lint at loop exit. The per-iteration call only
+    // fires on the merge-just-done transition; single-leaf runs or scopes
+    // that never flip mergeDone still benefit from a closing health check
+    // before the user sees the run summary.
+    if (haltKind === "normal" && ingestMadeProgress(loopBefore, loopAfter)) {
+      const lint = await runPostMergeMiniLint({ signal });
+      if (lint.note) finalReply += lint.note;
     }
   }
 

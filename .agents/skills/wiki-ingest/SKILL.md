@@ -273,7 +273,8 @@ Only run when **every** leaf in the input scope has `status === "done"` and `mer
    - Category order: Entities → Concepts → Code → Sources → Maps → Answers → Comparisons → Lint Reports → Graph.
    - Sort alphabetically within each category.
    - Item format: `- [[Page Name]] — One-line summary`.
-5. Regenerate `DASHBOARD.md`. Release lock. Return.
+5. Regenerate `DASHBOARD.md`. Release lock.
+6. **Post-merge mini-lint gate.** After the merge pass that drained `merge_pass.pending_parents`, run `node scripts/mini-lint.mjs` (deterministic, sub-second). It catches three classes of issues parallel ingest workers tend to introduce — near-duplicate concept/entity titles, broken `[[wiki/...]]` wikilinks, and orphan synthesis pages — and writes a report to `wiki/lint/post-merge-<YYYY-MM-DD>.md`. The webapp's `/ingest-loop` driver runs the same script automatically; for one-shot `/ingest` calls the skill is the trigger. Surface the one-line summary in your reply; the full LLM `wiki-lint` workflow still owns deeper checks. Return.
 
 If `graph.autoUpdateOnIngest` is `true`, graph synchronization is handled as
 separate coding-agent CLI invocations after ingest progress is detected. The
