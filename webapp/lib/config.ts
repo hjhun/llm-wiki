@@ -340,6 +340,14 @@ export const ConfigSchema = z.object({
        */
       enabled: z.boolean().default(false),
       /**
+       * Optional access passphrase for the public /clio endpoint. When set,
+       * the public query API requires a matching `x-clio-access-token` header
+       * (the /clio page prompts the visitor for it). Null means fully open —
+       * the original passwordless behavior. Never returned by GET endpoints;
+       * set/cleared via the dedicated /api/settings/public-token route.
+       */
+      accessToken: z.string().nullable().default(null),
+      /**
        * When true, public chat may ask the selected coding-agent CLI to use
        * read-only external lookup tools for questions that need fresh facts
        * outside the wiki. Disabled by default so /clio remains wiki-only
@@ -402,6 +410,7 @@ export const ConfigSchema = z.object({
     })
     .default({
       enabled: false,
+      accessToken: null,
       allowExternalLookup: false,
       sandboxEnabled: true,
       sandboxReadOnlyHomePaths: [

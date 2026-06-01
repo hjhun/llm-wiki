@@ -4,6 +4,7 @@ import { errorMessage, jsonError } from "@/lib/api";
 import { loadConfig } from "@/lib/config";
 import { runPublicQuery } from "@/lib/public-query";
 import { appendPublicSessionLog } from "@/lib/public-session-log";
+import { publicQueryAccessAllowed } from "@/lib/public-access";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -27,6 +28,18 @@ export async function POST(req: Request) {
   const cfg = await loadConfig();
   if (!cfg.publicQuery.enabled) {
     return jsonError("public query is disabled", 404);
+  }
+
+  // Optional access passphrase. When configured, the /clio page prompts the
+  // visitor and sends it back as this header; an unauthenticated request that
+  // omits or mismatches it is refused before any expensive CLI work runs.
+  if (
+    !publicQueryAccessAllowed(
+      cfg.publicQuery.accessToken,
+      req.headers.get("x-clio-access-token"),
+    )
+  ) {
+    return jsonError("access passphrase required", 401);
   }
 
   const parsed = Body.safeParse(await req.json().catch(() => null));

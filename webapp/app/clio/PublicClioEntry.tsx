@@ -12,7 +12,13 @@ export default async function PublicClioEntry() {
     <ThemeProvider initialTheme={cfg.ui.theme}>
       <LanguageProvider initialLanguage={cfg.ui.language}>
         {cfg.publicQuery.enabled ? (
-          <PublicClioChat appSubtitle={cfg.ui.appSubtitle} />
+          <PublicClioChat
+            appSubtitle={cfg.ui.appSubtitle}
+            accessRequired={
+              typeof cfg.publicQuery.accessToken === "string" &&
+              cfg.publicQuery.accessToken.length > 0
+            }
+          />
         ) : (
           <main className="flex h-screen w-screen items-center justify-center bg-bg px-6 text-ink">
             <section className="w-full max-w-lg rounded-md border border-line bg-bg-panel/82 p-6 shadow-sm backdrop-blur-xl">

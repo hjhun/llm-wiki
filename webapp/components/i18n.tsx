@@ -398,6 +398,15 @@ export const TEXT = {
       publicQuerySandbox: "bwrap sandbox 사용",
       publicQuerySandboxDesc:
         "켜면 public CLI를 격리된 HOME에서 실행합니다. config의 sandboxReadOnlyHomePaths에 지정된 ~/.codex, ~/.claude, ~/.cline*, ~/.agy, XDG 하위 상태 경로, ~/.agents 등과 agent-browser 설치물은 읽기 전용으로 공유합니다.",
+      publicQueryPassphrase: "접근 패스프레이즈",
+      publicQueryPassphraseDesc:
+        "설정하면 /clio 방문자가 이 패스프레이즈를 입력해야 합니다. 비워 두면 누구나 접근하는 기존 공개 동작입니다.",
+      publicQueryPassphraseOn:
+        "설정됨 — /clio 방문자는 패스프레이즈를 입력해야 합니다.",
+      publicQueryPassphraseSave: "패스프레이즈 저장",
+      publicQueryPassphraseClear: "해제",
+      publicQueryPassphraseSaved: "접근 패스프레이즈를 저장했습니다.",
+      publicQueryPassphraseCleared: "접근 패스프레이즈를 해제했습니다.",
       password: "Password",
       admin: "admin",
       currentPassword: "Current password",
@@ -916,6 +925,15 @@ export const TEXT = {
       publicQuerySandbox: "Use bwrap sandbox",
       publicQuerySandboxDesc:
         "When on, public CLI runs with an isolated HOME. Host paths from sandboxReadOnlyHomePaths, such as ~/.codex, ~/.claude, ~/.cline*, ~/.agy, XDG state subpaths, ~/.agents, and agent-browser installs, are shared read-only.",
+      publicQueryPassphrase: "Access passphrase",
+      publicQueryPassphraseDesc:
+        "When set, /clio visitors must enter this passphrase. Leave empty for the original open, passwordless behavior.",
+      publicQueryPassphraseOn:
+        "Set — /clio visitors must enter the passphrase.",
+      publicQueryPassphraseSave: "Save passphrase",
+      publicQueryPassphraseClear: "Clear",
+      publicQueryPassphraseSaved: "Access passphrase saved.",
+      publicQueryPassphraseCleared: "Access passphrase cleared.",
       password: "Password",
       admin: "admin",
       currentPassword: "Current password",
