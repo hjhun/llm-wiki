@@ -165,15 +165,15 @@ function FallbackVoxelCatMascot({ running }: { running: boolean }) {
           <g className="agent-voxel-head">
             <path
               className="agent-voxel-ear agent-voxel-ear-l"
-              d="M30 28 L42 8 L54 28 Z"
+              d="M33 28 L41 8 L49 28 Z"
             />
             <path
               className="agent-voxel-ear agent-voxel-ear-r"
-              d="M66 28 L78 8 L90 28 Z"
+              d="M63 28 L71 8 L79 28 Z"
             />
             <path
               className="agent-voxel-inner-ear"
-              d="M38 26 L43 17 L49 26 Z M72 26 L77 17 L83 26 Z"
+              d="M36 26 L41 17 L46 26 Z M66 26 L71 17 L76 26 Z"
             />
             <path
               className="agent-voxel-head-top"
