@@ -12,6 +12,51 @@ import {
 } from "./paths";
 import { appendMessage } from "./sessions";
 import { errorMessage } from "./api";
+import {
+  normalizePosixPath,
+  normalizeRawScope,
+  pathMatchesScope,
+  pathSegments,
+} from "./ingest/scope";
+import {
+  CODE_EXTS,
+  CODE_MANIFESTS,
+  IGNORE_CODE_DIRS,
+  classifyLeafFromFiles,
+  fileLooksLikeCode,
+  fileLooksLikeRuntimeEvidence,
+  isIgnoredCodePath,
+  type LeafKind,
+} from "./ingest/leaf-classify";
+import {
+  LOOP_STAGNATION_LIMIT,
+  buildLoopContinuationPrompt,
+  decideLoopHalt,
+  formatStateSummary,
+  ingestMadeProgress,
+  newlyDoneLeaves,
+  type LoopDecision,
+} from "./ingest/loop-decision";
+import {
+  EMPTY_SNAPSHOT,
+  type ProgressScope,
+  type ProgressSnapshot,
+  type StateSummary,
+} from "./ingest/types";
+
+// Re-export the public ingest-loop surface that moved into ./ingest/* so
+// existing `@/lib/ingest-loop` importers keep working unchanged.
+export {
+  normalizeRawScope,
+  ingestMadeProgress,
+  newlyDoneLeaves,
+  decideLoopHalt,
+  buildLoopContinuationPrompt,
+  formatStateSummary,
+  LOOP_STAGNATION_LIMIT,
+  EMPTY_SNAPSHOT,
+};
+export type { StateSummary, ProgressSnapshot, ProgressScope, LoopDecision };
 
 export const PROGRESS_DASHBOARD_PATH = "wiki/.progress/ingest/DASHBOARD.md";
 export const PROGRESS_STATE_PATH = "wiki/.progress/ingest/.state.json";
@@ -21,86 +66,6 @@ export const PROGRESS_LOCK_PATH = "wiki/.progress/ingest/.lock";
 export const PROGRESS_LEAVES_LOCK_DIR = "wiki/.progress/ingest/leaves";
 export const WIKI_LOG_REL = "wiki/log.md";
 export const WIKI_INDEX_REL = "wiki/index.md";
-
-export type StateSummary = {
-  total: number;
-  done: number;
-  in_progress: number;
-  partial: number;
-  pending: number;
-  error: number;
-  active_leaf: string | null;
-  active_subchunk: { id: string; status: string } | null;
-};
-
-export type ProgressSnapshot = {
-  leavesTotal: number;
-  leavesDone: number;
-  sourcePagesMissing: number;
-  missingSourceLeaves: string[];
-  codeLeavesTotal: number;
-  /** Legacy name: code/mixed leaves that are represented in ingest progress. */
-  codeLeavesWithOutputs: number;
-  /** Legacy name: kept for compatibility; Code Wiki pages are no longer required. */
-  codeLeavesMissingOutputs: number;
-  missingCodeLeaves: string[];
-  codeFilePagesTotal: number;
-  /** Legacy name: no longer tracks wiki/code file pages. */
-  codeFilePagesWithOutputs: number;
-  /** Code-looking raw files that have not been represented in ingest state. */
-  codeFilePagesMissing: number;
-  missingCodeFiles: string[];
-  codeDirectoryIndexesTotal: number;
-  /** Legacy name: directory wiki/code pages are no longer required. */
-  codeDirectoryIndexesWithOutputs: number;
-  /** Legacy name: directory wiki/code pages are no longer required. */
-  codeDirectoryIndexesMissing: number;
-  missingCodeDirectories: string[];
-  /** Legacy wiki/code output counter; graphify is the primary code artifact now. */
-  codeOutputsWritten: number;
-  subChunksTotal: number;
-  subChunksDone: number;
-  filesTotal: number;
-  bytesTotal: number;
-  sourcePagesWritten: number;
-  mergeDone: boolean;
-  /** Count of parent dirs still queued in merge_pass.pending_parents. */
-  mergePendingParents: number;
-  /** Sorted POSIX paths of leaves whose status === "done". */
-  doneLeaves: string[];
-};
-
-export type ProgressScope = {
-  rawScope?: string | null;
-};
-
-export const EMPTY_SNAPSHOT: ProgressSnapshot = {
-  leavesTotal: 0,
-  leavesDone: 0,
-  sourcePagesMissing: 0,
-  missingSourceLeaves: [],
-  codeLeavesTotal: 0,
-  codeLeavesWithOutputs: 0,
-  codeLeavesMissingOutputs: 0,
-  missingCodeLeaves: [],
-  codeFilePagesTotal: 0,
-  codeFilePagesWithOutputs: 0,
-  codeFilePagesMissing: 0,
-  missingCodeFiles: [],
-  codeDirectoryIndexesTotal: 0,
-  codeDirectoryIndexesWithOutputs: 0,
-  codeDirectoryIndexesMissing: 0,
-  missingCodeDirectories: [],
-  codeOutputsWritten: 0,
-  subChunksTotal: 0,
-  subChunksDone: 0,
-  filesTotal: 0,
-  bytesTotal: 0,
-  sourcePagesWritten: 0,
-  mergeDone: false,
-  mergePendingParents: 0,
-  doneLeaves: [],
-};
 
 export async function buildProgressReference(): Promise<string | null> {
   try {
@@ -118,128 +83,6 @@ export async function buildProgressReference(): Promise<string | null> {
 const ENTITY_REGISTRY_MAX = 400;
 const CODE_STATUS_MAX = 20;
 const RAW_CODE_SCAN_MAX_FILES = 5000;
-
-const CODE_EXTS = new Set([
-  ".ts",
-  ".tsx",
-  ".js",
-  ".jsx",
-  ".mjs",
-  ".cjs",
-  ".py",
-  ".rs",
-  ".go",
-  ".java",
-  ".kt",
-  ".swift",
-  ".c",
-  ".cc",
-  ".cpp",
-  ".h",
-  ".hpp",
-  ".cs",
-  ".php",
-  ".rb",
-  ".sh",
-  ".sql",
-]);
-
-const CODE_MANIFESTS = new Set([
-  "package.json",
-  "Cargo.toml",
-  "pyproject.toml",
-  "go.mod",
-  "pom.xml",
-  "build.gradle",
-  "Dockerfile",
-  "compose.yaml",
-  "tsconfig.json",
-]);
-
-const IGNORE_CODE_DIRS = new Set([
-  ".git",
-  ".trash",
-  "node_modules",
-  "dist",
-  "build",
-  "target",
-  ".next",
-  ".venv",
-  "vendor",
-  "coverage",
-]);
-
-type LeafKind = "prose" | "code" | "mixed" | "ignore";
-
-function normalizePosixPath(value: string): string {
-  return value.replace(/\\/g, "/").replace(/^\/+/, "").replace(/\/+$/, "");
-}
-
-export function normalizeRawScope(value?: string | null): string | null {
-  if (!value) return null;
-  const trimmed = value.trim();
-  if (!trimmed) return null;
-  const normalized = normalizePosixPath(trimmed);
-  if (normalized === "raw" || normalized.startsWith("raw/")) return normalized;
-  return null;
-}
-
-function pathMatchesScope(value: string, rawScope?: string | null): boolean {
-  const scope = normalizeRawScope(rawScope);
-  if (!scope) return true;
-  const normalized = normalizePosixPath(value);
-  return (
-    normalized === scope ||
-    normalized.startsWith(`${scope}/`) ||
-    scope.startsWith(`${normalized}/`)
-  );
-}
-
-function pathSegments(relPath: string): string[] {
-  return relPath.replace(/\\/g, "/").split("/").filter(Boolean);
-}
-
-function isIgnoredCodePath(relPath: string): boolean {
-  return pathSegments(relPath).some((part) => IGNORE_CODE_DIRS.has(part));
-}
-
-function fileLooksLikeCode(relPath: string): boolean {
-  if (isIgnoredCodePath(relPath)) return false;
-  const basename = path.posix.basename(relPath);
-  if (CODE_MANIFESTS.has(basename)) return true;
-  if (CODE_EXTS.has(path.posix.extname(relPath).toLowerCase())) return true;
-  const lower = relPath.toLowerCase();
-  return (
-    lower.includes("test") ||
-    lower.includes("spec") ||
-    lower.includes("__tests__/") ||
-    lower.includes("tests/")
-  );
-}
-
-function fileLooksLikeRuntimeEvidence(relPath: string): boolean {
-  if (isIgnoredCodePath(relPath)) return false;
-  const lower = relPath.toLowerCase();
-  return (
-    lower.endsWith(".log") ||
-    lower.includes("stacktrace") ||
-    lower.includes("stack-trace") ||
-    lower.includes("ci") ||
-    lower.includes("crash") ||
-    lower.includes("failure") ||
-    lower.includes("failing-test")
-  );
-}
-
-function classifyLeafFromFiles(files: string[]): LeafKind {
-  const actionable = files.filter((file) => !isIgnoredCodePath(file));
-  if (actionable.length === 0 && files.length > 0) return "ignore";
-  const codeCount = actionable.filter(
-    (file) => fileLooksLikeCode(file) || fileLooksLikeRuntimeEvidence(file),
-  ).length;
-  if (codeCount === 0) return "prose";
-  return codeCount === actionable.length ? "code" : "mixed";
-}
 
 function collectLeafFiles(leafPath: string, leaf: Record<string, unknown>): string[] {
   const files = new Set<string>();
@@ -873,34 +716,6 @@ async function totalRelativeFileBytes(filePaths: Iterable<string>): Promise<numb
   return total;
 }
 
-export function ingestMadeProgress(
-  before: ProgressSnapshot,
-  after: ProgressSnapshot,
-): boolean {
-  return (
-    after.subChunksDone > before.subChunksDone ||
-    after.leavesDone > before.leavesDone ||
-    after.sourcePagesWritten > before.sourcePagesWritten ||
-    after.sourcePagesMissing < before.sourcePagesMissing ||
-    after.codeOutputsWritten > before.codeOutputsWritten ||
-    after.codeLeavesMissingOutputs < before.codeLeavesMissingOutputs ||
-    after.codeFilePagesMissing < before.codeFilePagesMissing ||
-    after.codeDirectoryIndexesMissing < before.codeDirectoryIndexesMissing ||
-    (after.mergeDone && !before.mergeDone) ||
-    // A merge pass drained a parent from merge_pass.pending_parents — real
-    // progress even though no sub-chunk or leaf counter moved.
-    after.mergePendingParents < before.mergePendingParents
-  );
-}
-
-export function newlyDoneLeaves(
-  before: ProgressSnapshot,
-  after: ProgressSnapshot,
-): string[] {
-  const prev = new Set(before.doneLeaves);
-  return after.doneLeaves.filter((p) => !prev.has(p));
-}
-
 export async function readIngestStateSummary(
   options: { sessionPath?: string; rawScope?: string | null } = {},
 ): Promise<StateSummary | null> {
@@ -975,153 +790,6 @@ export async function lockFileExists(): Promise<boolean> {
   } catch {
     return false;
   }
-}
-
-export type LoopDecision =
-  | { halt: false }
-  | {
-      halt: true;
-      kind: "normal" | "error" | "stopped" | "capped" | "stalled";
-      reason: string;
-    };
-
-/**
- * Consecutive progress-free rounds tolerated before the loop is declared
- * stalled. A stuck `in_progress` sub-chunk or a stale `.lock` would otherwise
- * spin every remaining iteration up to `maxIterations`.
- */
-export const LOOP_STAGNATION_LIMIT = 3;
-
-export function decideLoopHalt(input: {
-  exitCode: number;
-  summary: StateSummary | null;
-  mergeDone: boolean;
-  mergePending: boolean;
-  idleRounds: number;
-  stopRequested: boolean;
-  iteration: number;
-  maxIter: number;
-  sourcePagesMissing?: number;
-  codeLeavesMissingOutputs?: number;
-  codeFilePagesMissing?: number;
-  codeDirectoryIndexesMissing?: number;
-}): LoopDecision {
-  if (input.exitCode !== 0) {
-    return {
-      halt: true,
-      kind: "error",
-      reason: `CLI exitCode=${input.exitCode}`,
-    };
-  }
-  if (input.summary && input.summary.error > 0) {
-    return {
-      halt: true,
-      kind: "error",
-      reason: `sub-chunk ${input.summary.error}건이 error 상태로 종료`,
-    };
-  }
-  if (input.stopRequested) {
-    return { halt: true, kind: "stopped", reason: "사용자 Stop 요청" };
-  }
-  if (input.iteration >= input.maxIter) {
-    return {
-      halt: true,
-      kind: "capped",
-      reason: `최대 반복 ${input.maxIter}회에 도달`,
-    };
-  }
-  // Completion: every leaf is done and no merge work is outstanding.
-  // This must NOT gate on `mergeDone` alone. `merge_pass.status` only flips to
-  // "done" after a merge pass drains `pending_parents`; a run with no parent to
-  // merge (single leaf, already-ingested scope, empty raw/) leaves the status
-  // at "idle" forever. Gating on `mergeDone` then makes the loop spin to
-  // maxIter even though every worker already reports the work complete.
-  if (
-    input.summary &&
-    input.summary.pending === 0 &&
-    input.summary.in_progress === 0 &&
-    input.summary.partial === 0 &&
-    (input.sourcePagesMissing ?? 0) === 0 &&
-    (input.codeLeavesMissingOutputs ?? 0) === 0 &&
-    (input.codeFilePagesMissing ?? 0) === 0 &&
-    (input.codeDirectoryIndexesMissing ?? 0) === 0 &&
-    (input.mergeDone || !input.mergePending)
-  ) {
-    return {
-      halt: true,
-      kind: "normal",
-      reason: input.mergeDone
-        ? `모든 leaf 완료 + merge pass done (${input.summary.done}/${input.summary.total})`
-        : `모든 leaf 완료 · 남은 merge 작업 없음 (${input.summary.done}/${input.summary.total})`,
-    };
-  }
-  if (
-    input.idleRounds >= LOOP_STAGNATION_LIMIT &&
-    ((input.sourcePagesMissing ?? 0) > 0 ||
-      (input.codeLeavesMissingOutputs ?? 0) > 0 ||
-      (input.codeFilePagesMissing ?? 0) > 0 ||
-      (input.codeDirectoryIndexesMissing ?? 0) > 0)
-  ) {
-    return {
-      halt: true,
-      kind: "stalled",
-      reason:
-        `ingest 산출물 누락 ` +
-        `(source leaves=${input.sourcePagesMissing ?? 0}, ` +
-        `code leaf progress=${input.codeLeavesMissingOutputs ?? 0}, ` +
-        `untracked code files=${input.codeFilePagesMissing ?? 0}, ` +
-        `legacy code directories=${input.codeDirectoryIndexesMissing ?? 0})이 ` +
-        `연속 ${input.idleRounds}개 라운드에서 해결되지 않아 중단`,
-    };
-  }
-  // Stagnation guard: aside from error/stop/cap and the completion branch
-  // above, the loop has no other exit. If several consecutive rounds advance
-  // nothing — a stuck `in_progress` sub-chunk, a stale `.lock`, or a merge
-  // pass that cannot proceed — spinning to maxIter is pure waste. Halt and let
-  // the manager report the stall.
-  if (input.idleRounds >= LOOP_STAGNATION_LIMIT) {
-    return {
-      halt: true,
-      kind: "stalled",
-      reason: `연속 ${input.idleRounds}개 라운드에서 진행이 없어 중단`,
-    };
-  }
-  return { halt: false };
-}
-
-export function buildLoopContinuationPrompt(input: {
-  sessionPath: string;
-  iteration: number;
-  progressRef: string | null;
-  entityRegistryRef?: string | null;
-  sourcePageStatusRef?: string | null;
-  codeWikiStatusRef?: string | null;
-  rawScope?: string | null;
-}): string {
-  const rawScope = normalizeRawScope(input.rawScope);
-  const lines: string[] = [
-    "You are operating an LLM Wiki repository.",
-    "Read CLAUDE.md/AGENTS.md in this repository and follow .agents/skills/wiki-ingest/SKILL.md. If additional skills are needed, project .agents/skills takes priority, then ~/.agents/skills, then host-specific global skill directories such as ~/.codex/skills or ~/.claude/skills.",
-    `Active session log: sessions/${input.sessionPath}`,
-  ];
-  if (rawScope) {
-    lines.push(
-      `Original /ingest-loop target scope: ${rawScope}. Continue processing exactly this scope; do not pick pending leaves outside it unless the merge parent is needed for this scope.`,
-    );
-  }
-  if (input.progressRef) lines.push(input.progressRef);
-  if (input.entityRegistryRef) lines.push(input.entityRegistryRef);
-  if (input.sourcePageStatusRef) lines.push(input.sourcePageStatusRef);
-  if (input.codeWikiStatusRef) lines.push(input.codeWikiStatusRef);
-  lines.push(
-    `This is /ingest-loop iteration ${input.iteration}. Pick the next pending sub-chunk, merge-pass parent, or missing direct-file pseudo-leaf enumeration from wiki/.progress/ingest/.state.json${rawScope ? ` within ${rawScope}` : ""} and process exactly one unit per the wiki-ingest skill, then exit. Do not loop yourself — the backend will spawn the next iteration. For code/mixed leaves, do not create mirrored wiki/code file pages as a repair task; graphify runs separately after ingest progress is complete.`,
-    "",
-    "===== CONVERSATION =====",
-    rawScope ? `User: /ingest-loop ${rawScope}` : "User: /ingest",
-    "",
-    "Respond now as the assistant.",
-  );
-  return lines.join("\n");
 }
 
 function stateLeafBelongsToSession(
@@ -1437,22 +1105,6 @@ export async function readActionableLeafPaths(
     data,
   };
   return data;
-}
-
-export function formatStateSummary(s: StateSummary): string {
-  const counts =
-    `leaves ${s.done}/${s.total} done` +
-    (s.in_progress ? ` · ${s.in_progress} in_progress` : "") +
-    (s.partial ? ` · ${s.partial} partial` : "") +
-    (s.pending ? ` · ${s.pending} pending` : "") +
-    (s.error ? ` · ${s.error} error` : "");
-  if (s.active_leaf) {
-    const sc = s.active_subchunk
-      ? ` (sub-chunk ${s.active_subchunk.id} ${s.active_subchunk.status})`
-      : "";
-    return `${counts} · ${s.active_leaf}${sc}`;
-  }
-  return counts;
 }
 
 type IngestLoopCliAttempt =

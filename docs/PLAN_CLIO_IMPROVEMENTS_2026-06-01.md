@@ -135,9 +135,15 @@ webapp/lib/telegram/*.ts    ~1500 LOC  (신규, 테스트 0)
 - **P1 완료**
   - `secret-scan`의 `redactSecrets`를 Telegram 세션 로그 저장 경계로 확장. `telegram/session-log.ts`에서 순수 함수 `buildTelegramSessionEntry`를 추출해 `rawMessage`·`question`·`answer`·`error` 영속 필드를 저장 직전 마스킹(테스트로 보장). 이제 비밀정보가 `wiki/answers/`·`sessions/` 어디에도 평문으로 남지 않음.
 
-검증: `npm test` 43 passed, `tsc --noEmit` 통과, `next build` 성공, `scripts/smoke-test.sh` 통과.
+- **P3 완료**
+  - `ingest-loop.ts`(2105줄)에서 순수·부작용 없는 클러스터를 동작 보존을 전제로 추출: `lib/ingest/scope.ts`(경로/스코프 헬퍼), `lib/ingest/leaf-classify.ts`(code/prose 분류), `lib/ingest/loop-decision.ts`(halt 판정·진행 감지·연속 프롬프트·요약), `lib/ingest/types.ts`(StateSummary·ProgressSnapshot·EMPTY_SNAPSHOT).
+  - 이동한 공개 심볼은 `ingest-loop.ts`에서 그대로 re-export하여 `@/lib/ingest-loop` 외부 임포트 호환성 유지(공개 API 무변경).
+  - `ingest-loop.ts` 2105 → 1757줄(−348), 추출 모듈에 단위 테스트 38개 추가(scope 7 / leaf-classify 13 / loop-decision 18).
+  - 상태 보존(fs/락/CLI/graphify) 로직은 통합 테스트가 없어 이번 패스에서 이동하지 않음 — 후속 작업으로 분리 가능.
 
-남은 항목(P3 ingest-loop 분해, P2 wiki-images, P4)은 후속 작업.
+검증: `npm test` 81 passed, `tsc --noEmit` 통과, `next build` 성공, `scripts/smoke-test.sh` 통과.
+
+남은 항목(P2 wiki-images, P4, ingest-loop의 상태 보존 클러스터 추가 분해)은 후속 작업.
 
 ---
 
