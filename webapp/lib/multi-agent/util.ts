@@ -1,0 +1,143 @@
+/**
+ * Pure helpers for the multi-agent orchestrator: kind classification, worker
+ * count clamping, deterministic persona seeding, ASCII cell fitting, manager
+ * name display, raw-scope parsing, ingest-completion check, and the per-kind
+ * mission profiles and operation policy text. No side effects — extracted from
+ * multi-agent.ts so they can be unit-tested directly.
+ */
+
+import type { Config } from "../config";
+import type { ChatKind } from "../chat-events";
+import { normalizeRawScope, type ProgressSnapshot } from "../ingest-loop";
+import type { MissionProfile, OrchestratedKind } from "./types";
+
+const ORCHESTRATED_KINDS = new Set<ChatKind>(["ingest", "ingest-loop", "lint"]);
+
+export function isOrchestratedKind(kind: ChatKind): kind is OrchestratedKind {
+  return ORCHESTRATED_KINDS.has(kind);
+}
+
+export function clampAgentCount(cfg: Config): number {
+  return Math.max(1, Math.min(16, cfg.agent.orchestration.maxConcurrentAgents));
+}
+
+export function seedOffset(seed: string): number {
+  let value = 0;
+  for (const char of seed) value = (value * 31 + char.charCodeAt(0)) >>> 0;
+  return value;
+}
+
+export function displayManagerName(name?: string | null): string {
+  const trimmed = name?.trim();
+  if (!trimmed || trimmed.toLowerCase() === "manager") return "Coordinator";
+  return trimmed;
+}
+
+export function fitAsciiCell(value: string, width: number): string {
+  const trimmed = value.replace(/\s+/g, " ").trim();
+  const text =
+    trimmed.length > width
+      ? `${trimmed.slice(0, Math.max(0, width - 1))}>`
+      : trimmed;
+  return text.padEnd(width, " ");
+}
+
+export function rawScopeFromMessage(message?: string | null): string | null {
+  if (!message) return null;
+  const trimmed = message.trim();
+  const match = /^\/(?:ingest-loop|ingest)(?:\s+([\s\S]+?))?\s*$/.exec(trimmed);
+  const target = match?.[1]?.trim();
+  return normalizeRawScope(target);
+}
+
+export function ingestWorkComplete(snapshot: ProgressSnapshot): boolean {
+  return (
+    snapshot.leavesTotal > 0 &&
+    snapshot.leavesDone === snapshot.leavesTotal &&
+    snapshot.mergePendingParents === 0 &&
+    snapshot.sourcePagesMissing === 0 &&
+    snapshot.codeLeavesMissingOutputs === 0 &&
+    snapshot.codeFilePagesMissing === 0 &&
+    snapshot.codeDirectoryIndexesMissing === 0
+  );
+}
+
+export function missionProfiles(kind: OrchestratedKind): MissionProfile[] {
+  if (kind === "lint") {
+    return [
+      {
+        role: "Evidence Scout",
+        detail: "wiki pages에서 모순, 깨진 링크, stale claim 증거를 수집합니다.",
+        asciiTask: "scan evidence",
+      },
+      {
+        role: "Structure Auditor",
+        detail: "frontmatter, index, orphan page, source 연결 상태를 점검합니다.",
+        asciiTask: "audit structure",
+      },
+      {
+        role: "Risk Reviewer",
+        detail: "수동 검토가 필요한 개인정보, 불확실한 출처, 수정 위험을 분류합니다.",
+        asciiTask: "rank risks",
+      },
+      {
+        role: "Repair Planner",
+        detail: "Coordinator가 한 번에 고칠 수 있는 항목과 보류 항목을 나눕니다.",
+        asciiTask: "plan repairs",
+      },
+    ];
+  }
+  return [
+    {
+      role: "Source Scout",
+      detail: "raw leaf와 sub-chunk를 읽고 source page coverage를 확보합니다.",
+      asciiTask: "raw -> sources",
+    },
+    {
+      role: "Code Cartographer",
+      detail: "코드 leaf 상태와 graphify 후속 그래프 산출물 누락을 점검합니다.",
+      asciiTask: "map code wiki",
+    },
+    {
+      role: "Link Steward",
+      detail: "entity, concept, index, log 연결이 merge pass에 맞는지 확인합니다.",
+      asciiTask: "link wiki pages",
+    },
+    {
+      role: "Merge Sentinel",
+      detail: "진행 state와 누락 지표를 보고 다음 round 또는 완료 조건을 판정합니다.",
+      asciiTask: "guard merge",
+    },
+  ];
+}
+
+export function operationPolicy(kind: OrchestratedKind): string {
+  if (kind === "lint") {
+    return [
+      "You are a read-only lint worker. Inspect the wiki for the wiki-lint categories and return findings with file paths and evidence.",
+      "Do not write wiki/lint reports, do not edit wiki/index.md, and do not apply --fix. The Coordinator will consolidate and perform the single write pass.",
+    ].join("\n");
+  }
+  if (kind === "ingest-loop") {
+    return [
+      "You are an ingest worker in a backend-managed loop. Follow wiki-ingest and process at most one sub-chunk or one merge-pass parent, then exit.",
+      "Every non-ignored leaf must have one wiki/sources page per original raw file recorded in source_pages_written. Repair missing source pages before reporting completion.",
+      "Code Wiki is part of ingest, not a separate command. During enumeration, classify leaves as prose/code/mixed/ignore and include direct-file pseudo-leaves for code files in non-leaf directories. For code or mixed leaves, write source summaries as provenance and record leaf/sub-chunk progress. Do not mirror the source tree into wiki/code/<project>/ or create one page per code file as a completion requirement; graphify materializes code knowledge in wiki/graph after ingest.",
+      "If the progress state shows code-looking raw files not represented in state, treat that as the next unit of work and repair the leaf enumeration. Do not repair a done code/mixed leaf by writing wiki/code file or directory pages.",
+      "A symlink located under raw/ is a valid source entry: follow it read-only even if its real target is outside the repository, preserve logical raw/... paths in state/citations, and reject only broken links or loops.",
+      "Honor your ASSIGNED LEAF SCOPE strictly: only touch leaves listed in your assignment (or any pending leaf if unrestricted). Use a per-leaf lock at wiki/.progress/ingest/leaves/<sha1(leafPath)>.lock for sub-chunk work; the global wiki/.progress/ingest/.lock is only a short state-mutex for enumeration/state-write windows.",
+      "If a per-leaf lock is already held by another live process, skip that leaf and try the next assigned leaf. If all assigned leaves are blocked or already done, exit successfully without writing anything.",
+      "Do NOT run wiki-graphify and do NOT write anything under wiki/graph/. The backend triggers graph updates as separate invocations only after all ingest work and merge passes are complete.",
+    ].join("\n");
+  }
+  return [
+    "You are an ingest worker. Follow wiki-ingest and process exactly one sub-chunk or one merge-pass parent, then exit.",
+    "Every non-ignored leaf must have one wiki/sources page per original raw file recorded in source_pages_written. Repair missing source pages before reporting completion.",
+    "Code Wiki is part of ingest, not a separate command. During enumeration, classify leaves as prose/code/mixed/ignore and include direct-file pseudo-leaves for code files in non-leaf directories. For code or mixed leaves, write source summaries as provenance and record leaf/sub-chunk progress. Do not mirror the source tree into wiki/code/<project>/ or create one page per code file as a completion requirement; graphify materializes code knowledge in wiki/graph after ingest.",
+    "If the progress state shows code-looking raw files not represented in state, treat that as the next unit of work and repair the leaf enumeration. Do not repair a done code/mixed leaf by writing wiki/code file or directory pages.",
+    "A symlink located under raw/ is a valid source entry: follow it read-only even if its real target is outside the repository, preserve logical raw/... paths in state/citations, and reject only broken links or loops.",
+    "Honor your ASSIGNED LEAF SCOPE strictly: only touch leaves listed in your assignment (or any pending leaf if unrestricted). Use a per-leaf lock at wiki/.progress/ingest/leaves/<sha1(leafPath)>.lock for sub-chunk work; the global wiki/.progress/ingest/.lock is only a short state-mutex for enumeration/state-write windows.",
+    "If a per-leaf lock is already held by another live process, skip that leaf and try the next assigned leaf. If all assigned leaves are blocked or already done, exit successfully without writing anything.",
+    "Do NOT run wiki-graphify and do NOT write anything under wiki/graph/. The backend triggers graph updates as separate invocations only after all ingest work and merge passes are complete.",
+  ].join("\n");
+}
