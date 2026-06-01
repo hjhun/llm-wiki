@@ -1,0 +1,48 @@
+name: Webapp
+
+# Typecheck and unit-test the Next.js webapp backend (webapp/lib). Runs on any
+# change that can affect the app or the repo-level operation scripts/skills the
+# smoke test verifies, so a broken security gate or router never reaches main.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "webapp/**"
+      - "scripts/**"
+      - ".github/workflows/webapp.yml"
+  pull_request:
+    paths:
+      - "webapp/**"
+      - "scripts/**"
+      - ".github/workflows/webapp.yml"
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: typecheck & test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: webapp/package-lock.json
+
+      - name: Install dependencies
+        working-directory: webapp
+        run: npm ci
+
+      - name: Unit tests
+        working-directory: webapp
+        run: npm test
+
+      # Covers typecheck, repo-level script/skill checks, and the production
+      # build; also re-runs the unit tests as part of the single entrypoint.
+      - name: Smoke test
+        run: bash scripts/smoke-test.sh

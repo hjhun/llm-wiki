@@ -1,0 +1,203 @@
+/**
+ * Pure decision logic for the ingest loop driver: when to halt, how to detect
+ * progress between rounds, and how to render the per-iteration continuation
+ * prompt and state summary. No filesystem, no CLI, no timers — every input is
+ * passed in, so the loop's control flow is fully unit-testable.
+ *
+ * Extracted verbatim from ingest-loop.ts, which re-exports these names so
+ * existing `@/lib/ingest-loop` imports are unaffected.
+ */
+
+import { normalizeRawScope } from "./scope";
+import type { ProgressSnapshot, StateSummary } from "./types";
+
+export function ingestMadeProgress(
+  before: ProgressSnapshot,
+  after: ProgressSnapshot,
+): boolean {
+  return (
+    after.subChunksDone > before.subChunksDone ||
+    after.leavesDone > before.leavesDone ||
+    after.sourcePagesWritten > before.sourcePagesWritten ||
+    after.sourcePagesMissing < before.sourcePagesMissing ||
+    after.codeOutputsWritten > before.codeOutputsWritten ||
+    after.codeLeavesMissingOutputs < before.codeLeavesMissingOutputs ||
+    after.codeFilePagesMissing < before.codeFilePagesMissing ||
+    after.codeDirectoryIndexesMissing < before.codeDirectoryIndexesMissing ||
+    (after.mergeDone && !before.mergeDone) ||
+    // A merge pass drained a parent from merge_pass.pending_parents — real
+    // progress even though no sub-chunk or leaf counter moved.
+    after.mergePendingParents < before.mergePendingParents
+  );
+}
+
+export function newlyDoneLeaves(
+  before: ProgressSnapshot,
+  after: ProgressSnapshot,
+): string[] {
+  const prev = new Set(before.doneLeaves);
+  return after.doneLeaves.filter((p) => !prev.has(p));
+}
+
+export type LoopDecision =
+  | { halt: false }
+  | {
+      halt: true;
+      kind: "normal" | "error" | "stopped" | "capped" | "stalled";
+      reason: string;
+    };
+
+/**
+ * Consecutive progress-free rounds tolerated before the loop is declared
+ * stalled. A stuck `in_progress` sub-chunk or a stale `.lock` would otherwise
+ * spin every remaining iteration up to `maxIterations`.
+ */
+export const LOOP_STAGNATION_LIMIT = 3;
+
+export function decideLoopHalt(input: {
+  exitCode: number;
+  summary: StateSummary | null;
+  mergeDone: boolean;
+  mergePending: boolean;
+  idleRounds: number;
+  stopRequested: boolean;
+  iteration: number;
+  maxIter: number;
+  sourcePagesMissing?: number;
+  codeLeavesMissingOutputs?: number;
+  codeFilePagesMissing?: number;
+  codeDirectoryIndexesMissing?: number;
+}): LoopDecision {
+  if (input.exitCode !== 0) {
+    return {
+      halt: true,
+      kind: "error",
+      reason: `CLI exitCode=${input.exitCode}`,
+    };
+  }
+  if (input.summary && input.summary.error > 0) {
+    return {
+      halt: true,
+      kind: "error",
+      reason: `sub-chunk ${input.summary.error}건이 error 상태로 종료`,
+    };
+  }
+  if (input.stopRequested) {
+    return { halt: true, kind: "stopped", reason: "사용자 Stop 요청" };
+  }
+  if (input.iteration >= input.maxIter) {
+    return {
+      halt: true,
+      kind: "capped",
+      reason: `최대 반복 ${input.maxIter}회에 도달`,
+    };
+  }
+  // Completion: every leaf is done and no merge work is outstanding.
+  // This must NOT gate on `mergeDone` alone. `merge_pass.status` only flips to
+  // "done" after a merge pass drains `pending_parents`; a run with no parent to
+  // merge (single leaf, already-ingested scope, empty raw/) leaves the status
+  // at "idle" forever. Gating on `mergeDone` then makes the loop spin to
+  // maxIter even though every worker already reports the work complete.
+  if (
+    input.summary &&
+    input.summary.pending === 0 &&
+    input.summary.in_progress === 0 &&
+    input.summary.partial === 0 &&
+    (input.sourcePagesMissing ?? 0) === 0 &&
+    (input.codeLeavesMissingOutputs ?? 0) === 0 &&
+    (input.codeFilePagesMissing ?? 0) === 0 &&
+    (input.codeDirectoryIndexesMissing ?? 0) === 0 &&
+    (input.mergeDone || !input.mergePending)
+  ) {
+    return {
+      halt: true,
+      kind: "normal",
+      reason: input.mergeDone
+        ? `모든 leaf 완료 + merge pass done (${input.summary.done}/${input.summary.total})`
+        : `모든 leaf 완료 · 남은 merge 작업 없음 (${input.summary.done}/${input.summary.total})`,
+    };
+  }
+  if (
+    input.idleRounds >= LOOP_STAGNATION_LIMIT &&
+    ((input.sourcePagesMissing ?? 0) > 0 ||
+      (input.codeLeavesMissingOutputs ?? 0) > 0 ||
+      (input.codeFilePagesMissing ?? 0) > 0 ||
+      (input.codeDirectoryIndexesMissing ?? 0) > 0)
+  ) {
+    return {
+      halt: true,
+      kind: "stalled",
+      reason:
+        `ingest 산출물 누락 ` +
+        `(source leaves=${input.sourcePagesMissing ?? 0}, ` +
+        `code leaf progress=${input.codeLeavesMissingOutputs ?? 0}, ` +
+        `untracked code files=${input.codeFilePagesMissing ?? 0}, ` +
+        `legacy code directories=${input.codeDirectoryIndexesMissing ?? 0})이 ` +
+        `연속 ${input.idleRounds}개 라운드에서 해결되지 않아 중단`,
+    };
+  }
+  // Stagnation guard: aside from error/stop/cap and the completion branch
+  // above, the loop has no other exit. If several consecutive rounds advance
+  // nothing — a stuck `in_progress` sub-chunk, a stale `.lock`, or a merge
+  // pass that cannot proceed — spinning to maxIter is pure waste. Halt and let
+  // the manager report the stall.
+  if (input.idleRounds >= LOOP_STAGNATION_LIMIT) {
+    return {
+      halt: true,
+      kind: "stalled",
+      reason: `연속 ${input.idleRounds}개 라운드에서 진행이 없어 중단`,
+    };
+  }
+  return { halt: false };
+}
+
+export function buildLoopContinuationPrompt(input: {
+  sessionPath: string;
+  iteration: number;
+  progressRef: string | null;
+  entityRegistryRef?: string | null;
+  sourcePageStatusRef?: string | null;
+  codeWikiStatusRef?: string | null;
+  rawScope?: string | null;
+}): string {
+  const rawScope = normalizeRawScope(input.rawScope);
+  const lines: string[] = [
+    "You are operating an LLM Wiki repository.",
+    "Read CLAUDE.md/AGENTS.md in this repository and follow .agents/skills/wiki-ingest/SKILL.md. If additional skills are needed, project .agents/skills takes priority, then ~/.agents/skills, then host-specific global skill directories such as ~/.codex/skills or ~/.claude/skills.",
+    `Active session log: sessions/${input.sessionPath}`,
+  ];
+  if (rawScope) {
+    lines.push(
+      `Original /ingest-loop target scope: ${rawScope}. Continue processing exactly this scope; do not pick pending leaves outside it unless the merge parent is needed for this scope.`,
+    );
+  }
+  if (input.progressRef) lines.push(input.progressRef);
+  if (input.entityRegistryRef) lines.push(input.entityRegistryRef);
+  if (input.sourcePageStatusRef) lines.push(input.sourcePageStatusRef);
+  if (input.codeWikiStatusRef) lines.push(input.codeWikiStatusRef);
+  lines.push(
+    `This is /ingest-loop iteration ${input.iteration}. Pick the next pending sub-chunk, merge-pass parent, or missing direct-file pseudo-leaf enumeration from wiki/.progress/ingest/.state.json${rawScope ? ` within ${rawScope}` : ""} and process exactly one unit per the wiki-ingest skill, then exit. Do not loop yourself — the backend will spawn the next iteration. For code/mixed leaves, do not create mirrored wiki/code file pages as a repair task; graphify runs separately after ingest progress is complete.`,
+    "",
+    "===== CONVERSATION =====",
+    rawScope ? `User: /ingest-loop ${rawScope}` : "User: /ingest",
+    "",
+    "Respond now as the assistant.",
+  );
+  return lines.join("\n");
+}
+
+export function formatStateSummary(s: StateSummary): string {
+  const counts =
+    `leaves ${s.done}/${s.total} done` +
+    (s.in_progress ? ` · ${s.in_progress} in_progress` : "") +
+    (s.partial ? ` · ${s.partial} partial` : "") +
+    (s.pending ? ` · ${s.pending} pending` : "") +
+    (s.error ? ` · ${s.error} error` : "");
+  if (s.active_leaf) {
+    const sc = s.active_subchunk
+      ? ` (sub-chunk ${s.active_subchunk.id} ${s.active_subchunk.status})`
+      : "";
+    return `${counts} · ${s.active_leaf}${sc}`;
+  }
+  return counts;
+}

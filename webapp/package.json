@@ -11,7 +11,13 @@
     "start": "node scripts/next-from-config.mjs start",
     "start:lan": "node scripts/next-from-config.mjs start --lan",
     "lint": "next lint",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "wiki:sources-index": "node ../scripts/build-sources-index.mjs --root ..",
+    "wiki:sources-index:check": "node ../scripts/build-sources-index.mjs --root .. --check",
+    "wiki:mini-lint": "node ../scripts/mini-lint.mjs --root ..",
+    "wiki:mini-lint:check": "node ../scripts/mini-lint.mjs --root .. --check"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
@@ -36,7 +42,8 @@
     "autoprefixer": "^10.4.20",
     "postcss": "^8.4.49",
     "tailwindcss": "^3.4.17",
-    "typescript": "^5.7.2"
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.9"
   },
   "engines": {
     "node": ">=20.0.0"

@@ -592,6 +592,24 @@ wiki/lint/YYYY-MM-DD.md
 
 같은 날 여러 번 실행하면 기존 리포트를 덮어쓰지 않고 `_2`, `_3` 같은 suffix를 붙여 새 파일을 만들어야 합니다.
 
+### 결정적 헬퍼 스크립트
+
+일부 유지보수 작업은 LLM 실행마다 결과가 표류하지 않도록 결정적 Node 스크립트로
+구현되어 있습니다. `webapp/`에서 npm 스크립트로 노출되며(각 스크립트는 `--root ..`를
+전달해 저장소 루트를 대상으로 동작):
+
+```bash
+cd webapp
+npm run wiki:sources-index          # frontmatter로 wiki/sources/index.md 재생성
+npm run wiki:sources-index:check    # 카탈로그가 최신인지 검증 (오래되면 exit 1)
+npm run wiki:mini-lint              # post-merge 구조 린트 리포트 작성
+npm run wiki:mini-lint:check        # 중복/끊긴 링크/orphan이 있으면 exit 1
+```
+
+`:check` 변형은 파일을 변경하지 않는 게이트로, CI나 pre-merge 훅에 적합합니다.
+`wiki:mini-lint`는 유사 중복 페이지, 끊긴 wikilink, orphan 합성 페이지를 점검하며,
+위의 LLM `/lint` 워크플로가 더 깊은 의미 수준 점검을 담당합니다.
+
 ### 자동 Lint
 
 자동 Lint는 **Settings**에서 설정합니다. 두 가지 신호를 사용합니다.

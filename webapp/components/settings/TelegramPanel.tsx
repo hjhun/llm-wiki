@@ -24,6 +24,7 @@ type StatusPayload = {
     dispatched: number;
     rejected: number;
     skipped: number;
+    throttled: number;
     errors: number;
     lastWebhookAt: string | null;
     lastDispatchAt: string | null;
@@ -869,6 +870,7 @@ function StatusPanel(props: {
             <Stat label={t.settings.telegramStatDispatched} value={String(status.stats.dispatched)} />
             <Stat label={t.settings.telegramStatRejected} value={String(status.stats.rejected)} />
             <Stat label={t.settings.telegramStatSkipped} value={String(status.stats.skipped)} />
+            <Stat label={t.settings.telegramStatThrottled} value={String(status.stats.throttled)} />
             <Stat label={t.settings.telegramStatErrors} value={String(status.stats.errors)} />
             <Stat label={t.settings.telegramStatLastWebhook} value={formatTimestamp(status.stats.lastWebhookAt)} />
             <Stat label={t.settings.telegramStatLastDispatch} value={formatTimestamp(status.stats.lastDispatchAt)} />

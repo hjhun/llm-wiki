@@ -198,6 +198,9 @@ log "checking setup.sh idempotent no-network path"
 log "checking webapp typecheck"
 (cd "${WEBAPP_DIR}" && npm run typecheck)
 
+log "running webapp unit tests"
+(cd "${WEBAPP_DIR}" && npm test)
+
 log "checking webapp production build"
 (cd "${WEBAPP_DIR}" && npm run build)
 
