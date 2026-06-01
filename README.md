@@ -167,6 +167,11 @@ Expected result:
 
 For a full walkthrough, read [docs/GUIDE.md](./docs/GUIDE.md). 한국어 안내서는 [docs/GUIDE_ko.md](./docs/GUIDE_ko.md)를 참고하세요.
 
+Want to see the output shape before running anything? Open
+[`examples/mini-wiki/`](./examples/mini-wiki/) — a hand-curated snapshot of
+two `raw/` articles ingested end-to-end (source pages, concept pages,
+generated source catalog, log).
+
 ## Core Workflows
 
 Run these from the **Chat** tab:
