@@ -122,7 +122,13 @@ Answer the user's question in this order.
 5. If a source is not in the wiki, explicitly say "source unknown" or withhold the answer.
 6. Always append these two lines at the end:
    - **Cited pages**: `[[wiki/sources/articles/foo]], [[wiki/concepts/bar]]` ...
-   - **Save**: `[ ] wiki/answers/<suggested-slug>.md` toggle, which feeds the answer back when the user clicks it.
+   - **Save**: a visible line `Save to \`wiki/answers/<suggested-slug>.md\`?` followed immediately by an HTML comment marker on its own line:
+
+     ```html
+     <!-- clio:save-answer slug="<suggested-slug>" question="<original user question, single-line, double-quotes escaped as &quot;>" -->
+     ```
+
+     The CLIO web chat detects this marker and renders a 1-click Save button under the answer; the visible line is the fallback for non-web clients. Do not emit the marker if `--save` was already applied or if the answer explicitly declined saving (e.g. trivial, speculative, or sensitive).
 
 ### Step 4 - Feedback into the Wiki (User Consent or `--save`)
 1. Create `wiki/answers/<slug>.md` with frontmatter:
@@ -167,8 +173,14 @@ Skill behavior:
 2. If qmd or graph context is active, use it to refine or expand the candidate list.
 3. Read candidate pages and find the chunk-limit/context-protection rationale.
 4. Write a 3-4 paragraph Markdown answer with two citations and concise bullets.
-5. Add a save toggle at the end: `wiki/answers/why-merge-pass.md` [ ].
-6. If the user clicks the toggle, feed the answer back and update `index.md` and `log.md`.
+5. Add a save suggestion at the end:
+
+   ```
+   Save to `wiki/answers/why-merge-pass.md`?
+   <!-- clio:save-answer slug="why-merge-pass" question="Why is the merge pass necessary in the LLM Wiki pattern?" -->
+   ```
+
+6. If the user clicks the rendered Save button (or replies with `/query --save <question>`), feed the answer back and update `index.md` and `log.md`.
 
 ## Related Skills
 

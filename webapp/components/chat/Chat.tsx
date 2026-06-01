@@ -799,6 +799,10 @@ export default function Chat() {
             messages={active?.messages ?? []}
             pending={pending}
             progress={progress}
+            onSaveAnswer={(question) => {
+              if (pending) return;
+              void send(`/query --save ${question}`);
+            }}
           />
         </div>
 

@@ -9,6 +9,7 @@ import {
   CircleDotDashed,
   LoaderCircle,
   RadioTower,
+  Save,
   Sparkles,
   Terminal,
   UserRound,
@@ -36,6 +37,35 @@ function formatDuration(ms?: number): string | null {
   if (ms < 1000) return `${ms}ms`;
   const seconds = Math.round(ms / 100) / 10;
   return `${seconds}s`;
+}
+
+const SAVE_ANSWER_MARKER_RE =
+  /<!--\s*clio:save-answer\s+([^>]+?)\s*-->/i;
+
+function decodeMarkerAttr(value: string): string {
+  return value
+    .replace(/&quot;/g, '"')
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">");
+}
+
+function parseSaveAnswerMarker(
+  content: string,
+): { slug: string; question: string; cleaned: string } | null {
+  const match = SAVE_ANSWER_MARKER_RE.exec(content);
+  if (!match) return null;
+  const attrs = match[1];
+  const slug = /slug\s*=\s*"([^"]*)"/.exec(attrs)?.[1] ?? "";
+  const questionRaw = /question\s*=\s*"([^"]*)"/.exec(attrs)?.[1] ?? "";
+  const slugTrim = slug.trim();
+  const question = decodeMarkerAttr(questionRaw).trim();
+  if (!slugTrim || !question) return null;
+  // Strip the marker and the immediately preceding "Save to ..." fallback line
+  // so the rendered answer is clean.
+  let cleaned = content.replace(SAVE_ANSWER_MARKER_RE, "").trimEnd();
+  cleaned = cleaned.replace(/(?:^|\n)\s*Save to `wiki\/answers\/[^`]+`\?\s*$/i, "");
+  return { slug: slugTrim, question, cleaned: cleaned.trimEnd() };
 }
 
 function agentStatusLabel(status: string): string {
@@ -67,10 +97,12 @@ export default function MessageList({
   messages,
   pending,
   progress,
+  onSaveAnswer,
 }: {
   messages: ChatMessage[];
   pending: boolean;
   progress: ChatProgress | null;
+  onSaveAnswer?: (question: string, slug: string) => void;
 }) {
   const { t } = useLanguage();
   const endRef = useRef<HTMLDivElement | null>(null);
@@ -108,6 +140,11 @@ export default function MessageList({
           m.role === "user" ? UserRound : m.role === "assistant" ? Bot : Terminal;
         const liveMermaid =
           pending && m.role === "assistant" && m.agent === "streaming";
+        const saveMarker =
+          m.role === "assistant" && !pending
+            ? parseSaveAnswerMarker(m.content)
+            : null;
+        const displayContent = saveMarker ? saveMarker.cleaned : m.content;
         return (
           <article
             key={i}
@@ -129,12 +166,27 @@ export default function MessageList({
             </header>
             <div className="prose prose-theme max-w-none text-[13.5px]">
               <MarkdownContent
-                content={m.content}
+                content={displayContent}
                 emptyText={t.chat.empty}
                 liveMermaid={liveMermaid}
               />
             </div>
-            <div className="mt-2 flex justify-end">
+            <div className="mt-2 flex items-center justify-between gap-2">
+              {saveMarker && onSaveAnswer ? (
+                <button
+                  type="button"
+                  onClick={() =>
+                    onSaveAnswer(saveMarker.question, saveMarker.slug)
+                  }
+                  className="inline-flex items-center gap-1.5 rounded-md border border-line bg-[rgb(var(--color-bg-subtle)_/_0.6)] px-2.5 py-1 font-mono text-[11px] uppercase tracking-widest text-ink-dim transition hover:border-ink-dim hover:text-ink"
+                  title={`Feed this answer back to wiki/answers/${saveMarker.slug}.md`}
+                >
+                  <Save aria-hidden className="h-3 w-3" />
+                  Save to wiki/answers/{saveMarker.slug}.md
+                </button>
+              ) : (
+                <span />
+              )}
               <MessageCopyButton
                 content={m.content}
                 copyLabel={t.chat.copyMessage}
