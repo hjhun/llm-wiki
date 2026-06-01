@@ -6,6 +6,7 @@
 import { getAutoIngestManager } from "./lib/auto-ingest/manager";
 import { getAutoLintManager } from "./lib/auto-lint/manager";
 import { getAutomationManager } from "./lib/automation/manager";
+import { rebootPolling as rebootTelegramPolling } from "./lib/telegram/polling";
 
 export async function bootAutoIngest(): Promise<void> {
   try {
@@ -35,6 +36,17 @@ export async function bootAutomation(): Promise<void> {
   } catch (err) {
     console.warn(
       "[automation] boot failed:",
+      err instanceof Error ? err.message : err,
+    );
+  }
+}
+
+export async function bootTelegramPolling(): Promise<void> {
+  try {
+    await rebootTelegramPolling();
+  } catch (err) {
+    console.warn(
+      "[telegram] polling boot failed:",
       err instanceof Error ? err.message : err,
     );
   }

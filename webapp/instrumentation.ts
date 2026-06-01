@@ -14,5 +14,6 @@ export async function register(): Promise<void> {
     await mod.bootAutoIngest();
     await mod.bootAutoLint();
     await mod.bootAutomation();
+    await mod.bootTelegramPolling();
   }
 }

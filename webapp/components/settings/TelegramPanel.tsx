@@ -37,6 +37,14 @@ type StatusPayload = {
     lastErrorAt: string | null;
   } | null;
   webhookError: string | null;
+  polling: {
+    status: "stopped" | "starting" | "running" | "error" | "disabled";
+    startedAt: string | null;
+    lastPolledAt: string | null;
+    lastErrorAt: string | null;
+    lastErrorMessage: string | null;
+    consecutiveErrors: number;
+  };
   allowlistCount: number;
   pendingCount: number;
 };
@@ -75,6 +83,7 @@ export default function TelegramPanel({
     | "saveToken"
     | "register"
     | "unregister"
+    | "polling"
     | "approve"
     | "revoke"
     | "refresh"
@@ -180,10 +189,10 @@ export default function TelegramPanel({
   }
 
   async function callSetup(
-    action: "register" | "unregister",
+    action: "register" | "unregister" | "use-polling",
     url?: string,
   ) {
-    setBusy(action);
+    setBusy(action === "use-polling" ? "polling" : action);
     try {
       const res = await fetch("/api/telegram/setup", {
         method: "POST",
@@ -204,16 +213,16 @@ export default function TelegramPanel({
       onChange({
         ...draft,
         mode: action === "register" ? "webhook" : "polling",
-        webhookPublicUrl: action === "register" ? url ?? draft.webhookPublicUrl : null,
-        webhookSecretSet:
-          action === "register"
-            ? true
-            : false,
+        webhookPublicUrl:
+          action === "register" ? url ?? draft.webhookPublicUrl : null,
+        webhookSecretSet: action === "register" ? true : false,
       });
       onNotice(
         action === "register"
           ? t.settings.telegramWebhookRegistered
-          : t.settings.telegramWebhookUnregistered,
+          : action === "use-polling"
+            ? t.settings.telegramPollingSwitched
+            : t.settings.telegramWebhookUnregistered,
       );
       void refreshStatus();
     } catch (err) {
@@ -363,6 +372,7 @@ export default function TelegramPanel({
           setWebhookUrl={setWebhookUrl}
           register={(url) => callSetup("register", url)}
           unregister={() => callSetup("unregister")}
+          usePolling={() => callSetup("use-polling")}
           t={t}
         />
 
@@ -508,14 +518,30 @@ function WebhookSection(props: {
   setWebhookUrl: (next: string) => void;
   register: (url: string) => void;
   unregister: () => void;
+  usePolling: () => void;
   t: ReturnType<typeof useLanguage>["t"];
 }) {
-  const { draft, webhookUrl, busy, setWebhookUrl, register, unregister, t } = props;
+  const {
+    draft,
+    webhookUrl,
+    busy,
+    setWebhookUrl,
+    register,
+    unregister,
+    usePolling,
+    t,
+  } = props;
   const isRegistered = draft.mode === "webhook" && draft.webhookSecretSet;
+  const isPolling = draft.mode === "polling";
   return (
     <div className="rounded border border-line bg-bg px-3 py-3">
-      <div className="text-xs uppercase tracking-widest text-ink-faint">
-        {t.settings.telegramWebhookSection}
+      <div className="flex items-center justify-between">
+        <div className="text-xs uppercase tracking-widest text-ink-faint">
+          {t.settings.telegramDeliverySection}
+        </div>
+        <div className="font-mono text-[11px] uppercase text-ink">
+          {draft.mode}
+        </div>
       </div>
       <p className="mt-1 text-[11px] text-ink-faint">
         {t.settings.telegramWebhookHint}
@@ -560,13 +586,32 @@ function WebhookSection(props: {
                 : t.settings.telegramWebhookUnregister}
             </button>
           ) : null}
+          {!isPolling ? (
+            <button
+              type="button"
+              className="rounded border border-line bg-bg-subtle px-2 py-1 text-ink-dim hover:text-ink disabled:opacity-50"
+              onClick={usePolling}
+              disabled={busy === "polling" || !draft.botTokenSet}
+            >
+              {busy === "polling"
+                ? t.settings.telegramPollingSwitching
+                : t.settings.telegramPollingUse}
+            </button>
+          ) : null}
         </div>
         <p className="text-[11px] text-ink-faint">
           {t.settings.telegramWebhookHttpsNote}
         </p>
         <p className="text-[11px] text-ink-faint">
+          {t.settings.telegramPollingHint}
+        </p>
+        <p className="text-[11px] text-ink-faint">
           {t.settings.telegramWebhookSecretStatus}:{" "}
-          <span className={draft.webhookSecretSet ? "text-emerald-400" : "text-rose-400"}>
+          <span
+            className={
+              draft.webhookSecretSet ? "text-emerald-400" : "text-rose-400"
+            }
+          >
             {draft.webhookSecretSet
               ? t.settings.telegramWebhookSecretSet
               : t.settings.telegramWebhookSecretMissing}
@@ -797,6 +842,27 @@ function StatusPanel(props: {
               {t.settings.telegramStatusUpstreamError}: {status.webhookError}
             </div>
           ) : null}
+          <div className="rounded border border-line px-2 py-1">
+            <div className="text-ink-faint">
+              {t.settings.telegramPollingStatus}
+            </div>
+            <div className="font-mono text-ink">
+              {status.polling.status}
+              {status.polling.consecutiveErrors > 0
+                ? ` · ${status.polling.consecutiveErrors} errors`
+                : ""}
+            </div>
+            <div className="text-ink-dim">
+              {t.settings.telegramPollingLastPolled}:{" "}
+              {formatTimestamp(status.polling.lastPolledAt)}
+            </div>
+            {status.polling.lastErrorMessage ? (
+              <div className="text-rose-200">
+                {status.polling.lastErrorMessage} ·{" "}
+                {formatTimestamp(status.polling.lastErrorAt)}
+              </div>
+            ) : null}
+          </div>
           <div className="grid grid-cols-2 gap-x-4 gap-y-1 sm:grid-cols-3">
             <Stat label={t.settings.telegramStatStartedAt} value={formatTimestamp(status.stats.startedAt)} />
             <Stat label={t.settings.telegramStatRequests} value={String(status.stats.webhookRequests)} />

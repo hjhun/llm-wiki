@@ -1,9 +1,11 @@
 import "server-only";
 
+import { z } from "zod";
 import {
   TelegramGetMeResponse,
   TelegramSendMessageResponse,
   TelegramSimpleResponse,
+  TelegramUpdate,
   type TelegramUser,
 } from "./types";
 
@@ -129,6 +131,54 @@ export type SendMessageInput = {
   replyToMessageId?: number;
   disableNotification?: boolean;
 };
+
+const TelegramGetUpdatesResponse = z.object({
+  ok: z.boolean(),
+  result: z.array(TelegramUpdate).optional(),
+  description: z.string().optional(),
+});
+
+export type GetUpdatesInput = {
+  offset?: number;
+  timeoutSec?: number;
+  allowedUpdates?: string[];
+};
+
+/**
+ * Long-poll the Telegram Bot API for new updates. Returns up to 100
+ * updates whose `update_id >= offset`. Telegram blocks the response for
+ * up to `timeoutSec` seconds when no updates are pending, so we set the
+ * fetch timeout slightly higher to cover network latency.
+ */
+export async function getUpdates(
+  token: string,
+  input: GetUpdatesInput = {},
+): Promise<z.infer<typeof TelegramUpdate>[]> {
+  const timeoutSec = input.timeoutSec ?? 30;
+  const raw = await call(
+    token,
+    "getUpdates",
+    {
+      ...(input.offset !== undefined ? { offset: input.offset } : {}),
+      timeout: timeoutSec,
+      allowed_updates: input.allowedUpdates ?? [
+        "message",
+        "edited_message",
+        "channel_post",
+      ],
+    },
+    (timeoutSec + 10) * 1000,
+  );
+  const parsed = TelegramGetUpdatesResponse.safeParse(raw);
+  if (!parsed.success || !parsed.data.ok) {
+    throw new Error(
+      parsed.success
+        ? parsed.data.description ?? "getUpdates failed"
+        : "Unexpected getUpdates response",
+    );
+  }
+  return parsed.data.result ?? [];
+}
 
 export async function sendMessage(
   token: string,

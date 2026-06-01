@@ -37,6 +37,8 @@ export type RouterAction =
       messageId: number;
       question: string;
       permission: "query" | "trusted";
+      /** trusted chats can opt in to writing the answer back to the wiki. */
+      saveToWiki: boolean;
     };
 
 function isApproved(cfg: Config["telegram"], chatId: number) {
@@ -58,6 +60,7 @@ function staticHelpText(): string {
     "/help - 이 도움말",
     "/whoami - 이 chat의 ID 표시 (관리자 승인 신청용)",
     "/reset - 이 chat의 대화 컨텍스트 초기화 (승인된 chat만)",
+    "/query --save <질문> - 답변을 wiki/answers/ 에 저장 (trusted 권한)",
   ].join("\n");
 }
 
@@ -155,12 +158,11 @@ export function classifyIncoming(
         return {
           kind: "static-help",
           chatId,
-          text: "사용법: /query <질문>",
+          text: "사용법: /query <질문>  (또는 /query --save <질문>)",
         };
       }
       question = rest;
     } else {
-      // M2 only handles /query and the static commands above.
       return {
         kind: "static-help",
         chatId,
@@ -169,11 +171,36 @@ export function classifyIncoming(
     }
   }
 
+  // Recognise `--save` as a leading flag on either /query --save … or a
+  // bare `--save …` from a trusted chat. The flag triggers a wiki write
+  // after the answer is generated.
+  let saveToWiki = false;
+  const saveMatch = /^--save\s+/i.exec(question);
+  if (saveMatch) {
+    saveToWiki = true;
+    question = question.slice(saveMatch[0].length).trim();
+  }
+  if (saveToWiki && approved.permission !== "trusted") {
+    return {
+      kind: "static-help",
+      chatId,
+      text: "--save 는 trusted 권한이 부여된 chat에서만 사용할 수 있습니다.",
+    };
+  }
+  if (saveToWiki && !question) {
+    return {
+      kind: "static-help",
+      chatId,
+      text: "사용법: /query --save <질문>",
+    };
+  }
+
   return {
     kind: "query",
     chatId,
     messageId: msg.message_id,
     question,
     permission: approved.permission,
+    saveToWiki,
   };
 }

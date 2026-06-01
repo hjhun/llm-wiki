@@ -8,12 +8,13 @@ import {
   getWebhookInfo,
   setWebhook,
 } from "@/lib/telegram/api";
+import { rebootPolling, stop as stopPolling } from "@/lib/telegram/polling";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 const BodySchema = z.object({
-  action: z.enum(["register", "unregister", "info"]),
+  action: z.enum(["register", "unregister", "info", "use-polling"]),
   /** Required for `register`. Must be the externally reachable HTTPS URL. */
   webhookUrl: z
     .string()
@@ -63,12 +64,34 @@ export async function POST(req: Request) {
       await patchLocalConfig({
         telegram: { ...tg, webhookPublicUrl: null, mode: "polling" },
       });
+      // Re-evaluate polling now that webhook is gone; the manager will
+      // either start (if mode=polling and enabled) or stay stopped.
+      void rebootPolling();
       return NextResponse.json({ ok: true });
     } catch (err) {
       return jsonError(
         err instanceof Error ? err.message : String(err),
         502,
       );
+    }
+  }
+
+  if (parsed.data.action === "use-polling") {
+    try {
+      // Cleanest path: ask Telegram to drop any existing webhook, then
+      // flip our config to polling and reboot the worker.
+      try {
+        await deleteWebhook(tg.botToken);
+      } catch {
+        // Telegram returns an error if no webhook is set, which is fine.
+      }
+      await patchLocalConfig({
+        telegram: { ...tg, mode: "polling", webhookPublicUrl: null },
+      });
+      void rebootPolling();
+      return NextResponse.json({ ok: true });
+    } catch (err) {
+      return jsonError(err instanceof Error ? err.message : String(err), 502);
     }
   }
 
@@ -98,6 +121,11 @@ export async function POST(req: Request) {
         mode: "webhook",
       },
     });
+    // Webhook takes over delivery; stop the polling loop if it was
+    // running. Telegram refuses to send updates through both channels
+    // simultaneously, so leaving the poller alive would just rack up
+    // 409s on every getUpdates call.
+    void stopPolling();
     return NextResponse.json({ ok: true });
   } catch (err) {
     return jsonError(err instanceof Error ? err.message : String(err), 502);

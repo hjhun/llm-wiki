@@ -6,6 +6,7 @@ import { sendMessage } from "./api";
 import { getBotUsername } from "./bot-identity";
 import { appendChatTurn, readChatHistory, resetChatHistory } from "./history";
 import { classifyIncoming, type RouterAction } from "./router";
+import { saveAnswerToWiki } from "./save-answer";
 import {
   noteDispatched,
   noteError,
@@ -224,7 +225,25 @@ async function handleAction(
               .map((s) => s.title || s.path)
               .join(", ")}`
           : "";
-      const replyBody = `${result.answer}${sourcesLine}`;
+      let saveSuffix = "";
+      let savedRelPath: string | null = null;
+      if (action.saveToWiki && action.permission === "trusted") {
+        try {
+          const saved = await saveAnswerToWiki({
+            question: action.question,
+            answer: result.answer,
+            sources: result.sources,
+            chatId: action.chatId,
+          });
+          savedRelPath = saved.relPath;
+          saveSuffix = `\n\n저장됨: \`${saved.relPath}\``;
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          noteError(`save-answer: ${message}`);
+          saveSuffix = `\n\n저장 실패: ${message.slice(0, 200)}`;
+        }
+      }
+      const replyBody = `${result.answer}${sourcesLine}${saveSuffix}`;
       await send(token, action.chatId, replyBody, cfgReplyMaxChars);
       // Persist the turn so the next message keeps context.
       appendChatTurn(
@@ -234,6 +253,7 @@ async function handleAction(
         cfgHistoryTurns,
       );
       noteDispatched();
+      void savedRelPath;
       await appendTelegramSessionLog({
         ...meta,
         kind: "query",

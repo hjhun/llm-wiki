@@ -278,8 +278,16 @@ export const TEXT = {
       telegramTokenClear: "저장된 토큰 삭제",
       telegramTokenCleared: "저장된 토큰을 삭제했습니다.",
       telegramWebhookSection: "Webhook 등록",
+      telegramDeliverySection: "수신 방식",
       telegramWebhookHint:
         "텔레그램이 호출할 외부 공개 URL을 등록합니다. webhook secret은 서버에서 자동 생성/저장되며 매 요청의 X-Telegram-Bot-Api-Secret-Token 헤더로 검증됩니다.",
+      telegramPollingUse: "Polling으로 전환",
+      telegramPollingSwitching: "전환 중...",
+      telegramPollingSwitched: "Polling 모드로 전환했습니다.",
+      telegramPollingHint:
+        "공개 URL 없이 사용하려면 Polling으로 전환하세요. 서버가 getUpdates를 30초 long-poll하며 즉시 dispatch합니다.",
+      telegramPollingStatus: "Polling 워커 상태",
+      telegramPollingLastPolled: "마지막 polling",
       telegramWebhookUrl: "Public Webhook URL",
       telegramWebhookRegister: "Webhook 등록",
       telegramWebhookRegistering: "등록 중...",
@@ -787,8 +795,16 @@ export const TEXT = {
       telegramTokenClear: "Clear stored token",
       telegramTokenCleared: "Stored token cleared.",
       telegramWebhookSection: "Webhook setup",
+      telegramDeliverySection: "Delivery mode",
       telegramWebhookHint:
         "Register the public URL Telegram should call. The webhook secret is generated and stored server-side and is verified on every request via the X-Telegram-Bot-Api-Secret-Token header.",
+      telegramPollingUse: "Switch to polling",
+      telegramPollingSwitching: "Switching...",
+      telegramPollingSwitched: "Switched to polling mode.",
+      telegramPollingHint:
+        "If you cannot expose a public URL, switch to polling. The server long-polls getUpdates for 30 seconds and dispatches immediately.",
+      telegramPollingStatus: "Polling worker status",
+      telegramPollingLastPolled: "Last poll",
       telegramWebhookUrl: "Public webhook URL",
       telegramWebhookRegister: "Register webhook",
       telegramWebhookRegistering: "Registering...",

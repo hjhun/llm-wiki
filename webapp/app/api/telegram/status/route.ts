@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireSession } from "@/lib/api";
 import { loadConfig } from "@/lib/config";
 import { getWebhookInfo } from "@/lib/telegram/api";
+import { snapshotPolling } from "@/lib/telegram/polling";
 import { snapshotStats } from "@/lib/telegram/runtime-state";
 
 export const dynamic = "force-dynamic";
@@ -14,6 +15,7 @@ export async function GET() {
   const cfg = await loadConfig();
   const tg = cfg.telegram;
   const stats = snapshotStats();
+  const polling = snapshotPolling();
 
   let webhook:
     | {
@@ -52,6 +54,7 @@ export async function GET() {
     stats,
     webhook,
     webhookError,
+    polling,
     allowlistCount: tg.allowlist.length,
     pendingCount: tg.pending.length,
   });
