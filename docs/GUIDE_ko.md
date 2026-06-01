@@ -60,7 +60,7 @@ CLIO는 단순히 문서에 채팅하는 도구가 아닙니다. 중요한 결�
 
 `wiki/`는 에이전트가 생성하고 관리하는 지식 저장소입니다.
 
-- `wiki/sources/YYYY/YYYY-MM/<slug>.md` - 원본 자료별 요약 페이지
+- `wiki/sources/<raw-relative-path>.md` - 원본 자료별 요약 페이지 (`raw/` 경로 미러링)
 - `wiki/entities/` 또는 유사 경로 - 사람, 조직, 제품, 프로젝트 같은 개체 페이지
 - `wiki/concepts/` 또는 유사 경로 - 개념, 방법론, 패턴 페이지
 - `wiki/answers/` - 저장한 질의응답 결과
@@ -454,7 +454,7 @@ apply 단계에서는 파일 전체를 `raw/.trash/`로 옮기거나, 원본을 
 성공하면 다음과 같은 파일들이 생성되거나 갱신됩니다.
 
 ```text
-wiki/sources/YYYY/YYYY-MM/<source-summary>.md
+wiki/sources/<raw-relative-path>.md
 wiki/concepts/<concept>.md
 wiki/entities/<entity>.md
 wiki/index.md
@@ -759,7 +759,7 @@ Chat 탭:
 
 예상 결과:
 
-- `wiki/sources/YYYY/YYYY-MM/` 아래 source summary 생성
+- `wiki/sources/<raw-relative-path>.md`에 source summary 생성 (`raw/` 경로 미러링)
 - 관련 concept/entity 페이지 생성 또는 갱신
 - `wiki/index.md` 갱신
 - `wiki/log.md`에 ingest entry append

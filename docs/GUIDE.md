@@ -63,7 +63,7 @@ that should become source candidates. The full conversation still lives under
 
 `wiki/` is where the agent writes generated knowledge:
 
-- `wiki/sources/YYYY/YYYY-MM/<slug>.md` - source summaries
+- `wiki/sources/<raw-relative-path>.md` - source summaries (mirroring the `raw/` path)
 - `wiki/entities/` or similarly named pages - people, organizations, projects, products
 - `wiki/concepts/` or similarly named pages - ideas, patterns, methods
 - `wiki/answers/` - saved query answers
@@ -458,7 +458,7 @@ For careful one-step-at-a-time operation:
 After a successful ingest, expect some or all of:
 
 ```text
-wiki/sources/YYYY/YYYY-MM/<source-summary>.md
+wiki/sources/<raw-relative-path>.md
 wiki/concepts/<concept>.md
 wiki/entities/<entity>.md
 wiki/index.md
@@ -764,7 +764,7 @@ Chat tab:
 
 Expected:
 
-- source summary under `wiki/sources/YYYY/YYYY-MM/`
+- source summary under `wiki/sources/<raw-relative-path>.md` (mirroring the `raw/` path)
 - related concept/entity pages created or updated
 - `wiki/index.md` updated
 - ingest entry appended to `wiki/log.md`

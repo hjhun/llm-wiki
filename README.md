@@ -48,7 +48,7 @@ The important split is ownership:
 | `raw/chat/` | You via Chat | User-approved external captures from Chat, such as browser/search/tool findings, ready for later ingest. |
 | `raw/automation/` | Automations | Draft-only scheduled job records. Treat them as source candidates for later ingest. |
 | `wiki/` | Agent | Generated and maintained Markdown wiki. |
-| `wiki/sources/YYYY/YYYY-MM/` | Agent | One source summary page per original source. |
+| `wiki/sources/<raw-relative-path>.md` | Agent | One source summary page per original source, mirroring the `raw/` path. |
 | `wiki/answers/` | Agent | Saved answers from query workflows. |
 | `wiki/lint/` | Agent | Wiki health reports. |
 | `wiki/graph/` | Agent + graphify | Graph JSON, graph report, partial graph state. |
@@ -160,7 +160,7 @@ Then ask:
 
 Expected result:
 
-- A source summary appears under `wiki/sources/YYYY/YYYY-MM/`.
+- A source summary appears under `wiki/sources/<raw-relative-path>.md` (mirroring the `raw/` path).
 - Related concept/entity pages may be created or updated.
 - `wiki/index.md` and `wiki/log.md` are updated.
 - The query answer cites wiki/source pages.
