@@ -220,6 +220,7 @@ function buildIndex(records, generatedAt) {
     "title: Source Catalog",
     "type: index",
     "tags: [sources, catalog]",
+    "sources: []",
     `updated: ${generatedAt}`,
     "---",
     "",

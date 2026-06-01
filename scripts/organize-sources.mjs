@@ -142,6 +142,7 @@ async function buildPlan() {
     occupied.delete(rel);
     const target = await uniqueTarget(desired, occupied);
     occupied.add(target);
+    if (target === rel) continue;
     moves.push({ from: `wiki/sources/${rel}`, to: `wiki/sources/${target}`, reason });
   }
 
