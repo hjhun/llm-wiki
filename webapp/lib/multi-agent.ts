@@ -17,6 +17,7 @@ import {
   ingestMadeProgress,
   maybeAutoRunGraphify,
   normalizeRawScope,
+  readActionableLeafPaths,
   readIngestStateSummary,
   readProgressSnapshot,
   stopFlagExists,
@@ -270,6 +271,67 @@ function emitAgentProgress(
   });
 }
 
+/**
+ * Partition actionable (pending/partial/in_progress) leaves across workers as
+ * disjoint round-robin buckets. A `null` actionableLeaves input (no `.state.json`
+ * yet) is the bootstrap case: only worker 0 gets unrestricted scope so it can
+ * enumerate; the rest receive empty assignments and will no-op exit.
+ */
+function partitionActionableLeaves(
+  workerCount: number,
+  actionableLeaves: string[] | null,
+): { assignments: (string[] | null)[]; hasState: boolean } {
+  if (workerCount <= 0) return { assignments: [], hasState: actionableLeaves != null };
+  if (actionableLeaves == null) {
+    const assignments: (string[] | null)[] = new Array(workerCount).fill([]);
+    assignments[0] = null;
+    return { assignments, hasState: false };
+  }
+  const assignments: string[][] = Array.from({ length: workerCount }, () => []);
+  for (let i = 0; i < actionableLeaves.length; i += 1) {
+    assignments[i % workerCount].push(actionableLeaves[i]);
+  }
+  return { assignments, hasState: true };
+}
+
+function buildLeafScopeReference(
+  assignedLeaves: string[] | null,
+  hasState: boolean,
+): string {
+  if (assignedLeaves === null) {
+    if (!hasState) {
+      return [
+        "===== ASSIGNED LEAF SCOPE =====",
+        "No prior wiki/.progress/ingest/.state.json exists. You are the bootstrap worker for this round:",
+        "perform leaf enumeration and initial sub-chunk planning per wiki-ingest Step 1, then process at most one sub-chunk.",
+        "Hold the global wiki/.progress/ingest/.lock only for the short enumeration/state-write critical section.",
+      ].join("\n");
+    }
+    return [
+      "===== ASSIGNED LEAF SCOPE =====",
+      "Unrestricted: pick any pending sub-chunk or merge-pass parent under the current raw scope.",
+      "Use a per-leaf lock at wiki/.progress/ingest/leaves/<sha1(leafPath)>.lock for sub-chunk work.",
+      "Hold the global wiki/.progress/ingest/.lock only briefly during enumeration or state-write critical sections.",
+    ].join("\n");
+  }
+  if (assignedLeaves.length === 0) {
+    return [
+      "===== ASSIGNED LEAF SCOPE =====",
+      "Empty assignment: no leaves were partitioned to this worker for this round.",
+      "Exit successfully without performing any ingest work. Do NOT acquire any lock, enumerate leaves, or write state.json.",
+      "The Coordinator will reconcile on the next round.",
+    ].join("\n");
+  }
+  return [
+    "===== ASSIGNED LEAF SCOPE =====",
+    "Process work only within these leaves this round (disjoint from other workers):",
+    ...assignedLeaves.map((p) => `- ${p}`),
+    "Acquire a per-leaf lock at wiki/.progress/ingest/leaves/<sha1(leafPath)>.lock before touching a leaf's sub-chunks; release it on exit.",
+    "Hold the global wiki/.progress/ingest/.lock only briefly when reading/writing wiki/.progress/ingest/.state.json (treat it as a short state mutex, not a long-held run lock).",
+    "Process at most one pending sub-chunk from one assigned leaf this invocation. If all assigned leaves are already done or locked by another worker, exit successfully.",
+  ].join("\n");
+}
+
 function operationPolicy(kind: OrchestratedKind): string {
   if (kind === "lint") {
     return [
@@ -284,7 +346,8 @@ function operationPolicy(kind: OrchestratedKind): string {
       "Code Wiki is part of ingest, not a separate command. During enumeration, classify leaves as prose/code/mixed/ignore and include direct-file pseudo-leaves for code files in non-leaf directories. For code or mixed leaves, write source summaries as provenance and record leaf/sub-chunk progress. Do not mirror the source tree into wiki/code/<project>/ or create one page per code file as a completion requirement; graphify materializes code knowledge in wiki/graph after ingest.",
       "If the progress state shows code-looking raw files not represented in state, treat that as the next unit of work and repair the leaf enumeration. Do not repair a done code/mixed leaf by writing wiki/code file or directory pages.",
       "A symlink located under raw/ is a valid source entry: follow it read-only even if its real target is outside the repository, preserve logical raw/... paths in state/citations, and reject only broken links or loops.",
-      "If wiki/.progress/ingest/.lock is held by another live process, report that you are standing by and exit successfully. The Coordinator will launch the next round.",
+      "Honor your ASSIGNED LEAF SCOPE strictly: only touch leaves listed in your assignment (or any pending leaf if unrestricted). Use a per-leaf lock at wiki/.progress/ingest/leaves/<sha1(leafPath)>.lock for sub-chunk work; the global wiki/.progress/ingest/.lock is only a short state-mutex for enumeration/state-write windows.",
+      "If a per-leaf lock is already held by another live process, skip that leaf and try the next assigned leaf. If all assigned leaves are blocked or already done, exit successfully without writing anything.",
       "Do NOT run wiki-graphify and do NOT write anything under wiki/graph/. The backend triggers graph updates as separate invocations only after all ingest work and merge passes are complete.",
     ].join("\n");
   }
@@ -294,7 +357,8 @@ function operationPolicy(kind: OrchestratedKind): string {
     "Code Wiki is part of ingest, not a separate command. During enumeration, classify leaves as prose/code/mixed/ignore and include direct-file pseudo-leaves for code files in non-leaf directories. For code or mixed leaves, write source summaries as provenance and record leaf/sub-chunk progress. Do not mirror the source tree into wiki/code/<project>/ or create one page per code file as a completion requirement; graphify materializes code knowledge in wiki/graph after ingest.",
     "If the progress state shows code-looking raw files not represented in state, treat that as the next unit of work and repair the leaf enumeration. Do not repair a done code/mixed leaf by writing wiki/code file or directory pages.",
     "A symlink located under raw/ is a valid source entry: follow it read-only even if its real target is outside the repository, preserve logical raw/... paths in state/citations, and reject only broken links or loops.",
-    "If wiki/.progress/ingest/.lock is held by another live process, report that you are standing by and exit successfully.",
+    "Honor your ASSIGNED LEAF SCOPE strictly: only touch leaves listed in your assignment (or any pending leaf if unrestricted). Use a per-leaf lock at wiki/.progress/ingest/leaves/<sha1(leafPath)>.lock for sub-chunk work; the global wiki/.progress/ingest/.lock is only a short state-mutex for enumeration/state-write windows.",
+    "If a per-leaf lock is already held by another live process, skip that leaf and try the next assigned leaf. If all assigned leaves are blocked or already done, exit successfully without writing anything.",
     "Do NOT run wiki-graphify and do NOT write anything under wiki/graph/. The backend triggers graph updates as separate invocations only after all ingest work and merge passes are complete.",
   ].join("\n");
 }
@@ -308,6 +372,7 @@ function wrapWorkerPrompt(input: {
   entityRegistryRef?: string | null;
   sourcePageStatusRef?: string | null;
   codeWikiStatusRef?: string | null;
+  leafScopeRef?: string | null;
 }): string {
   const lines = [
     "You are operating as a named worker in an LLM Wiki multi-agent run.",
@@ -329,6 +394,9 @@ function wrapWorkerPrompt(input: {
   }
   if (input.codeWikiStatusRef) {
     lines.push(input.codeWikiStatusRef);
+  }
+  if (input.leafScopeRef) {
+    lines.push(input.leafScopeRef);
   }
   lines.push("", "===== COORDINATOR-PROVIDED TASK =====", input.basePrompt);
   return lines.join("\n");
@@ -368,6 +436,13 @@ async function runWorkerBatch(input: {
     input.kind === "ingest" || input.kind === "ingest-loop"
       ? await buildSourcePageStatusReference({ rawScope: input.rawScope })
       : null;
+  const isIngest = input.kind === "ingest" || input.kind === "ingest-loop";
+  const actionableLeaves = isIngest
+    ? await readActionableLeafPaths(input.rawScope ?? null)
+    : null;
+  const partition = isIngest
+    ? partitionActionableLeaves(input.workers.length, actionableLeaves)
+    : null;
   for (const worker of input.workers) {
     emitAgentProgress(input.onAgentProgress, worker, {
       status: "assigned",
@@ -376,6 +451,12 @@ async function runWorkerBatch(input: {
   }
   return Promise.all(
     input.workers.map(async (worker): Promise<WorkerRun> => {
+      const leafScopeRef = partition
+        ? buildLeafScopeReference(
+            partition.assignments[worker.index] ?? [],
+            partition.hasState,
+          )
+        : null;
       const prompt = wrapWorkerPrompt({
         basePrompt: input.basePrompt,
         kind: input.kind,
@@ -385,6 +466,7 @@ async function runWorkerBatch(input: {
         entityRegistryRef,
         sourcePageStatusRef,
         codeWikiStatusRef,
+        leafScopeRef,
       });
       const started = Date.now();
       emitAgentProgress(input.onAgentProgress, worker, {

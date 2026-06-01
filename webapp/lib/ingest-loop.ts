@@ -17,6 +17,7 @@ export const PROGRESS_STATE_PATH = "wiki/.progress/ingest/.state.json";
 export const PROGRESS_STOP_PATH = "wiki/.progress/ingest/.stop";
 export const PROGRESS_STOP_DIR = "wiki/.progress/ingest/stops";
 export const PROGRESS_LOCK_PATH = "wiki/.progress/ingest/.lock";
+export const PROGRESS_LEAVES_LOCK_DIR = "wiki/.progress/ingest/leaves";
 export const WIKI_LOG_REL = "wiki/log.md";
 export const WIKI_INDEX_REL = "wiki/index.md";
 
@@ -909,9 +910,20 @@ export async function clearStopFlag(sessionPath?: string): Promise<void> {
 }
 
 export async function lockFileExists(): Promise<boolean> {
+  // "Busy" under the two-tier lock model means either the global state mutex
+  // is held (enumeration / state-write / merge-pass) OR at least one per-leaf
+  // lock is held by an active worker. Both indicate an in-flight ingest.
   try {
     await fs.access(path.join(PROJECT_ROOT, PROGRESS_LOCK_PATH));
     return true;
+  } catch {
+    // fall through to per-leaf check
+  }
+  try {
+    const entries = await fs.readdir(
+      path.join(PROJECT_ROOT, PROGRESS_LEAVES_LOCK_DIR),
+    );
+    return entries.some((name) => name.endsWith(".lock"));
   } catch {
     return false;
   }
@@ -1139,6 +1151,52 @@ export function summarizeIngestState(
   }
   if (options.sessionPath && summary.total === 0) return null;
   return summary;
+}
+
+/**
+ * Read pending or partial leaf paths from `.state.json`, optionally filtered by
+ * a raw-scope prefix. Returns `null` when the state file does not yet exist
+ * (typical bootstrap before the first enumeration). Returns an empty array
+ * when the file exists but no actionable leaves remain.
+ */
+export async function readActionableLeafPaths(
+  rawScope?: string | null,
+): Promise<string[] | null> {
+  let raw: string;
+  try {
+    raw = await fs.readFile(
+      path.join(PROJECT_ROOT, PROGRESS_STATE_PATH),
+      "utf8",
+    );
+  } catch {
+    return null;
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+  if (
+    !parsed ||
+    typeof parsed !== "object" ||
+    !("leaves" in parsed) ||
+    typeof (parsed as { leaves: unknown }).leaves !== "object" ||
+    (parsed as { leaves: unknown }).leaves == null
+  ) {
+    return [];
+  }
+  const leaves = (parsed as { leaves: Record<string, unknown> }).leaves;
+  const actionable: string[] = [];
+  for (const [leafPath, leafValue] of Object.entries(leaves)) {
+    const leaf = (leafValue ?? {}) as Record<string, unknown>;
+    const status = typeof leaf.status === "string" ? leaf.status : "pending";
+    if (status === "done" || status === "stale" || status === "error") continue;
+    if (!leafMatchesScope(leafPath, leaf, rawScope)) continue;
+    actionable.push(leafPath);
+  }
+  actionable.sort();
+  return actionable;
 }
 
 export function formatStateSummary(s: StateSummary): string {

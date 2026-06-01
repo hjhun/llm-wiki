@@ -164,12 +164,18 @@ Use the nearest project manifest or the first directory under `raw/` as the
      outside the webapp/CLI adapter, create one chat log session file
      `sessions/<YYYY-MM-DD>/<HHMMSS>_ingest_<subject>.md` (frontmatter only).
    - This file holds the conversation, not progress.
-2. Ensure `wiki/.progress/ingest/` exists. Create `leaves/`, `tmp/` subfolders if missing.
-3. Attempt to acquire `wiki/.progress/ingest/.lock`:
-   - File contents: `{"pid": <int>, "started_at": <ISO8601>, "session": "<rel path>"}`.
-   - Write via `tmp/<rand>.lock` then rename — atomic on POSIX.
-   - If `.lock` already exists and `pid` is alive, **abort** with a chat message: "Another `/ingest` is in progress (pid=…, session=…). Wait for it to finish or remove the lock manually." Do not proceed.
-4. Read `wiki/.progress/ingest/.state.json` if it exists. If `version` mismatches the current SKILL version, run the migration in §State Migration before proceeding.
+2. Ensure `wiki/.progress/ingest/` exists. Create `leaves/`, `tmp/` subfolders if missing. The `leaves/` subfolder holds per-leaf lock files (one per leaf currently being processed); it is also reused by graphify state but the lock subset is owned by ingest workers.
+3. Honor any `ASSIGNED LEAF SCOPE` block in the prompt:
+   - If the block lists specific leaves, restrict all sub-chunk work in this invocation to those leaves.
+   - If the block is empty (no leaves assigned for this round), exit successfully without acquiring any lock, writing state, or enumerating leaves.
+   - If the block is absent or marks the scope as Unrestricted, operate normally over the requested raw scope.
+4. Acquire locks with the two-tier protocol:
+   - **Global state mutex** `wiki/.progress/ingest/.lock` is a *short* critical-section mutex around enumeration and `.state.json` read-modify-write windows only. File contents: `{"pid": <int>, "started_at": <ISO8601>, "session": "<rel path>", "phase": "state-write" | "enumerate" | "merge-pass"}`. Write via `tmp/<rand>.lock` then rename — atomic on POSIX. Release immediately when the critical section ends; never hold it across LLM file reads or sub-chunk processing.
+   - **Per-leaf lock** `wiki/.progress/ingest/leaves/<sha1(leafPath)>.lock` guards sub-chunk processing for a single leaf. File contents: `{"pid": <int>, "started_at": <ISO8601>, "session": "<rel path>", "leaf_path": "<raw/.../>"}`. Acquire it before reading any file in the leaf, release it on exit (success, error, or no-op).
+   - If a per-leaf lock is held by another live process, skip that leaf and try the next assigned leaf. Do **not** abort the whole invocation just because one leaf is busy — parallel workers expect contention here.
+   - The merge pass (Step 3) holds the global lock with `phase: "merge-pass"` for its duration since it touches multiple leaves' parent pages.
+   - Treat any lock whose `pid` is no longer alive as stale and replace it atomically.
+5. Read `wiki/.progress/ingest/.state.json` if it exists. If `version` mismatches the current SKILL version, run the migration in §State Migration before proceeding.
 
 ### Step 1 — Enumerate Leaves (idempotent)
 
@@ -237,7 +243,7 @@ For exactly **one** sub-chunk whose `status === "pending"`:
    ```
 7. Mark the sub-chunk `status: "done"`, set `ended_at`, and record `source_pages_written`. For code/mixed leaves, do not block completion on `wiki/code` page creation. If this was the leaf's last sub-chunk, set `leaves[<leafPath>].status = "done"` **and queue the merge pass**: add the leaf's immediate parent directory (a POSIX path ending in `/`; use `raw/` for a leaf sitting directly under `raw/`) to `merge_pass.pending_parents` unless it is already listed. This is the only place `pending_parents` is filled — Step 3 and the `/ingest-loop` backend driver both rely on it to know merge work is outstanding, so skipping it leaves the loop unable to detect completion. Persist `.state.json`.
 8. **Regenerate `wiki/.progress/ingest/DASHBOARD.md`** from `.state.json` (idempotent — overwrite, do not append).
-9. **Release `.lock` and return.** Do **not** start the next sub-chunk in the same call. The next `/ingest` invocation will read `.state.json` and pick up the next `pending` sub-chunk.
+9. **Release the per-leaf lock (and the global state mutex if still held) and return.** Do **not** start the next sub-chunk in the same call. The next `/ingest` invocation will read `.state.json` and pick up the next `pending` sub-chunk.
 
 If an exception is raised during this step:
 - Set the sub-chunk `status: "error"`, store the error message in `leaves[<leafPath>].last_error`.
