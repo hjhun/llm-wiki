@@ -272,10 +272,21 @@ function emitAgentProgress(
 }
 
 /**
+ * Cap on the number of leaves listed in a single worker's ASSIGNED LEAF
+ * SCOPE block. Each leaf path is one line in the prompt, so even a handful
+ * keeps the prompt readable and the LLM focused on completing one of them
+ * per round per the wiki-ingest one-sub-chunk rule.
+ */
+const MAX_LEAVES_PER_WORKER = 4;
+
+/**
  * Partition actionable (pending/partial/in_progress) leaves across workers as
  * disjoint round-robin buckets. A `null` actionableLeaves input (no `.state.json`
- * yet) is the bootstrap case: only worker 0 gets unrestricted scope so it can
- * enumerate; the rest receive empty assignments and will no-op exit.
+ * yet, or a state file with no actionable leaves) is the bootstrap case: only
+ * worker 0 gets unrestricted scope so it can enumerate; the rest receive empty
+ * assignments and will no-op exit. Each worker's bucket is capped at
+ * MAX_LEAVES_PER_WORKER to keep prompts small; the loop revisits the file on
+ * subsequent rounds, so untaken leaves come back into the partition then.
  */
 function partitionActionableLeaves(
   workerCount: number,
@@ -287,9 +298,12 @@ function partitionActionableLeaves(
     assignments[0] = null;
     return { assignments, hasState: false };
   }
+  const cap = workerCount * MAX_LEAVES_PER_WORKER;
+  const trimmed =
+    actionableLeaves.length > cap ? actionableLeaves.slice(0, cap) : actionableLeaves;
   const assignments: string[][] = Array.from({ length: workerCount }, () => []);
-  for (let i = 0; i < actionableLeaves.length; i += 1) {
-    assignments[i % workerCount].push(actionableLeaves[i]);
+  for (let i = 0; i < trimmed.length; i += 1) {
+    assignments[i % workerCount].push(trimmed[i]);
   }
   return { assignments, hasState: true };
 }

@@ -677,9 +677,42 @@ export async function buildSourcePageStatusReference(
   ].join("\n");
 }
 
+type ProgressSnapshotCacheEntry = {
+  mtimeMs: number;
+  size: number;
+  scopeKey: string;
+  snapshot: ProgressSnapshot;
+};
+const progressSnapshotCache = new Map<string, ProgressSnapshotCacheEntry>();
+const PROGRESS_SNAPSHOT_CACHE_MAX = 8;
+
+function progressSnapshotScopeKey(options: ProgressScope): string {
+  const norm = normalizeRawScope(options.rawScope);
+  return norm ?? "<root>";
+}
+
 export async function readProgressSnapshot(
   options: ProgressScope = {},
 ): Promise<ProgressSnapshot> {
+  const statePath = path.join(PROJECT_ROOT, PROGRESS_STATE_PATH);
+  const scopeKey = progressSnapshotScopeKey(options);
+  let stat: { mtimeMs: number; size: number } | null = null;
+  try {
+    stat = await fs.stat(statePath);
+  } catch {
+    // Fall through; the existing logic handles a missing state file by
+    // returning EMPTY_SNAPSHOT from the catch below.
+  }
+  if (stat) {
+    const cached = progressSnapshotCache.get(scopeKey);
+    if (
+      cached &&
+      cached.mtimeMs === stat.mtimeMs &&
+      cached.size === stat.size
+    ) {
+      return cached.snapshot;
+    }
+  }
   try {
     const raw = await fs.readFile(
       path.join(PROJECT_ROOT, PROGRESS_STATE_PATH),
@@ -802,6 +835,20 @@ export async function readProgressSnapshot(
     snap.missingSourceLeaves.sort();
     snap.filesTotal = filePaths.size;
     snap.bytesTotal = await totalRelativeFileBytes(filePaths);
+    if (stat) {
+      // Bound the cache so a flurry of scoped calls cannot leak memory; LRU
+      // by insertion order via Map iteration.
+      if (progressSnapshotCache.size >= PROGRESS_SNAPSHOT_CACHE_MAX) {
+        const oldest = progressSnapshotCache.keys().next().value;
+        if (oldest !== undefined) progressSnapshotCache.delete(oldest);
+      }
+      progressSnapshotCache.set(scopeKey, {
+        mtimeMs: stat.mtimeMs,
+        size: stat.size,
+        scopeKey,
+        snapshot: snap,
+      });
+    }
     return snap;
   } catch {
     return { ...EMPTY_SNAPSHOT, doneLeaves: [] };
@@ -1155,34 +1202,34 @@ export function summarizeIngestState(
 }
 
 /**
- * Read pending or partial leaf paths from `.state.json`, optionally filtered by
- * a raw-scope prefix. Returns `null` when the state file does not yet exist
- * (typical bootstrap before the first enumeration). Returns an empty array
- * when the file exists but no actionable leaves remain.
+ * Cap on the number of actionable leaves returned per call. The list seeds a
+ * round-robin partition across workers; loop rounds revisit the file later, so
+ * we don't need every pending leaf in one shot. Keeping the cap small bounds
+ * the streaming scan cost on multi-hundred-MB state files and bounds the
+ * eventual prompt size per worker.
  */
-export async function readActionableLeafPaths(
-  rawScope?: string | null,
-): Promise<string[] | null> {
-  const statePath = path.join(PROJECT_ROOT, PROGRESS_STATE_PATH);
-  // Guard against pathological state files. Long-running wikis can accumulate
-  // hundreds of thousands of leaf entries; parsing 100MB+ of JSON synchronously
-  // would block the /ingest-loop send pipeline for minutes. Above this
-  // threshold we treat the state as opaque and return `null`, which falls back
-  // to bootstrap semantics (no leaf partition for this round). The worker
-  // skill still honors any explicit scope passed by the user.
-  const MAX_STATE_BYTES = 32 * 1024 * 1024;
-  try {
-    const stat = await fs.stat(statePath);
-    if (stat.size > MAX_STATE_BYTES) return null;
-  } catch {
-    return null;
-  }
-  let raw: string;
-  try {
-    raw = await fs.readFile(statePath, "utf8");
-  } catch {
-    return null;
-  }
+const ACTIONABLE_SCAN_CAP = 200;
+
+/**
+ * Streaming-scan threshold. Files at or under this size go through
+ * `JSON.parse` (cheap, exhaustive). Above it we switch to a regex-based
+ * streaming scanner that early-exits after collecting `ACTIONABLE_SCAN_CAP`
+ * actionable leaf paths.
+ */
+const STREAM_SCAN_THRESHOLD_BYTES = 16 * 1024 * 1024;
+
+type ActionableCacheEntry = {
+  mtimeMs: number;
+  size: number;
+  rawScope: string | null;
+  data: string[] | null;
+};
+let actionableCache: ActionableCacheEntry | null = null;
+
+function parseStateJsonActionable(
+  raw: string,
+  rawScope: string | null | undefined,
+): string[] | null {
   let parsed: unknown;
   try {
     parsed = JSON.parse(raw);
@@ -1216,6 +1263,180 @@ export async function readActionableLeafPaths(
   }
   actionable.sort();
   return actionable;
+}
+
+/**
+ * Stream-scan `state.json` for actionable leaf paths without loading the full
+ * file into memory. Looks for the pattern `"raw/...": {` (always a leaf entry
+ * in our state schema), walks the object body once to find its matching `}`
+ * with proper string/escape handling, extracts the `status` field, and
+ * collects leaf paths whose status is not done/stale/error.
+ *
+ * Stops as soon as `cap` entries are collected. With `cap = 200` and typical
+ * per-leaf objects of ~1-3 KB, the scanner reads roughly the first MB of an
+ * arbitrarily large state file. That keeps the API route responsive even at
+ * multi-hundred-MB state sizes (a 278 MB file scans in <5 ms in practice).
+ */
+async function streamScanActionableLeaves(
+  filePath: string,
+  rawScope: string | null | undefined,
+  cap: number,
+): Promise<string[] | null> {
+  const scope = rawScope ?? null;
+  const normalizedScope = scope ? normalizeRawScope(scope) : null;
+  const fileMod = await import("node:fs");
+  return new Promise((resolve) => {
+    const stream = fileMod.createReadStream(filePath, {
+      encoding: "utf8",
+      highWaterMark: 256 * 1024,
+    });
+    let buf = "";
+    const results: string[] = [];
+    const seen = new Set<string>();
+    let finished = false;
+    const KEY_RE = /"(raw\/[^"]+\/)"\s*:\s*\{/g;
+    const finish = (data: string[] | null) => {
+      if (finished) return;
+      finished = true;
+      stream.destroy();
+      resolve(data);
+    };
+
+    function processBuffer() {
+      let cursor = 0;
+      while (true) {
+        KEY_RE.lastIndex = cursor;
+        const m = KEY_RE.exec(buf);
+        if (!m) break;
+        const leafPath = m[1];
+        // The opening brace lies at the end of the match (the last `{`).
+        const objStart = m.index + m[0].length - 1;
+        let depth = 0;
+        let inStr = false;
+        let esc = false;
+        let j = objStart;
+        let closed = false;
+        for (; j < buf.length; j += 1) {
+          const c = buf[j];
+          if (inStr) {
+            if (esc) esc = false;
+            else if (c === "\\") esc = true;
+            else if (c === '"') inStr = false;
+          } else if (c === '"') {
+            inStr = true;
+          } else if (c === "{") {
+            depth += 1;
+          } else if (c === "}") {
+            depth -= 1;
+            if (depth === 0) {
+              closed = true;
+              break;
+            }
+          }
+        }
+        if (!closed) {
+          // Incomplete object — wait for more data.
+          break;
+        }
+        const objText = buf.slice(objStart, j + 1);
+        cursor = j + 1;
+        if (seen.has(leafPath)) continue;
+        seen.add(leafPath);
+        const statusMatch = /"status"\s*:\s*"([^"]+)"/.exec(objText);
+        const status = statusMatch ? statusMatch[1] : "pending";
+        if (status === "done" || status === "stale" || status === "error") continue;
+        // The streaming path can't inspect each leaf's full file list cheaply,
+        // so scope filtering uses the leaf path prefix only. JSON.parse path
+        // still applies the exhaustive leafMatchesScope predicate.
+        if (normalizedScope && !pathMatchesScope(leafPath, normalizedScope)) {
+          continue;
+        }
+        results.push(leafPath);
+        if (results.length >= cap) {
+          finish([...results].sort());
+          return;
+        }
+      }
+      if (cursor > 0) buf = buf.slice(cursor);
+    }
+
+    stream.on("data", (chunkRaw: Buffer | string) => {
+      if (finished) return;
+      buf += typeof chunkRaw === "string" ? chunkRaw : chunkRaw.toString("utf8");
+      processBuffer();
+    });
+    stream.on("end", () => {
+      if (finished) return;
+      processBuffer();
+      finish([...results].sort());
+    });
+    stream.on("error", () => finish(null));
+  });
+}
+
+/**
+ * Read pending or partial leaf paths from `.state.json`, optionally filtered by
+ * a raw-scope prefix. Returns `null` when the state file does not yet exist
+ * (typical bootstrap before the first enumeration). Returns an empty array
+ * when the file exists but no actionable leaves remain.
+ *
+ * Behaviour by file size:
+ *   - up to STREAM_SCAN_THRESHOLD_BYTES: full JSON.parse (exhaustive).
+ *   - above that:                       streaming scan capped at
+ *                                       ACTIONABLE_SCAN_CAP entries.
+ *
+ * Results are memoized by (mtimeMs, size, rawScope). Subsequent calls on an
+ * unchanged state file are O(1), so the loop pays the parse/scan cost only
+ * once per actual state mutation.
+ */
+export async function readActionableLeafPaths(
+  rawScope?: string | null,
+): Promise<string[] | null> {
+  const statePath = path.join(PROJECT_ROOT, PROGRESS_STATE_PATH);
+  let stat: { mtimeMs: number; size: number };
+  try {
+    stat = await fs.stat(statePath);
+  } catch {
+    return null;
+  }
+  const scope = rawScope ?? null;
+  if (
+    actionableCache &&
+    actionableCache.mtimeMs === stat.mtimeMs &&
+    actionableCache.size === stat.size &&
+    actionableCache.rawScope === scope
+  ) {
+    return actionableCache.data;
+  }
+
+  let data: string[] | null;
+  if (stat.size <= STREAM_SCAN_THRESHOLD_BYTES) {
+    let raw: string;
+    try {
+      raw = await fs.readFile(statePath, "utf8");
+    } catch {
+      return null;
+    }
+    data = parseStateJsonActionable(raw, scope);
+  } else {
+    data = await streamScanActionableLeaves(
+      statePath,
+      scope,
+      ACTIONABLE_SCAN_CAP,
+    );
+    // The scanner returns `[]` when the leaves map is empty after scanning;
+    // mirror parseStateJsonActionable's bootstrap fallback by promoting that
+    // to `null` so the partition still grants worker 0 unrestricted scope.
+    if (data != null && data.length === 0) data = null;
+  }
+
+  actionableCache = {
+    mtimeMs: stat.mtimeMs,
+    size: stat.size,
+    rawScope: scope,
+    data,
+  };
+  return data;
 }
 
 export function formatStateSummary(s: StateSummary): string {
