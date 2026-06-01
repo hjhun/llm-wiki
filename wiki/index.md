@@ -39,4 +39,4 @@ Rule: each item is one line in the format `- [[Page Name]] — One-line summary`
 
 ## Graph
 
-- [[wiki/graph/GRAPH_REPORT]] — Knowledge graph report, generated after graphify runs
+- `wiki/graph/GRAPH_REPORT.md` — Knowledge graph report, generated after graphify runs (a wikilink is added here once the file exists)

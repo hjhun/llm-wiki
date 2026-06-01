@@ -22,3 +22,19 @@ appended as new entries.
 ## [2026-05-30 10:22] ingest | sources index regen
 - Changed files: `wiki/sources/index.md`
 - Notes: ran `node scripts/build-sources-index.mjs`; 2 sources catalogued.
+
+## [2026-06-01 14:00] ingest | raw/code/throttle/ | sub-chunk 1
+- Changed files: `wiki/sources/code/throttle/index.md`,
+  `wiki/concepts/sliding-window-rate-limit.md`
+- Notes: mixed code+image leaf (1 `.ts` + 1 `.svg`); image read text-first
+  and recorded as caption/alt-text per the wiki-images skill, raw bytes left
+  immutable.
+
+## [2026-06-01 14:02] ingest | merge pass | raw/code/
+- Integrated pages: `wiki/concepts/sliding-window-rate-limit.md`
+- Notes: added Code category to `wiki/index.md`; cross-linked the throttle
+  source page to its concept.
+
+## [2026-06-01 14:02] ingest | sources index regen
+- Changed files: `wiki/sources/index.md`
+- Notes: ran `node scripts/build-sources-index.mjs`; 3 sources catalogued.
