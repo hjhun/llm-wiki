@@ -6,6 +6,7 @@ import { randomUUID } from "node:crypto";
 import { SESSIONS_ROOT } from "./paths";
 import type { CliName } from "./cli";
 import type { PublicQueryVisibleSource } from "./public-query";
+import { redactSecrets } from "./secret-scan";
 
 export type PublicSessionLogInput = {
   request: Request;
@@ -84,6 +85,69 @@ function clientIp(request: Request): string {
   );
 }
 
+/** Mask a high-confidence secret out of a nullable persisted field. */
+function safeField(value: string | null | undefined): string | null {
+  if (value == null) return null;
+  return redactSecrets(value).redacted;
+}
+
+export type PublicSessionEntryArgs = {
+  visitorId: string;
+  conversationId: string;
+  ip: string;
+  userAgent: string;
+  referer: string | null;
+  rawMessage?: string;
+  question: string;
+  answer?: string | null;
+  sources?: PublicQueryVisibleSource[];
+  agent?: CliName | null;
+  durationMs?: number | null;
+  ok: boolean;
+  error?: string | null;
+};
+
+/**
+ * Build the JSON entry persisted for a public-query interaction. Pure and
+ * filesystem-free so the redaction contract can be unit-tested.
+ *
+ * The public endpoint is unauthenticated, so a visitor can paste anything,
+ * including a credential. The `sessions/` audit trail is append-only
+ * (CLAUDE.md §9), so every free-text field (the inbound message, derived
+ * question, and answer) plus the error string is masked here — the same
+ * fail-closed gate the wiki-answer and Telegram paths already use.
+ */
+export function buildPublicSessionEntry(
+  args: PublicSessionEntryArgs,
+  now: Date,
+): Record<string, unknown> {
+  return {
+    time: readableKstTime(now),
+    isoTime: now.toISOString(),
+    kind: "public-query",
+    actor: "public-user",
+    visitorId: args.visitorId,
+    conversationId: args.conversationId,
+    request: {
+      ip: args.ip,
+      userAgent: args.userAgent,
+      referer: args.referer,
+    },
+    conversation: {
+      message: safeField(args.rawMessage ?? args.question),
+      question: safeField(args.question),
+      answer: safeField(args.answer),
+    },
+    result: {
+      ok: args.ok,
+      error: safeField(args.error),
+      agent: args.agent ?? null,
+      durationMs: args.durationMs ?? null,
+      sources: args.sources ?? [],
+    },
+  };
+}
+
 export async function appendPublicSessionLog(
   input: PublicSessionLogInput,
 ): Promise<string> {
@@ -102,31 +166,24 @@ export async function appendPublicSessionLog(
   const abs = path.join(SESSIONS_ROOT, rel);
   await fs.mkdir(path.dirname(abs), { recursive: true });
 
-  const entry = {
-    time: readableKstTime(now),
-    isoTime: now.toISOString(),
-    kind: "public-query",
-    actor: "public-user",
-    visitorId,
-    conversationId,
-    request: {
+  const entry = buildPublicSessionEntry(
+    {
+      visitorId,
+      conversationId,
       ip: clientIp(input.request),
       userAgent: input.request.headers.get("user-agent") ?? "unknown",
       referer: input.request.headers.get("referer") ?? null,
-    },
-    conversation: {
-      message: input.rawMessage ?? input.question,
+      rawMessage: input.rawMessage,
       question: input.question,
       answer: input.answer ?? null,
-    },
-    result: {
-      ok: input.ok,
-      error: input.error ?? null,
+      sources: input.sources,
       agent: input.agent ?? null,
       durationMs: input.durationMs ?? null,
-      sources: input.sources ?? [],
+      ok: input.ok,
+      error: input.error ?? null,
     },
-  };
+    now,
+  );
 
   await fs.appendFile(abs, JSON.stringify(entry) + "\n", "utf8");
   return rel.split(path.sep).join("/");
