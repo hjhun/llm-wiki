@@ -216,6 +216,7 @@ its raw-mirrored provenance path stable.
 | "add/update/audit a skill", "improve CLIO skills" | [`skill-maintenance`](.agents/skills/skill-maintenance/SKILL.md) |
 | qmd installed (default setup) | [`wiki-search-qmd`](.agents/skills/wiki-search-qmd/SKILL.md) |
 | Optional marp installed | [`wiki-marp`](.agents/skills/wiki-marp/SKILL.md) |
+| image/scan/screenshot or multimodal PDF under `raw/` (inside `/ingest`) | [`wiki-images`](.agents/skills/wiki-images/SKILL.md) |
 
 **Priority**: `.agents/skills/` (project-local) > global skills. qmd is installed by default under `tools/qmd/` when possible and falls back to a global `qmd` from `PATH`. graphify execution uses the **global `graphify` command from `PATH`**. If missing, `setup.sh` installs the official `graphifyy` package and runs `graphify install`.
 

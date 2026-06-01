@@ -141,9 +141,14 @@ webapp/lib/telegram/*.ts    ~1500 LOC  (신규, 테스트 0)
   - `ingest-loop.ts` 2105 → 1757줄(−348), 추출 모듈에 단위 테스트 38개 추가(scope 7 / leaf-classify 13 / loop-decision 18).
   - 상태 보존(fs/락/CLI/graphify) 로직은 통합 테스트가 없어 이번 패스에서 이동하지 않음 — 후속 작업으로 분리 가능.
 
-검증: `npm test` 81 passed, `tsc --noEmit` 통과, `next build` 성공, `scripts/smoke-test.sh` 통과.
+- **P2 완료** (권장안 P2-1b)
+  - 경량 `wiki-images` 스킬 신설: `.agents/skills/wiki-images/SKILL.md`. 이미지/스캔/스크린샷/멀티모달 PDF 리프를 ingest 안에서 **텍스트 우선 → 이미지 보조** 순으로 처리하고, `wiki/sources/<raw-mirror>.md`에 caption·alt-text·연결을 기록. `raw/` 원본은 불변. 호스트 CLI 비전 가능 여부에 따라 `status: summarized | needs_review`로 분기(없는 텍스트를 지어내지 않음).
+  - dangling 참조 정리: `wiki-ingest/SKILL.md`의 bare `wiki-images`를 실제 스킬 링크로 교체.
+  - 라우팅 노출: `CLAUDE.md`·`AGENTS.md` §6 스킬 라우팅 표에 wiki-images 행 추가(두 파일 바이트 동기화 유지).
 
-남은 항목(P2 wiki-images, P4, ingest-loop의 상태 보존 클러스터 추가 분해)은 후속 작업.
+검증: `npm test` 81 passed, `tsc --noEmit` 통과, `next build` 성공, `scripts/smoke-test.sh` 통과. CLAUDE.md ↔ AGENTS.md 동일성 확인.
+
+남은 항목(P4, ingest-loop의 상태 보존 클러스터 추가 분해)은 후속 작업.
 
 ---
 
