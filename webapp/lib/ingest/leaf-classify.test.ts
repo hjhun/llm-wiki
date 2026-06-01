@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
   classifyLeafFromFiles,
+  collectLeafFiles,
   fileLooksLikeCode,
   fileLooksLikeRuntimeEvidence,
+  inferLeafKind,
   isIgnoredCodePath,
 } from "./leaf-classify";
 
@@ -63,5 +65,30 @@ describe("classifyLeafFromFiles", () => {
   });
   it("returns prose for an empty leaf", () => {
     expect(classifyLeafFromFiles([])).toBe("prose");
+  });
+});
+
+describe("collectLeafFiles", () => {
+  it("merges the leaf's files and each sub-chunk's files, normalizing slashes", () => {
+    const files = collectLeafFiles("raw/x", {
+      files: ["raw/x/a.ts"],
+      sub_chunks: [{ files: ["raw\\x\\b.ts"] }, { files: ["raw/x/a.ts"] }],
+    });
+    expect(files.sort()).toEqual(["raw/x/a.ts", "raw/x/b.ts"]);
+  });
+  it("falls back to the leaf path when no files are recorded", () => {
+    expect(collectLeafFiles("raw/x", {})).toEqual(["raw/x"]);
+  });
+});
+
+describe("inferLeafKind", () => {
+  it("honors an explicit kind field", () => {
+    expect(inferLeafKind("raw/x", { kind: "mixed", files: ["a.md"] })).toBe(
+      "mixed",
+    );
+  });
+  it("classifies from files when kind is absent", () => {
+    expect(inferLeafKind("raw/x", { files: ["raw/x/main.ts"] })).toBe("code");
+    expect(inferLeafKind("raw/x", { files: ["raw/x/notes.md"] })).toBe("prose");
   });
 });
