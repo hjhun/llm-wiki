@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireSession, jsonError } from "@/lib/api";
 import { loadConfig, patchLocalConfig } from "@/lib/config";
+import { invalidate as invalidateBotIdentity } from "@/lib/telegram/bot-identity";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -32,5 +33,8 @@ export async function POST(req: Request) {
   await patchLocalConfig({
     telegram: { ...cfg.telegram, botToken: next },
   });
+  // Token swap invalidates any cached bot identity (we may now point at
+  // a different bot account).
+  invalidateBotIdentity();
   return NextResponse.json({ ok: true, set: next != null });
 }

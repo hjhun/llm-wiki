@@ -2,6 +2,23 @@ import type { Config } from "../config";
 import { describeChat, normalizeChatKind, type TelegramMessage } from "./types";
 
 /**
+ * Build the @mention prefix(es) the router should recognise for the bot.
+ * Telegram delivers commands as `/help@botusername` and free text with
+ * embedded `@botusername` mentions; both need to be stripped before the
+ * payload reaches runPublicQuery.
+ */
+function botMentionRegex(botUsername: string): RegExp {
+  // Escape characters that have special meaning inside a regex group.
+  const safe = botUsername.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`@${safe}\\b`, "gi");
+}
+
+function stripBotMention(text: string, botUsername: string | null): string {
+  if (!botUsername) return text;
+  return text.replace(botMentionRegex(botUsername), "").trim();
+}
+
+/**
  * Decide what to do with an incoming Telegram message. The router never
  * touches Telegram directly — it just classifies. The webhook handler
  * acts on the action.
@@ -47,10 +64,37 @@ function staticHelpText(): string {
 export function classifyIncoming(
   cfg: Config["telegram"],
   msg: TelegramMessage,
+  botUsername: string | null = null,
 ): RouterAction {
   const chatId = msg.chat.id;
   const chatKind = normalizeChatKind(msg.chat.type);
-  const text = msg.text?.trim() ?? "";
+  const rawText = msg.text?.trim() ?? "";
+
+  // Group/channel gating: by default the bot only reacts when explicitly
+  // mentioned (`@botusername …`) or addressed via a slash command. This
+  // is the standard "the bot lives in this group but doesn't speak unless
+  // spoken to" UX. Private chats keep responding to all text.
+  let text = rawText;
+  if (chatKind !== "private") {
+    const mentioned =
+      botUsername != null && botMentionRegex(botUsername).test(rawText);
+    const slashCommand = rawText.startsWith("/");
+    if (!mentioned && !slashCommand) {
+      return { kind: "ignore", reason: "group message without mention" };
+    }
+    // Always strip the bot mention. Slash commands sent in groups carry
+    // a `@botusername` suffix (e.g. `/help@cliobot`) that Telegram
+    // appends automatically; the downstream router branches don't
+    // expect that suffix.
+    text = stripBotMention(rawText, botUsername);
+    if (text.length === 0) {
+      return {
+        kind: "static-help",
+        chatId,
+        text: staticHelpText(),
+      };
+    }
+  }
 
   // Non-text payload (photo/voice/etc.) — accept enough to ack but don't
   // try to ingest in M2.

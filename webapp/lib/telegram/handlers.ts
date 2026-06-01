@@ -3,6 +3,7 @@ import "server-only";
 import { loadConfig, patchLocalConfig } from "../config";
 import { runPublicQuery } from "../public-query";
 import { sendMessage } from "./api";
+import { getBotUsername } from "./bot-identity";
 import { appendChatTurn, readChatHistory, resetChatHistory } from "./history";
 import { classifyIncoming, type RouterAction } from "./router";
 import {
@@ -271,7 +272,10 @@ export async function dispatchUpdate(update: TelegramUpdate): Promise<void> {
     noteSkipped();
     return;
   }
-  const action = classifyIncoming(tg, msg);
+  // Resolve the bot's `@username` so the router can recognise group
+  // mentions. Cached after the first successful getMe per token.
+  const botUsername = await getBotUsername(tg.botToken).catch(() => null);
+  const action = classifyIncoming(tg, msg, botUsername);
   try {
     await handleAction(
       tg.botToken,
