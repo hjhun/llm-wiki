@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Synthetic diagram for the CLIO mini-wiki: a 60s sliding window holding
+     up to 5 timestamps. The 6th call within the window is rejected. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="520" height="180" viewBox="0 0 520 180" font-family="sans-serif">
+  <title>Sliding-window rate limiter (5 calls / 60s)</title>
+  <desc>A horizontal time axis with a 60-second window. Five accepted call
+  markers sit inside the window; a sixth call arriving while the window is
+  full is rejected until the oldest timestamp ages out.</desc>
+
+  <line x1="20" y1="120" x2="500" y2="120" stroke="#333" stroke-width="2"/>
+  <text x="20" y="150" font-size="12" fill="#333">t - 60s</text>
+  <text x="450" y="150" font-size="12" fill="#333">now</text>
+
+  <rect x="120" y="60" width="300" height="60" fill="#e8f0fe" stroke="#4285f4"/>
+  <text x="150" y="50" font-size="12" fill="#4285f4">window = 60s</text>
+
+  <circle cx="150" cy="120" r="6" fill="#34a853"/>
+  <circle cx="210" cy="120" r="6" fill="#34a853"/>
+  <circle cx="270" cy="120" r="6" fill="#34a853"/>
+  <circle cx="330" cy="120" r="6" fill="#34a853"/>
+  <circle cx="390" cy="120" r="6" fill="#34a853"/>
+  <circle cx="430" cy="120" r="7" fill="#ea4335"/>
+  <text x="408" y="100" font-size="12" fill="#ea4335">6th: rejected</text>
+</svg>

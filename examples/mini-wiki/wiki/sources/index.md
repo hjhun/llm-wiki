@@ -2,6 +2,7 @@
 title: Source Catalog
 type: index
 tags: [sources, catalog]
+sources: []
 updated: 2026-06-01
 ---
 
@@ -11,10 +12,11 @@ updated: 2026-06-01
 > The header section is rewritten deterministically on every run.
 > LLM-authored prose may live after the `<!-- clio:sources-index:custom -->` marker below.
 
-Total sources: **2**
+Total sources: **3**
 
 ## Recently Updated (top 30)
 
+- `2026-06-01` · [[wiki/sources/code/throttle/index|Throttle Module (code + diagram)]]
 - `2026-05-30` · [[wiki/sources/articles/leaf-first-merge|Why the Leaf-First Merge Pass Matters]]
 - `2026-05-30` · [[wiki/sources/articles/raw-immutability|Raw Immutability as a Design Constraint]]
 
@@ -24,6 +26,8 @@ Total sources: **2**
 
 ## By Topic
 
+- **code-wiki** (1)
+  - [[wiki/sources/code/throttle/index|Throttle Module (code + diagram)]]
 - **ingest-pipeline** (1)
   - [[wiki/sources/articles/leaf-first-merge|Why the Leaf-First Merge Pass Matters]]
 - **llm-wiki** (2)
@@ -31,26 +35,36 @@ Total sources: **2**
   - [[wiki/sources/articles/raw-immutability|Raw Immutability as a Design Constraint]]
 - **provenance** (1)
   - [[wiki/sources/articles/raw-immutability|Raw Immutability as a Design Constraint]]
+- **rate-limiting** (1)
+  - [[wiki/sources/code/throttle/index|Throttle Module (code + diagram)]]
 
 ## By Entity
 
-- **(unspecified)** (2)
+- **(unspecified)** (3)
   - [[wiki/sources/articles/leaf-first-merge|Why the Leaf-First Merge Pass Matters]]
   - [[wiki/sources/articles/raw-immutability|Raw Immutability as a Design Constraint]]
+  - [[wiki/sources/code/throttle/index|Throttle Module (code + diagram)]]
 
 ## By Source Kind
 
 - **article** (2)
   - [[wiki/sources/articles/leaf-first-merge|Why the Leaf-First Merge Pass Matters]]
   - [[wiki/sources/articles/raw-immutability|Raw Immutability as a Design Constraint]]
+- **code** (1)
+  - [[wiki/sources/code/throttle/index|Throttle Module (code + diagram)]]
 
 ## By Project
 
 - **(unspecified)** (2)
   - [[wiki/sources/articles/leaf-first-merge|Why the Leaf-First Merge Pass Matters]]
   - [[wiki/sources/articles/raw-immutability|Raw Immutability as a Design Constraint]]
+- **throttle-demo** (1)
+  - [[wiki/sources/code/throttle/index|Throttle Module (code + diagram)]]
 
 ## By Source Date
+
+- **2026-06**
+  - `2026-06-01` · [[wiki/sources/code/throttle/index|Throttle Module (code + diagram)]]
 
 - **2026-05**
   - `2026-05-18` · [[wiki/sources/articles/raw-immutability|Raw Immutability as a Design Constraint]]
@@ -60,4 +74,5 @@ Total sources: **2**
 
 - [[wiki/sources/articles/leaf-first-merge|Why the Leaf-First Merge Pass Matters]] · `raw/articles/leaf-first-merge.md`
 - [[wiki/sources/articles/raw-immutability|Raw Immutability as a Design Constraint]] · `raw/articles/raw-immutability.md`
+- [[wiki/sources/code/throttle/index|Throttle Module (code + diagram)]] · `raw/code/throttle/`
 <!-- clio:sources-index:custom -->
