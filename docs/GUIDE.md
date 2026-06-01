@@ -660,7 +660,86 @@ The **Build from prompt** panel is for non-developer setup. Describe the recurri
 ./setup.sh --with-agent-browser
 ```
 
-## 15. Configuration Files
+## 15. Telegram Bot
+
+CLIO can expose the **Chat → /query** flow through a Telegram bot. Use it to ask
+the wiki questions from a phone or a shared group without opening the web UI.
+
+### Capability Summary
+
+- Read-only by default: messages are routed through the same wiki-only
+  `runPublicQuery` pipeline that backs the public Chat endpoint.
+- Two delivery modes: long polling (no public URL needed) or webhook (HTTPS URL +
+  secret token). Both share the same dispatch path.
+- Chat-id allowlist plus a pending queue: new chats are auto-rejected and
+  recorded for one-click approval in Settings.
+- Conversation context per chat (default 6 turns) plus `/reset` to clear it.
+- Per-chat rate limit (5 requests per 60 seconds).
+- `trusted` permission unlocks `/query --save <question>`, which writes the
+  answer back to `wiki/answers/<slug>.md` and appends a `wiki/log.md` entry.
+- Every interaction is logged to
+  `sessions/<YYYY-MM-DD>/telegram/<chatId>.jsonl`.
+
+### Create the Bot
+
+1. Talk to [@BotFather](https://t.me/BotFather) on Telegram and run `/newbot`.
+2. Copy the HTTP API token.
+3. In the CLIO web UI, open **Settings → Telegram**.
+4. Paste the token, click **Verify token**, then **Save token**. The token is
+   stored only in `config/local.json` and is never returned by GET endpoints.
+
+### Choose Polling or Webhook
+
+Polling is the default and works on any host that has outbound HTTPS. Webhook
+requires an externally reachable HTTPS URL and is preferred under load.
+
+- **Polling:** Click **Switch to polling**. The webapp boot already starts a
+  long-polling worker; the button just confirms the mode and reboots the loop.
+- **Webhook:** Provide a public URL such as
+  `https://your-tunnel.host/api/telegram/webhook` and click **Register
+  webhook**. CLIO generates a random secret server-side and validates the
+  `X-Telegram-Bot-Api-Secret-Token` header on every callback. Local development
+  typically uses [`cloudflared`](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/get-started/)
+  or [`ngrok`](https://ngrok.com/) for the tunnel.
+
+### Approve a Chat
+
+1. Send `/whoami` to the bot from the desired chat (private DM or a group the
+   bot was added to). The bot replies with the chat id and kind.
+2. In Settings → Telegram, the chat appears in **Pending chats**.
+3. Click **Approve as query** for read-only access, or **Approve as trusted**
+   for `--save` capability.
+4. To remove access later, use **Revoke** on the **Approved chats** row.
+
+### Group Behaviour
+
+In groups and channels the bot ignores every message that does not either
+start with `/` or mention the bot directly (`@yourbotusername …`). Private
+chats respond to all text messages once approved.
+
+### Supported Commands
+
+| Command | Where it works | What it does |
+|---|---|---|
+| `/start`, `/help` | any chat | print the help block |
+| `/whoami` | any chat | print this chat's id and kind |
+| `/query <question>` | approved chats | route through `runPublicQuery` |
+| `/query --save <question>` | trusted chats | answer + write `wiki/answers/<slug>.md` |
+| `/reset` | approved chats | clear the per-chat conversation history |
+
+Plain-text messages in approved chats are treated as `/query <text>`.
+
+### Verification
+
+- Send `/whoami` from your phone → approve the chat in Settings.
+- Ask a wiki question → expect a multi-message answer that ends with a
+  short `출처:` line listing the cited pages.
+- For trusted access, send `/query --save Why is leaf-first ingest necessary?`
+  and confirm a new file under `wiki/answers/`.
+- Open **Settings → Telegram → Status** to see the request, dispatched,
+  rejected, and error counters update in real time.
+
+## 16. Configuration Files
 
 Default settings live in:
 
@@ -696,7 +775,7 @@ Useful defaults:
 
 Prefer changing settings through the UI unless you know exactly what you are editing.
 
-## 16. QA Checklist
+## 17. QA Checklist
 
 Use this after installation, before a release, or after a large change.
 
@@ -814,7 +893,7 @@ Files that normally must not be committed:
 - `webapp/node_modules/**`
 - local raw data you do not intend to publish
 
-## 17. Troubleshooting
+## 18. Troubleshooting
 
 ### Port Already in Use
 
@@ -909,7 +988,7 @@ Agents should not modify `raw/`. If anything under `raw/` changed unexpectedly:
 3. Record the incident in `wiki/log.md` by appending a new entry.
 4. Run `/lint` to check generated pages.
 
-## 18. Daily Workflow Example
+## 19. Daily Workflow Example
 
 1. Save new articles, notes, PDFs, or transcripts under a clear `raw/` folder.
 2. Run:
@@ -935,7 +1014,7 @@ Agents should not modify `raw/`. If anything under `raw/` changed unexpectedly:
 7. Build or update the graph from the Graph tab.
 8. Commit or back up the wiki if this is a knowledge base you want to preserve.
 
-## 19. Where to Read Next
+## 20. Where to Read Next
 
 | Document | Purpose |
 |---|---|

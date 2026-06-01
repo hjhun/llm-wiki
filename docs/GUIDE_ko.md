@@ -655,7 +655,84 @@ YouTube 요약, GitHub/Gerrit 패치 리뷰, 이메일 sync, custom prompt 템�
 ./setup.sh --with-agent-browser
 ```
 
-## 15. 설정 파일
+## 15. 텔레그램 봇
+
+CLIO의 **Chat → /query** 흐름을 텔레그램 봇으로 노출할 수 있습니다. 휴대폰이나
+공유 그룹에서 웹 UI를 열지 않고도 위키에 질문할 수 있게 됩니다.
+
+### 능력 요약
+
+- 기본은 읽기 전용입니다. 들어온 메시지는 public Chat 엔드포인트와 동일한
+  wiki-only `runPublicQuery` 파이프라인을 거칩니다.
+- 두 가지 수신 방식: long polling(공개 URL 불필요) 또는 webhook(HTTPS URL +
+  secret 토큰). 두 경로의 dispatch는 동일합니다.
+- chat-id allowlist + pending 큐: 새 chat은 자동 거절되며 pending에 기록되어
+  Settings에서 한 번에 승인할 수 있습니다.
+- chat당 대화 컨텍스트(기본 6턴) + `/reset` 초기화 명령.
+- chat당 rate limit (60초당 5건).
+- `trusted` 권한 chat은 `/query --save <질문>` 으로 답변을 wiki/answers/에
+  저장하고 wiki/log.md에 항목을 추가할 수 있습니다.
+- 모든 상호작용은 `sessions/<YYYY-MM-DD>/telegram/<chatId>.jsonl` 에 기록됩니다.
+
+### 봇 만들기
+
+1. 텔레그램에서 [@BotFather](https://t.me/BotFather)에게 `/newbot`을 실행합니다.
+2. 발급된 HTTP API 토큰을 복사합니다.
+3. CLIO 웹 UI에서 **Settings → Telegram** 탭을 엽니다.
+4. 토큰을 붙여넣고 **토큰 검증** → **토큰 저장**을 누릅니다. 토큰은
+   `config/local.json` 에만 저장되며 GET 응답에는 절대 포함되지 않습니다.
+
+### Polling 또는 Webhook 선택
+
+기본은 polling이고 outbound HTTPS만 되면 어디서든 동작합니다. webhook은 외부
+도달 가능한 HTTPS URL이 필요하며 부하가 큰 환경에서 권장됩니다.
+
+- **Polling:** "Polling으로 전환" 버튼을 누르면 됩니다. webapp 부팅 시 이미
+  long-polling 워커가 자동 기동되므로, 이 버튼은 모드를 명시적으로 확인하고
+  루프를 재기동하는 용도입니다.
+- **Webhook:** `https://your-tunnel.host/api/telegram/webhook` 형태의 공개
+  URL을 입력하고 **Webhook 등록**을 누릅니다. secret은 서버에서 자동 생성되며
+  매 콜백마다 `X-Telegram-Bot-Api-Secret-Token` 헤더로 검증됩니다. 로컬
+  개발에서는 보통 [`cloudflared`](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/get-started/)
+  나 [`ngrok`](https://ngrok.com/) 같은 터널을 사용합니다.
+
+### chat 승인
+
+1. 봇에게 `/whoami` 를 보냅니다 (1:1 또는 봇이 추가된 그룹). 봇이 chat id와
+   kind를 회신합니다.
+2. Settings → Telegram의 **대기 중인 chat** 표에 해당 chat이 보입니다.
+3. 읽기 전용이면 **Query 권한 승인**, `--save` 까지 허용하려면 **Trusted 권한
+   승인** 을 누릅니다.
+4. 이후 접근을 막으려면 **허용된 chat** 표의 **허용 취소** 를 사용합니다.
+
+### 그룹 동작 규칙
+
+그룹/채널에서는 `/` 로 시작하지 않거나 `@봇username` 으로 명시적으로 멘션되지
+않은 메시지는 무시됩니다. 1:1 private chat은 승인된 뒤로 모든 텍스트에
+응답합니다.
+
+### 지원 명령
+
+| 명령 | 적용 chat | 동작 |
+|---|---|---|
+| `/start`, `/help` | 모든 chat | 도움말 출력 |
+| `/whoami` | 모든 chat | 현재 chat의 id/kind 출력 |
+| `/query <질문>` | 승인된 chat | `runPublicQuery` 로 라우팅 |
+| `/query --save <질문>` | trusted chat | 답변 회신 + `wiki/answers/<slug>.md` 작성 |
+| `/reset` | 승인된 chat | 이 chat의 대화 컨텍스트 초기화 |
+
+승인된 chat에서 그냥 평문을 보내면 `/query <text>` 로 처리됩니다.
+
+### 검증
+
+- 휴대폰에서 `/whoami` 전송 → Settings에서 chat 승인.
+- 위키 질문 전송 → 마지막에 `출처: …` 라인이 붙은 답변이 회신됩니다.
+- trusted 권한이라면 `/query --save 왜 leaf-first ingest가 필요한가요?` 를
+  보내고 `wiki/answers/` 하단에 신규 파일이 생겼는지 확인합니다.
+- **Settings → Telegram → 상태** 패널에서 수신 요청 / 처리 완료 / 거절 / 오류
+  카운터가 실시간 갱신되는지 확인합니다.
+
+## 16. 설정 파일
 
 기본 설정:
 
@@ -691,7 +768,7 @@ config/local.json
 
 가능하면 UI에서 설정을 바꾸고, 수동 편집은 필요한 경우에만 하세요.
 
-## 16. QA 체크리스트
+## 17. QA 체크리스트
 
 설치 후, 릴리스 전, 큰 변경 후에 사용하세요.
 
@@ -807,7 +884,7 @@ git status --short
 - `webapp/node_modules/**`
 - 공개할 의도가 없는 local raw data
 
-## 17. 문제 해결
+## 18. 문제 해결
 
 ### 포트가 이미 사용 중일 때
 
@@ -902,7 +979,7 @@ wiki/.progress/ingest/.lock
 3. `wiki/log.md`에 새 entry를 append하여 상황을 기록합니다.
 4. `/lint`를 실행해 생성 페이지 상태를 점검합니다.
 
-## 18. 일상적인 사용 예시
+## 19. 일상적인 사용 예시
 
 1. 새 기사, 노트, PDF, 회의록을 명확한 `raw/` 폴더 아래에 저장합니다.
 2. Chat 탭에서 실행합니다.
@@ -928,7 +1005,7 @@ wiki/.progress/ingest/.lock
 7. Graph 탭에서 그래프를 Build 또는 Incremental Update 합니다.
 8. 보존할 지식 베이스라면 `wiki/`를 커밋하거나 백업합니다.
 
-## 19. 다음 문서
+## 20. 다음 문서
 
 | 문서 | 내용 |
 |---|---|

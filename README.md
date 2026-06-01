@@ -186,6 +186,14 @@ Run these from the **Chat** tab:
 | `/lint --fix` | Apply safe automatic fixes and write a lint report. |
 | `/preprocess raw/<path> <rules>` | Dry-run cleanup planning for noise under `raw/`; only `/preprocess --apply` mutates files after backups. |
 
+CLIO also exposes the **/query** flow through a Telegram bot. Set the bot
+token under **Settings → Telegram**, switch the delivery mode (polling or
+webhook) to fit your hosting, approve specific chat ids, and ask wiki
+questions from your phone or a shared group. See
+[docs/GUIDE.md §15](./docs/GUIDE.md#15-telegram-bot) (한국어:
+[GUIDE_ko.md §15](./docs/GUIDE_ko.md#15-텔레그램-봇)) for the full setup
+walkthrough.
+
 ## Code Wiki
 
 CLIO can document software projects as part of the same local-first knowledge
