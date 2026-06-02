@@ -19,6 +19,8 @@ import MessageCopyButton from "./MessageCopyButton";
 import AgentMascot from "../agent-panel/AgentMascot";
 import { useLanguage } from "../i18n";
 import { EmptyState } from "../ui";
+import { extractAnswerSources, sourceHref } from "@/lib/answer-sources";
+import { FileText } from "lucide-react";
 import type { ChatMessage, ChatProgress } from "./types";
 
 const ROLE_LABEL: Record<string, string> = {
@@ -149,6 +151,10 @@ export default function MessageList({
             ? parseSaveAnswerMarker(m.content)
             : null;
         const displayContent = saveMarker ? saveMarker.cleaned : m.content;
+        const sources =
+          m.role === "assistant" && !liveMermaid
+            ? extractAnswerSources(displayContent)
+            : [];
         return (
           <article
             key={i}
@@ -178,6 +184,26 @@ export default function MessageList({
                 <span className="md-stream-cursor" aria-hidden />
               ) : null}
             </div>
+            {sources.length > 0 ? (
+              <div className="mt-3 border-t border-line/60 pt-2.5">
+                <div className="mb-1.5 flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-widest text-ink-faint">
+                  <FileText aria-hidden className="h-3 w-3" />
+                  {t.chat.sourcesLabel}
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {sources.map((source) => (
+                    <a
+                      key={source.path}
+                      href={sourceHref(source.path)}
+                      title={source.path}
+                      className="inline-flex max-w-full items-center gap-1 rounded border border-accent/40 bg-accent/10 px-1.5 py-0.5 font-mono text-[11px] text-accent no-underline transition hover:border-accent hover:bg-accent/15"
+                    >
+                      <span className="truncate">{source.label}</span>
+                    </a>
+                  ))}
+                </div>
+              </div>
+            ) : null}
             <div className="mt-2 flex items-center justify-between gap-2">
               {saveMarker && onSaveAnswer ? (
                 <button
