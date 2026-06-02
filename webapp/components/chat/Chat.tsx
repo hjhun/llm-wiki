@@ -190,8 +190,35 @@ export default function Chat() {
   const [renaming, setRenaming] = useState(false);
   const [renameDraft, setRenameDraft] = useState("");
   const [savingRename, setSavingRename] = useState(false);
+  const [dragging, setDragging] = useState(false);
+  const [prefill, setPrefill] = useState<string | null>(null);
   const streamAbortRef = useRef<AbortController | null>(null);
   const streamTokenRef = useRef(0);
+
+  async function handleDrop(e: React.DragEvent) {
+    e.preventDefault();
+    setDragging(false);
+    const files = Array.from(e.dataTransfer.files);
+    if (files.length === 0) return;
+    const date = new Date().toISOString().slice(0, 10);
+    const dir = `uploads/${date}`;
+    const form = new FormData();
+    form.set("ws", "raw");
+    form.set("dir", dir);
+    for (const file of files) form.append("files", file);
+    try {
+      const res = await fetch("/api/files/upload", {
+        method: "POST",
+        body: form,
+      });
+      if (!res.ok) throw await asError(res);
+      notify(t.chat.dropUploaded(files.length), "success");
+      // Suggest ingesting what was just dropped.
+      setPrefill(`/ingest raw/${dir}`);
+    } catch (err) {
+      notify(err instanceof Error ? err.message : String(err), "error");
+    }
+  }
 
   const refreshSessions = useCallback(async () => {
     try {
@@ -827,7 +854,26 @@ export default function Chat() {
             {error}
           </div>
         ) : null}
-        <div className="min-h-0 flex-1 overflow-auto bg-[linear-gradient(180deg,rgb(var(--color-bg)_/_0.72),rgb(var(--color-bg-subtle)_/_0.42))]">
+        <div
+          className="relative min-h-0 flex-1 overflow-auto bg-[linear-gradient(180deg,rgb(var(--color-bg)_/_0.72),rgb(var(--color-bg-subtle)_/_0.42))]"
+          onDragOver={(e) => {
+            if (e.dataTransfer.types.includes("Files")) {
+              e.preventDefault();
+              setDragging(true);
+            }
+          }}
+          onDragLeave={(e) => {
+            if (e.currentTarget === e.target) setDragging(false);
+          }}
+          onDrop={handleDrop}
+        >
+          {dragging ? (
+            <div className="pointer-events-none absolute inset-3 z-20 flex items-center justify-center rounded-lg border-2 border-dashed border-accent/60 bg-accent/10 backdrop-blur-sm">
+              <span className="rounded-md bg-bg-panel/90 px-3 py-1.5 text-sm font-medium text-accent">
+                {t.chat.dropHint}
+              </span>
+            </div>
+          ) : null}
           <MessageList
             messages={active?.messages ?? []}
             pending={pending}
@@ -852,6 +898,8 @@ export default function Chat() {
         <Composer
           disabled={pending}
           onSend={send}
+          prefill={prefill}
+          onPrefillConsumed={() => setPrefill(null)}
           cancel={
             pending && activeKind && attachedJobId
               ? { onCancel: cancelCli, cancelling }

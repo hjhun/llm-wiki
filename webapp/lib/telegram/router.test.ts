@@ -15,6 +15,7 @@ type TgConfig = Config["telegram"];
 function makeConfig(overrides: Partial<TgConfig> = {}): TgConfig {
   return {
     enabled: true,
+    notifyOnIngest: true,
     botToken: "test-token",
     mode: "polling",
     webhookPublicUrl: null,

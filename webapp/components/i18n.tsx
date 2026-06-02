@@ -30,6 +30,37 @@ export const TEXT = {
       korean: "한국어",
       english: "English",
       tableOfContents: "목차",
+      commandPalette: "명령 팔레트",
+      commandPalettePlaceholder: "이동하거나 명령을 검색…",
+      paletteThemeAction: "테마 전환",
+      paletteLanguageAction: "언어 전환",
+      paletteNoResults: "결과 없음",
+      paletteWikiResults: "위키 검색",
+    },
+    onboarding: {
+      title: "시작하기",
+      next: "다음",
+      back: "이전",
+      done: "시작하기",
+      skip: "건너뛰기",
+      steps: [
+        {
+          title: "CLIO에 오신 걸 환영합니다",
+          body: "CLIO는 raw 자료를 사람이 읽을 수 있는 위키로 만들어 관리하는 LLM 위키입니다. 몇 단계로 흐름을 안내할게요.",
+        },
+        {
+          title: "1. 자료를 넣으세요",
+          body: "Explorer에서 업로드하거나, 채팅 영역에 파일을 드래그앤드롭하면 raw/에 저장됩니다. 글·PDF·코드·로그 모두 가능합니다.",
+        },
+        {
+          title: "2. 위키로 정리하세요",
+          body: "채팅에서 /ingest 를 실행하면 자료를 요약·교차참조해 위키를 생성·갱신합니다. /를 입력하면 명령 자동완성이 떠요.",
+        },
+        {
+          title: "3. 질문하고 둘러보세요",
+          body: "/query 로 위키에 질문하고, 대시보드에서 현황을 확인하세요. 어디서든 Cmd/Ctrl+K로 검색·이동할 수 있습니다.",
+        },
+      ],
     },
     sidebar: {
       local: "local",
@@ -72,6 +103,8 @@ export const TEXT = {
       lint: "최근 lint 리포트",
       lintNone: "리포트 없음",
       lintRunning: "실행 중",
+      lintTodo: "미해결",
+      lintDone: "해결",
       recentActivity: "최근 활동",
       noActivity: "기록된 활동이 없습니다",
       openChat: "Chat 열기",
@@ -126,6 +159,9 @@ export const TEXT = {
       copiedMessage: "복사됨",
       saveRequested: "답변 저장을 요청했습니다.",
       sourcesLabel: "참고한 소스",
+      dropHint: "여기에 놓으면 raw/에 추가됩니다",
+      dropUploaded: (count: number) =>
+        `${count}개 파일을 raw/에 추가했습니다. ingest 명령을 준비해 두었어요.`,
       newChat: "+ New Chat",
       renameChat: "채팅 이름 변경",
       renameInput: "채팅 이름",
@@ -587,6 +623,37 @@ export const TEXT = {
       korean: "한국어",
       english: "English",
       tableOfContents: "Contents",
+      commandPalette: "Command palette",
+      commandPalettePlaceholder: "Jump to or search commands…",
+      paletteThemeAction: "Switch theme",
+      paletteLanguageAction: "Switch language",
+      paletteNoResults: "No results",
+      paletteWikiResults: "Wiki search",
+    },
+    onboarding: {
+      title: "Getting started",
+      next: "Next",
+      back: "Back",
+      done: "Get started",
+      skip: "Skip",
+      steps: [
+        {
+          title: "Welcome to CLIO",
+          body: "CLIO is an LLM wiki that turns your raw material into a readable, maintained wiki. Here's the flow in a few steps.",
+        },
+        {
+          title: "1. Add material",
+          body: "Upload in the Explorer, or drag and drop files onto the chat area to stage them under raw/. Articles, PDFs, code, and logs all work.",
+        },
+        {
+          title: "2. Build the wiki",
+          body: "Run /ingest in chat to summarize and cross-reference your material into wiki pages. Type / for command autocomplete.",
+        },
+        {
+          title: "3. Ask and explore",
+          body: "Use /query to ask the wiki, and watch status on the Dashboard. Press Cmd/Ctrl+K anywhere to search or jump around.",
+        },
+      ],
     },
     sidebar: {
       local: "local",
@@ -629,6 +696,8 @@ export const TEXT = {
       lint: "Latest lint report",
       lintNone: "No reports yet",
       lintRunning: "running",
+      lintTodo: "open",
+      lintDone: "done",
       recentActivity: "Recent activity",
       noActivity: "No recorded activity yet",
       openChat: "Open Chat",
@@ -687,6 +756,9 @@ export const TEXT = {
       copiedMessage: "Copied",
       saveRequested: "Requested to save the answer.",
       sourcesLabel: "Sources",
+      dropHint: "Drop here to add to raw/",
+      dropUploaded: (count: number) =>
+        `Added ${count} file(s) to raw/. An ingest command is ready for you.`,
       newChat: "+ New Chat",
       renameChat: "Rename chat",
       renameInput: "Chat name",

@@ -11,6 +11,7 @@ import {
   type RunIngestLoopResult,
 } from "../ingest-loop";
 import { lintLockExists } from "../lint-lock";
+import { notifyIngestComplete } from "../telegram/notify";
 import {
   readRuntimeState,
   writeRuntimeState,
@@ -268,6 +269,14 @@ export class AutoIngestManager {
       const endedAt = new Date();
       const summaryLine = `## [${formatTimestamp(endedAt)}] ingest | auto-trigger ${halt} (source=${source}, iter=${result?.iterations ?? 0}, reason=${truncate(haltReason, 60)})`;
       await appendWikiLog(summaryLine);
+
+      // Notify trusted Telegram chats on a meaningful outcome (skip no-ops).
+      if (halt !== "noop") {
+        const seconds = Math.round(durationMs / 1000);
+        await notifyIngestComplete(
+          `🤖 자동 ingest 완료\nsource: ${source}\n결과: ${halt} · 반복 ${result?.iterations ?? 0}회 · ${seconds}s\n${truncate(haltReason, 140)}`,
+        );
+      }
 
       const lastResult: AutoIngestRuntime["lastResult"] = {
         halt,
