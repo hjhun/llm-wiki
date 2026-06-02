@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useLanguage } from "./i18n";
 
 type AutoLintRuntime = {
   counter: { suggested: boolean };
@@ -22,6 +23,7 @@ export default function AutoLintBadge({
 }: {
   className?: string;
 }) {
+  const { t } = useLanguage();
   const [suggested, setSuggested] = useState(false);
 
   useEffect(() => {
@@ -50,7 +52,7 @@ export default function AutoLintBadge({
   if (!suggested) return null;
   return (
     <span
-      title="lint 추천: ingest 누적 임계값 도달"
+      title={t.sidebar.autoLintBadgeTitle}
       className={[
         "inline-block h-2 w-2 rounded-full bg-amber-400",
         className ?? "",

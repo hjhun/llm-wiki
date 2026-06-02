@@ -33,6 +33,7 @@ import rehypeHighlight from "rehype-highlight";
 import { detectCallout } from "@/lib/markdown-callout";
 import remarkWikilinks from "./remark-wikilinks";
 import { extractHeadings, slugify } from "@/lib/markdown-headings";
+import { useLanguage } from "../i18n";
 import {
   getMermaidRenderConfig,
   MERMAID_THEME_OPTIONS,
@@ -160,8 +161,10 @@ export default function MarkdownContent({
   emptyText,
   liveMermaid = false,
   toc = false,
-  tocLabel = "목차",
+  tocLabel,
 }: MarkdownContentProps) {
+  const { t } = useLanguage();
+  const resolvedTocLabel = tocLabel ?? t.common.tableOfContents;
   const components = useMemo(
     () => createMarkdownComponents(liveMermaid),
     [liveMermaid],
@@ -179,7 +182,7 @@ export default function MarkdownContent({
       {headings.length >= 3 ? (
         <nav className="not-prose mb-4 rounded-md border border-line bg-bg-subtle/60 px-3 py-2.5">
           <div className="mb-1.5 font-mono text-[10px] uppercase tracking-widest text-ink-faint">
-            {tocLabel}
+            {resolvedTocLabel}
           </div>
           <ul className="space-y-0.5 text-[12.5px]">
             {headings.map((heading, index) => (
@@ -209,7 +212,7 @@ export default function MarkdownContent({
   );
 }
 
-/** ReactNode 트리에서 표시 텍스트만 추출한다(하이라이팅 span 포함). */
+/** Extract only the visible text from a ReactNode tree (incl. highlight spans). */
 function extractText(node: ReactNode): string {
   if (node == null || node === false || node === true) return "";
   if (typeof node === "string" || typeof node === "number") {
@@ -242,6 +245,7 @@ function WikilinkChip({
   href: string;
   children: ReactNode;
 }) {
+  const { t } = useLanguage();
   const [state, setState] = useState<PreviewState>("idle");
   const [preview, setPreview] = useState<string>("");
   const [hover, setHover] = useState(false);
@@ -289,10 +293,10 @@ function WikilinkChip({
           {state === "loading" ? (
             <span className="text-ink-faint">…</span>
           ) : state === "error" ? (
-            <span className="text-ink-faint">미리보기를 불러올 수 없습니다.</span>
+            <span className="text-ink-faint">{t.common.previewUnavailable}</span>
           ) : (
             <span className="line-clamp-6 whitespace-pre-wrap font-sans text-ink-dim">
-              {preview || "(빈 문서)"}
+              {preview || t.common.emptyDocument}
             </span>
           )}
         </span>

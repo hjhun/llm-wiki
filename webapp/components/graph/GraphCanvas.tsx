@@ -10,6 +10,7 @@ import type {
 import { Maximize2, ZoomIn, ZoomOut } from "lucide-react";
 import { useEffect, useMemo, useRef } from "react";
 import { IconButton } from "../ui";
+import { useLanguage } from "../i18n";
 import type { GraphData, GraphNode } from "./types";
 
 type Props = {
@@ -208,6 +209,7 @@ export default function GraphCanvas({
   onSelect,
   text,
 }: Props) {
+  const { t } = useLanguage();
   const containerRef = useRef<HTMLDivElement | null>(null);
   const cyRef = useRef<Core | null>(null);
   const graphRef = useRef(graph);
@@ -335,7 +337,7 @@ export default function GraphCanvas({
   if (graph.nodes.length === 0) {
     return (
       <div className="flex h-full items-center justify-center text-sm text-ink-faint">
-        graph.json에 노드가 없습니다.
+        {t.graph.noNodes}
       </div>
     );
   }

@@ -359,7 +359,9 @@ export default function PublicClioChat({
 
   function clearActive() {
     if (!activeConversation || pending) return;
-    const ok = window.confirm("현재 대화 내용을 비울까요?");
+    const ok = window.confirm(
+      isKorean ? "현재 대화 내용을 비울까요?" : "Clear the current conversation?",
+    );
     if (!ok) return;
     setConversations((current) =>
       sortConversations(
@@ -395,7 +397,9 @@ export default function PublicClioChat({
   function deleteSelected() {
     if (selectedCount === 0 || pending) return;
     const ok = window.confirm(
-      `선택한 대화 ${selectedCount}개를 삭제할까요? 이 작업은 되돌릴 수 없습니다.`,
+      isKorean
+        ? `선택한 대화 ${selectedCount}개를 삭제할까요? 이 작업은 되돌릴 수 없습니다.`
+        : `Delete ${selectedCount} selected conversation(s)? This cannot be undone.`,
     );
     if (!ok) return;
     const ids = new Set(selectedIds);
@@ -541,7 +545,7 @@ export default function PublicClioChat({
             {messages.length === 0 ? (
               <div className="flex min-h-40 flex-col justify-end border-b border-line/70 pb-6">
                 <div className="max-w-2xl text-2xl font-semibold leading-tight text-ink sm:text-3xl">
-                  wiki에 대해 물어보세요.
+                  {isKorean ? "wiki에 대해 물어보세요." : "Ask about the wiki."}
                 </div>
               </div>
             ) : null}
@@ -585,7 +589,7 @@ export default function PublicClioChat({
                   void send();
                 }
               }}
-              placeholder="질문 입력"
+              placeholder={isKorean ? "질문 입력" : "Ask a question"}
               disabled={pending}
               className="block w-full resize-none rounded-md border border-line bg-bg px-4 py-3 text-[15px] leading-relaxed text-ink outline-none transition-colors placeholder:text-ink-faint focus:border-accent disabled:opacity-60"
             />
