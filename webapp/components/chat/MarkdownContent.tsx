@@ -28,6 +28,8 @@ import {
 } from "lucide-react";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
+import rehypeHighlight from "rehype-highlight";
+import { detectCallout } from "@/lib/markdown-callout";
 import {
   getMermaidRenderConfig,
   MERMAID_THEME_OPTIONS,
@@ -45,12 +47,6 @@ type MarkdownContentProps = {
 type CodeElementProps = {
   className?: string;
   children?: ReactNode;
-};
-
-type CodeBlock = {
-  className?: string;
-  language: string | null;
-  source: string;
 };
 
 type SvgSize = {
@@ -80,17 +76,37 @@ function createMarkdownComponents(liveMermaid: boolean): Components {
         </a>
       );
     },
+    blockquote({ children }) {
+      const firstLine = extractText(children).trim().split("\n")[0] ?? "";
+      const kind = detectCallout(firstLine);
+      if (!kind) {
+        return <blockquote>{children}</blockquote>;
+      }
+      return (
+        <div className={`not-prose md-callout md-callout-${kind}`}>
+          {children}
+        </div>
+      );
+    },
     pre({ children }) {
-      const block = parseCodeBlock(children);
-      if (!block) {
+      const child = Children.toArray(children).find(isValidElement) as
+        | ReactElement<CodeElementProps>
+        | undefined;
+      if (!child) {
         return <pre>{children}</pre>;
       }
 
-      if (block.language === "mermaid") {
-        return <MermaidDiagram source={block.source} live={liveMermaid} />;
+      const className =
+        typeof child.props.className === "string" ? child.props.className : "";
+      const language =
+        /language-([\w-]+)/.exec(className)?.[1]?.toLowerCase() ?? null;
+
+      if (language === "mermaid") {
+        const source = extractText(child.props.children).replace(/\n$/, "");
+        return <MermaidDiagram source={source} live={liveMermaid} />;
       }
 
-      return <CopyableCodeBlock block={block} />;
+      return <CopyableCodeBlock language={language} codeChildren={children} />;
     },
     code({ className, children, node: _node, ...props }) {
       return (
@@ -113,28 +129,42 @@ export default function MarkdownContent({
   );
 
   return (
-    <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
+    <ReactMarkdown
+      remarkPlugins={[remarkGfm]}
+      rehypePlugins={[[rehypeHighlight, { detect: true, ignoreMissing: true }]]}
+      components={components}
+    >
       {content || emptyText || ""}
     </ReactMarkdown>
   );
 }
 
-function parseCodeBlock(children: ReactNode): CodeBlock | null {
-  const child = Children.toArray(children).find(isValidElement) as
-    | ReactElement<CodeElementProps>
-    | undefined;
-  if (!child) return null;
-
-  const className =
-    typeof child.props.className === "string" ? child.props.className : "";
-  const language = /language-([\w-]+)/.exec(className)?.[1]?.toLowerCase() ?? null;
-  const source = Children.toArray(child.props.children).join("").replace(/\n$/, "");
-
-  return { className, language, source };
+/** ReactNode 트리에서 표시 텍스트만 추출한다(하이라이팅 span 포함). */
+function extractText(node: ReactNode): string {
+  if (node == null || node === false || node === true) return "";
+  if (typeof node === "string" || typeof node === "number") {
+    return String(node);
+  }
+  if (Array.isArray(node)) return node.map(extractText).join("");
+  if (isValidElement(node)) {
+    const element = node as ReactElement<{ children?: ReactNode }>;
+    return extractText(element.props.children);
+  }
+  return "";
 }
 
-function CopyableCodeBlock({ block }: { block: CodeBlock }) {
+function CopyableCodeBlock({
+  language,
+  codeChildren,
+}: {
+  language: string | null;
+  codeChildren: ReactNode;
+}) {
   const [copied, setCopied] = useState(false);
+  const source = useMemo(
+    () => extractText(codeChildren).replace(/\n$/, ""),
+    [codeChildren],
+  );
 
   useEffect(() => {
     if (!copied) return;
@@ -143,7 +173,7 @@ function CopyableCodeBlock({ block }: { block: CodeBlock }) {
   }, [copied]);
 
   async function copyCode() {
-    await writeClipboard(block.source);
+    await writeClipboard(source);
     setCopied(true);
   }
 
@@ -152,7 +182,7 @@ function CopyableCodeBlock({ block }: { block: CodeBlock }) {
   return (
     <div className="not-prose relative my-4 overflow-hidden rounded-md border border-line bg-bg-subtle shadow-sm">
       <span className="pointer-events-none absolute left-3 top-2 z-10 max-w-[calc(100%-5rem)] truncate rounded border border-line bg-bg-panel/90 px-2 py-1 font-mono text-[10px] uppercase tracking-widest text-ink-faint shadow-sm backdrop-blur">
-        {block.language ?? "code"}
+        {language ?? "code"}
       </span>
       <button
         type="button"
@@ -174,7 +204,7 @@ function CopyableCodeBlock({ block }: { block: CodeBlock }) {
         {copied ? "Copied" : "Copy"}
       </button>
       <pre className="m-0 max-h-[32rem] overflow-auto bg-transparent px-3 pb-3 pt-12 text-[12px] leading-relaxed">
-        <code className={block.className}>{block.source}</code>
+        {codeChildren}
       </pre>
     </div>
   );

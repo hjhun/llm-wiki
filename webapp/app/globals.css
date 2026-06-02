@@ -136,6 +136,100 @@ select {
   --tw-prose-td-borders: rgb(var(--color-line));
 }
 
+/* ── Code syntax highlighting (rehype-highlight / highlight.js) ──────────
+   highlight.js emits .hljs-* token classes; we map them onto the design
+   tokens so highlighting tracks the active theme instead of shipping a
+   separate light/dark stylesheet. The code block wrapper owns the bg, so
+   .hljs stays transparent. */
+.hljs {
+  background: transparent;
+  color: rgb(var(--color-ink));
+}
+.hljs-comment,
+.hljs-quote {
+  color: rgb(var(--color-ink-faint));
+  font-style: italic;
+}
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-literal,
+.hljs-doctag,
+.hljs-name {
+  color: rgb(var(--color-info));
+}
+.hljs-string,
+.hljs-regexp,
+.hljs-addition,
+.hljs-meta-string {
+  color: rgb(var(--color-success));
+}
+.hljs-number,
+.hljs-symbol,
+.hljs-bullet,
+.hljs-link {
+  color: rgb(var(--color-warning));
+}
+.hljs-title,
+.hljs-section,
+.hljs-built_in,
+.hljs-class .hljs-title,
+.hljs-title.class_,
+.hljs-title.function_ {
+  color: rgb(var(--color-accent));
+}
+.hljs-attr,
+.hljs-attribute,
+.hljs-variable,
+.hljs-template-variable,
+.hljs-type,
+.hljs-selector-class,
+.hljs-selector-attr,
+.hljs-selector-pseudo {
+  color: rgb(var(--color-info));
+}
+.hljs-meta,
+.hljs-deletion {
+  color: rgb(var(--color-danger));
+}
+.hljs-emphasis {
+  font-style: italic;
+}
+.hljs-strong {
+  font-weight: 700;
+}
+
+/* ── Markdown callouts ──────────────────────────────────────────────────
+   Rendered from blockquotes whose first line carries a callout marker
+   (e.g. the CLAUDE.md "⚠️ Conflicts with ..." convention). */
+.md-callout {
+  margin: 1rem 0;
+  border: 1px solid rgb(var(--color-line));
+  border-left-width: 3px;
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  color: rgb(var(--color-ink));
+  font-size: 0.875rem;
+  line-height: 1.55;
+}
+.md-callout > :first-child {
+  margin-top: 0;
+}
+.md-callout > :last-child {
+  margin-bottom: 0;
+}
+.md-callout-warning {
+  border-left-color: rgb(var(--color-warning));
+  background: rgb(var(--color-warning) / 0.1);
+}
+.md-callout-info {
+  border-left-color: rgb(var(--color-info));
+  background: rgb(var(--color-info) / 0.1);
+}
+.md-callout-danger {
+  border-left-color: rgb(var(--color-danger));
+  background: rgb(var(--color-danger) / 0.1);
+}
+
 .chat-message {
   color: rgb(var(--color-ink));
 }
