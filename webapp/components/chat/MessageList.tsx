@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import MarkdownContent from "./MarkdownContent";
 import MessageCopyButton from "./MessageCopyButton";
+import AgentMascot from "../agent-panel/AgentMascot";
 import { useLanguage } from "../i18n";
 import { EmptyState } from "../ui";
 import type { ChatMessage, ChatProgress } from "./types";
@@ -119,21 +120,24 @@ export default function MessageList({
       progress.agents.length > 0);
 
   return (
-    <div className="mx-auto flex min-h-full w-full max-w-6xl flex-col gap-3 px-5 py-5 lg:px-8">
+    <div className="mx-auto flex min-h-full w-full max-w-4xl flex-col gap-3 px-5 py-5 lg:px-8">
       {messages.length === 0 && !pending ? (
-        <EmptyState
-          title={t.chat.guideTitle}
-          description={
-            <span>
-              {t.chat.guideFreeQuestion}{" "}
-              <span className="font-mono text-ink">/preprocess</span>,{" "}
-              <span className="font-mono text-ink">/ingest</span>,{" "}
-              <span className="font-mono text-ink">/query</span>,{" "}
-              <span className="font-mono text-ink">/lint</span>
-            </span>
-          }
-          className="items-start text-left"
-        />
+        <div className="flex flex-1 flex-col items-center justify-center gap-2 py-8">
+          <AgentMascot running={false} />
+          <EmptyState
+            title={t.chat.guideTitle}
+            description={
+              <span>
+                {t.chat.guideFreeQuestion}{" "}
+                <span className="font-mono text-ink">/preprocess</span>,{" "}
+                <span className="font-mono text-ink">/ingest</span>,{" "}
+                <span className="font-mono text-ink">/query</span>,{" "}
+                <span className="font-mono text-ink">/lint</span>
+              </span>
+            }
+            className="w-full max-w-lg"
+          />
+        </div>
       ) : null}
       {messages.map((m, i) => {
         const RoleIcon =

@@ -136,6 +136,22 @@ select {
   --tw-prose-td-borders: rgb(var(--color-line));
 }
 
+/* Inline code as a subtle chip, and drop the typography plugin's backtick
+   pseudo-quotes. Block code (inside <pre>) is excluded so highlighting and
+   the code-block chrome are untouched. */
+.prose-theme :where(code):not(pre code) {
+  background: rgb(var(--color-bg-subtle));
+  border: 1px solid rgb(var(--color-line));
+  border-radius: 4px;
+  padding: 0.1em 0.35em;
+  font-size: 0.85em;
+  font-weight: 500;
+}
+.prose-theme :where(code):not(pre code)::before,
+.prose-theme :where(code):not(pre code)::after {
+  content: none;
+}
+
 /* ── Code syntax highlighting (rehype-highlight / highlight.js) ──────────
    highlight.js emits .hljs-* token classes; we map them onto the design
    tokens so highlighting tracks the active theme instead of shipping a
