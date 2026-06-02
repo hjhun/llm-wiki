@@ -18,6 +18,7 @@ import {
   ClipboardCheck,
   Download,
   ExternalLink,
+  Link2,
   Maximize2,
   Palette,
   RotateCcw,
@@ -30,6 +31,7 @@ import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeHighlight from "rehype-highlight";
 import { detectCallout } from "@/lib/markdown-callout";
+import remarkWikilinks from "./remark-wikilinks";
 import {
   getMermaidRenderConfig,
   MERMAID_THEME_OPTIONS,
@@ -62,6 +64,7 @@ function createMarkdownComponents(liveMermaid: boolean): Components {
         return (
           <a
             href={href}
+            title={href}
             className="not-prose inline-flex max-w-full items-center gap-1 rounded border border-accent/40 bg-accent/10 px-1.5 py-0.5 align-baseline font-mono text-[11px] text-accent no-underline hover:border-accent hover:bg-accent/15"
             {...props}
           >
@@ -70,10 +73,30 @@ function createMarkdownComponents(liveMermaid: boolean): Components {
           </a>
         );
       }
+      // Title-only wikilink: no resolvable path, so render a non-navigating
+      // chip with a tooltip instead of a dead link.
+      if (href?.startsWith("wiki:")) {
+        return (
+          <span
+            className="not-prose inline-flex max-w-full items-center gap-1 rounded border border-info/40 bg-info/10 px-1.5 py-0.5 align-baseline font-mono text-[11px] text-info"
+            title={`wiki page: ${href.slice("wiki:".length)}`}
+          >
+            <Link2 aria-hidden className="h-3 w-3 shrink-0" />
+            <span className="truncate">{children}</span>
+          </span>
+        );
+      }
       return (
         <a href={href} {...props}>
           {children}
         </a>
+      );
+    },
+    table({ children }) {
+      return (
+        <div className="not-prose md-table-wrap">
+          <table className="md-table">{children}</table>
+        </div>
       );
     },
     blockquote({ children }) {
@@ -130,7 +153,7 @@ export default function MarkdownContent({
 
   return (
     <ReactMarkdown
-      remarkPlugins={[remarkGfm]}
+      remarkPlugins={[remarkGfm, remarkWikilinks]}
       rehypePlugins={[[rehypeHighlight, { detect: true, ignoreMissing: true }]]}
       components={components}
     >

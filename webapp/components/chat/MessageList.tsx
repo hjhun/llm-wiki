@@ -170,6 +170,9 @@ export default function MessageList({
                 emptyText={t.chat.empty}
                 liveMermaid={liveMermaid}
               />
+              {liveMermaid && displayContent ? (
+                <span className="md-stream-cursor" aria-hidden />
+              ) : null}
             </div>
             <div className="mt-2 flex items-center justify-between gap-2">
               {saveMarker && onSaveAnswer ? (
