@@ -1,6 +1,7 @@
 "use client";
 
 import MarkdownContent from "../chat/MarkdownContent";
+import { useLanguage } from "../i18n";
 
 type MarkdownPreviewProps = {
   content: string;
@@ -16,9 +17,10 @@ export default function MarkdownPreview({
   content,
   className,
 }: MarkdownPreviewProps) {
+  const { t } = useLanguage();
   return (
     <div className={className}>
-      <MarkdownContent content={content} />
+      <MarkdownContent content={content} toc tocLabel={t.common.tableOfContents} />
     </div>
   );
 }

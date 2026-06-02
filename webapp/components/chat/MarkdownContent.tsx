@@ -32,6 +32,7 @@ import remarkGfm from "remark-gfm";
 import rehypeHighlight from "rehype-highlight";
 import { detectCallout } from "@/lib/markdown-callout";
 import remarkWikilinks from "./remark-wikilinks";
+import { extractHeadings, slugify } from "@/lib/markdown-headings";
 import {
   getMermaidRenderConfig,
   MERMAID_THEME_OPTIONS,
@@ -44,6 +45,10 @@ type MarkdownContentProps = {
   content: string;
   emptyText?: string;
   liveMermaid?: boolean;
+  /** Render a table of contents above the body (for long documents). */
+  toc?: boolean;
+  /** Localized ToC heading label. */
+  tocLabel?: string;
 };
 
 type CodeElementProps = {
@@ -99,6 +104,18 @@ function createMarkdownComponents(liveMermaid: boolean): Components {
         </div>
       );
     },
+    h1({ children }) {
+      return <h1 id={slugify(extractText(children))} className="scroll-mt-4">{children}</h1>;
+    },
+    h2({ children }) {
+      return <h2 id={slugify(extractText(children))} className="scroll-mt-4">{children}</h2>;
+    },
+    h3({ children }) {
+      return <h3 id={slugify(extractText(children))} className="scroll-mt-4">{children}</h3>;
+    },
+    h4({ children }) {
+      return <h4 id={slugify(extractText(children))} className="scroll-mt-4">{children}</h4>;
+    },
     blockquote({ children }) {
       const firstLine = extractText(children).trim().split("\n")[0] ?? "";
       const kind = detectCallout(firstLine);
@@ -145,20 +162,53 @@ export default function MarkdownContent({
   content,
   emptyText,
   liveMermaid = false,
+  toc = false,
+  tocLabel = "목차",
 }: MarkdownContentProps) {
   const components = useMemo(
     () => createMarkdownComponents(liveMermaid),
     [liveMermaid],
   );
+  const headings = useMemo(
+    () =>
+      toc
+        ? extractHeadings(content).filter((h) => h.depth >= 2 && h.depth <= 3)
+        : [],
+    [toc, content],
+  );
 
   return (
-    <ReactMarkdown
-      remarkPlugins={[remarkGfm, remarkWikilinks]}
-      rehypePlugins={[[rehypeHighlight, { detect: true, ignoreMissing: true }]]}
-      components={components}
-    >
-      {content || emptyText || ""}
-    </ReactMarkdown>
+    <>
+      {headings.length >= 3 ? (
+        <nav className="not-prose mb-4 rounded-md border border-line bg-bg-subtle/60 px-3 py-2.5">
+          <div className="mb-1.5 font-mono text-[10px] uppercase tracking-widest text-ink-faint">
+            {tocLabel}
+          </div>
+          <ul className="space-y-0.5 text-[12.5px]">
+            {headings.map((heading, index) => (
+              <li
+                key={`${heading.slug}-${index}`}
+                style={{ paddingLeft: (heading.depth - 2) * 12 }}
+              >
+                <a
+                  href={`#${heading.slug}`}
+                  className="text-ink-dim no-underline hover:text-accent"
+                >
+                  {heading.text}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </nav>
+      ) : null}
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm, remarkWikilinks]}
+        rehypePlugins={[[rehypeHighlight, { detect: true, ignoreMissing: true }]]}
+        components={components}
+      >
+        {content || emptyText || ""}
+      </ReactMarkdown>
+    </>
   );
 }
 

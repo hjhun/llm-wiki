@@ -29,6 +29,7 @@ export const TEXT = {
       language: "언어",
       korean: "한국어",
       english: "English",
+      tableOfContents: "목차",
     },
     sidebar: {
       local: "local",
@@ -585,6 +586,7 @@ export const TEXT = {
       language: "Language",
       korean: "한국어",
       english: "English",
+      tableOfContents: "Contents",
     },
     sidebar: {
       local: "local",
