@@ -25,6 +25,8 @@ export default function Composer({
   disabled,
   onSend,
   cancel,
+  prefill,
+  onPrefillConsumed,
 }: {
   disabled: boolean;
   onSend: (message: string) => void;
@@ -33,6 +35,9 @@ export default function Composer({
    * in-flight so the user can abort all running child CLIs immediately.
    */
   cancel?: { onCancel: () => void; cancelling: boolean } | null;
+  /** External text to drop into the composer (e.g. an ingest suggestion). */
+  prefill?: string | null;
+  onPrefillConsumed?: () => void;
 }) {
   const { t } = useLanguage();
   const [value, setValue] = useState("");
@@ -105,6 +110,16 @@ export default function Composer({
   useEffect(() => {
     setActiveIndex(0);
   }, [value]);
+
+  // Accept an externally supplied value (e.g. a drag-and-drop ingest suggestion).
+  useEffect(() => {
+    if (prefill == null) return;
+    setValue(prefill);
+    setDismissed(true);
+    onPrefillConsumed?.();
+    focusSoon();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prefill]);
 
   useEffect(() => {
     if (!taRef.current) return;

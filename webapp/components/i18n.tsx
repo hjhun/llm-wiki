@@ -132,6 +132,9 @@ export const TEXT = {
       copiedMessage: "복사됨",
       saveRequested: "답변 저장을 요청했습니다.",
       sourcesLabel: "참고한 소스",
+      dropHint: "여기에 놓으면 raw/에 추가됩니다",
+      dropUploaded: (count: number) =>
+        `${count}개 파일을 raw/에 추가했습니다. ingest 명령을 준비해 두었어요.`,
       newChat: "+ New Chat",
       renameChat: "채팅 이름 변경",
       renameInput: "채팅 이름",
@@ -699,6 +702,9 @@ export const TEXT = {
       copiedMessage: "Copied",
       saveRequested: "Requested to save the answer.",
       sourcesLabel: "Sources",
+      dropHint: "Drop here to add to raw/",
+      dropUploaded: (count: number) =>
+        `Added ${count} file(s) to raw/. An ingest command is ready for you.`,
       newChat: "+ New Chat",
       renameChat: "Rename chat",
       renameInput: "Chat name",
