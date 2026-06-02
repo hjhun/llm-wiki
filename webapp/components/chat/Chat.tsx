@@ -8,6 +8,7 @@ import Composer from "./Composer";
 import MessageList from "./MessageList";
 import SessionList from "./SessionList";
 import { useLanguage } from "../i18n";
+import { useToast } from "../ui/Toast";
 import { IconButton, PageHeader, StatusBadge } from "../ui";
 import type {
   ChatJobSnapshot,
@@ -174,6 +175,7 @@ function RunningOperationBar({
 
 export default function Chat() {
   const { t } = useLanguage();
+  const { notify } = useToast();
   const [sessions, setSessions] = useState<SessionRef[]>([]);
   const [active, setActive] = useState<ActiveSession | null>(null);
   const [pending, setPending] = useState(false);
@@ -832,6 +834,7 @@ export default function Chat() {
             progress={progress}
             onSaveAnswer={(question) => {
               if (pending) return;
+              notify(t.chat.saveRequested, "info");
               void send(`/query --save ${question}`);
             }}
           />

@@ -4,6 +4,7 @@ import AgentEdgePanel from "@/components/agent-panel/AgentEdgePanel";
 import { LanguageProvider } from "@/components/i18n";
 import Sidebar from "@/components/Sidebar";
 import { ThemeProvider } from "@/components/theme";
+import { ToastProvider } from "@/components/ui/Toast";
 import { SESSION_COOKIE, isFirstRun, verifySessionToken } from "@/lib/auth";
 import { loadConfig } from "@/lib/config";
 
@@ -28,13 +29,15 @@ export default async function ProtectedLayout({
   return (
     <ThemeProvider initialTheme={cfg.ui.theme}>
       <LanguageProvider initialLanguage={cfg.ui.language}>
-        <div className="flex h-screen w-screen overflow-hidden">
-          <Sidebar appSubtitle={cfg.ui.appSubtitle} />
-          <main className="flex h-screen flex-1 flex-col overflow-hidden bg-bg/80">
-            {children}
-          </main>
-        </div>
-        {cfg.ui.agentEdgePanelEnabled ? <AgentEdgePanel /> : null}
+        <ToastProvider>
+          <div className="flex h-screen w-screen overflow-hidden">
+            <Sidebar appSubtitle={cfg.ui.appSubtitle} />
+            <main className="flex h-screen flex-1 flex-col overflow-hidden bg-bg/80">
+              {children}
+            </main>
+          </div>
+          {cfg.ui.agentEdgePanelEnabled ? <AgentEdgePanel /> : null}
+        </ToastProvider>
       </LanguageProvider>
     </ThemeProvider>
   );
