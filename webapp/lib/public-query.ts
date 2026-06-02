@@ -294,7 +294,10 @@ function formatFallbackAnswer(
   return lines.join("\n\n");
 }
 
-function sourceIsMentioned(answer: string, source: PublicQuerySource): boolean {
+export function sourceIsMentioned(
+  answer: string,
+  source: PublicQuerySource,
+): boolean {
   const haystack = answer.normalize("NFKC").toLowerCase();
   const title = source.title.normalize("NFKC").toLowerCase().trim();
   const sourcePath = source.path.normalize("NFKC").toLowerCase().trim();
@@ -304,7 +307,7 @@ function sourceIsMentioned(answer: string, source: PublicQuerySource): boolean {
   );
 }
 
-function visibleSourcesForAnswer(
+export function visibleSourcesForAnswer(
   answer: string,
   sources: PublicQuerySource[],
 ): PublicQueryVisibleSource[] {
@@ -317,7 +320,7 @@ function visibleSourcesForAnswer(
     }));
 }
 
-function summarizeAgentStderr(stderr: string): string {
+export function summarizeAgentStderr(stderr: string): string {
   const important = stderr
     .split(/\r?\n/)
     .filter((line) =>
