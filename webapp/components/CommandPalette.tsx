@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Clock3,
+  FileText,
   FolderTree,
   LayoutDashboard,
   Languages,
@@ -18,19 +19,24 @@ import { useLanguage } from "./i18n";
 import { useTheme, type Theme } from "./theme";
 import { cx } from "./ui";
 
-type Action = {
+type Group = "action" | "wiki";
+
+type Item = {
   id: string;
   label: string;
   hint?: string;
   icon: LucideIcon;
+  group: Group;
   run: () => void;
 };
+
+type WikiHit = { path: string; title: string; snippet: string };
 
 const THEME_CYCLE: Theme[] = ["default", "light", "dark"];
 
 /**
- * Global Cmd/Ctrl+K command palette: jump between tabs and run quick actions.
- * Mounted once in the protected layout.
+ * Global Cmd/Ctrl+K command palette: jump between tabs, run quick actions, and
+ * search wiki pages. Mounted once in the protected layout.
  */
 export default function CommandPalette() {
   const router = useRouter();
@@ -39,6 +45,7 @@ export default function CommandPalette() {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
+  const [hits, setHits] = useState<WikiHit[]>([]);
   const inputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
@@ -57,13 +64,43 @@ export default function CommandPalette() {
   useEffect(() => {
     if (open) {
       setQuery("");
+      setHits([]);
       setActiveIndex(0);
       setTimeout(() => inputRef.current?.focus(), 0);
     }
   }, [open]);
 
+  // Debounced wiki search.
+  useEffect(() => {
+    const q = query.trim();
+    if (q.length < 2) {
+      setHits([]);
+      return;
+    }
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => {
+      void (async () => {
+        try {
+          const res = await fetch(`/api/search?q=${encodeURIComponent(q)}`, {
+            cache: "no-store",
+            signal: controller.signal,
+          });
+          if (!res.ok) throw new Error();
+          const json = (await res.json()) as { hits?: WikiHit[] };
+          setHits(json.hits ?? []);
+        } catch {
+          /* aborted or failed: leave previous hits */
+        }
+      })();
+    }, 180);
+    return () => {
+      controller.abort();
+      window.clearTimeout(timer);
+    };
+  }, [query]);
+
   const tabs = t.sidebar.tabs;
-  const actions = useMemo<Action[]>(() => {
+  const actionItems = useMemo<Item[]>(() => {
     const go = (href: string) => () => {
       setOpen(false);
       router.push(href);
@@ -76,13 +113,14 @@ export default function CommandPalette() {
       automations: Clock3,
       settings: Settings,
     };
-    const nav: Action[] = (
+    const nav: Item[] = (
       ["dashboard", "chat", "explorer", "graph", "automations", "settings"] as const
     ).map((key) => ({
       id: `nav:${key}`,
       label: tabs[key].label,
       hint: tabs[key].desc,
       icon: navIcons[key],
+      group: "action",
       run: go(`/${key}`),
     }));
     nav.push({
@@ -90,42 +128,61 @@ export default function CommandPalette() {
       label: t.common.paletteThemeAction,
       hint: theme,
       icon: Palette,
-      run: () => {
-        const next = THEME_CYCLE[(THEME_CYCLE.indexOf(theme) + 1) % THEME_CYCLE.length];
-        setTheme(next);
-      },
+      group: "action",
+      run: () =>
+        setTheme(
+          THEME_CYCLE[(THEME_CYCLE.indexOf(theme) + 1) % THEME_CYCLE.length],
+        ),
     });
     nav.push({
       id: "language",
       label: t.common.paletteLanguageAction,
       hint: language === "ko" ? "한국어 → English" : "English → 한국어",
       icon: Languages,
-      run: () => {
-        void setLanguage(language === "ko" ? "en" : "ko");
-      },
+      group: "action",
+      run: () => void setLanguage(language === "ko" ? "en" : "ko"),
     });
-    return nav;
-  }, [tabs, t, theme, language, router, setTheme, setLanguage]);
-
-  const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return actions;
-    return actions.filter(
+    if (!q) return nav;
+    return nav.filter(
       (a) =>
         a.label.toLowerCase().includes(q) ||
         (a.hint?.toLowerCase().includes(q) ?? false),
     );
-  }, [actions, query]);
+  }, [tabs, t, theme, language, query, router, setTheme, setLanguage]);
+
+  const wikiItems = useMemo<Item[]>(
+    () =>
+      hits.map((hit) => ({
+        id: `wiki:${hit.path}`,
+        label: hit.title,
+        hint: hit.snippet,
+        icon: FileText,
+        group: "wiki",
+        run: () => {
+          setOpen(false);
+          router.push(`/explorer?ws=wiki&path=${encodeURIComponent(hit.path)}`);
+        },
+      })),
+    [hits, router],
+  );
+
+  const items = useMemo(
+    () => [...actionItems, ...wikiItems],
+    [actionItems, wikiItems],
+  );
 
   useEffect(() => {
     setActiveIndex(0);
-  }, [query]);
+  }, [query, hits]);
 
   if (!open) return null;
 
   function runAt(index: number) {
-    filtered[index]?.run();
+    items[index]?.run();
   }
+
+  const firstWikiIndex = actionItems.length;
 
   return (
     <div
@@ -148,11 +205,11 @@ export default function CommandPalette() {
             onKeyDown={(e) => {
               if (e.key === "ArrowDown") {
                 e.preventDefault();
-                setActiveIndex((i) => (filtered.length ? (i + 1) % filtered.length : 0));
+                setActiveIndex((i) => (items.length ? (i + 1) % items.length : 0));
               } else if (e.key === "ArrowUp") {
                 e.preventDefault();
                 setActiveIndex((i) =>
-                  filtered.length ? (i - 1 + filtered.length) % filtered.length : 0,
+                  items.length ? (i - 1 + items.length) % items.length : 0,
                 );
               } else if (e.key === "Enter") {
                 e.preventDefault();
@@ -167,15 +224,20 @@ export default function CommandPalette() {
           </kbd>
         </div>
         <ul className="max-h-80 overflow-auto p-1.5">
-          {filtered.length === 0 ? (
+          {items.length === 0 ? (
             <li className="px-3 py-6 text-center text-xs text-ink-faint">
               {t.common.paletteNoResults}
             </li>
           ) : (
-            filtered.map((action, i) => {
-              const Icon = action.icon;
+            items.map((item, i) => {
+              const Icon = item.icon;
               return (
-                <li key={action.id}>
+                <li key={item.id}>
+                  {i === firstWikiIndex && wikiItems.length > 0 ? (
+                    <div className="mb-1 mt-2 px-2.5 font-mono text-[10px] uppercase tracking-widest text-ink-faint">
+                      {t.common.paletteWikiResults}
+                    </div>
+                  ) : null}
                   <button
                     type="button"
                     onMouseEnter={() => setActiveIndex(i)}
@@ -187,11 +249,11 @@ export default function CommandPalette() {
                   >
                     <Icon aria-hidden className="h-4 w-4 shrink-0 text-ink-dim" />
                     <span className="min-w-0 flex-1 truncate text-sm text-ink">
-                      {action.label}
+                      {item.label}
                     </span>
-                    {action.hint ? (
-                      <span className="shrink-0 truncate font-mono text-[10px] text-ink-faint">
-                        {action.hint}
+                    {item.hint ? (
+                      <span className="max-w-[45%] shrink-0 truncate font-mono text-[10px] text-ink-faint">
+                        {item.hint}
                       </span>
                     ) : null}
                   </button>

@@ -35,6 +35,7 @@ export const TEXT = {
       paletteThemeAction: "테마 전환",
       paletteLanguageAction: "언어 전환",
       paletteNoResults: "결과 없음",
+      paletteWikiResults: "위키 검색",
     },
     sidebar: {
       local: "local",
@@ -597,6 +598,7 @@ export const TEXT = {
       paletteThemeAction: "Switch theme",
       paletteLanguageAction: "Switch language",
       paletteNoResults: "No results",
+      paletteWikiResults: "Wiki search",
     },
     sidebar: {
       local: "local",
