@@ -170,8 +170,15 @@ function buildArgs(
     case "claude": {
       // Token streaming: NDJSON deltas are parsed back into plain text by the
       // runCli stdout handler. Without it, `-p` buffers everything until exit.
+      // --include-partial-messages makes claude emit fine-grained token deltas
+      // (stream_event/content_block_delta) instead of one big block at the end.
       const stream = streamTokens
-        ? ["--output-format", "stream-json", "--verbose"]
+        ? [
+            "--output-format",
+            "stream-json",
+            "--verbose",
+            "--include-partial-messages",
+          ]
         : [];
       return safeMode
         ? ["-p", prompt, ...stream]

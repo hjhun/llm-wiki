@@ -25,26 +25,46 @@ export type StreamJsonParser = {
   finalText(): string;
 };
 
-function extractTextFromLine(
-  obj: unknown,
-): { delta: string; result: string | null } {
-  if (!obj || typeof obj !== "object") return { delta: "", result: null };
+type LineKind =
+  | { kind: "partial"; text: string } // incremental token delta
+  | { kind: "assistant"; text: string } // full (cumulative) message block
+  | { kind: "result"; result: string } // terminal authoritative answer
+  | { kind: "none" };
+
+function contentBlockDeltaText(o: Record<string, unknown>): string | null {
+  if (
+    o.type === "content_block_delta" &&
+    o.delta &&
+    typeof o.delta === "object"
+  ) {
+    const d = o.delta as Record<string, unknown>;
+    if (typeof d.text === "string") return d.text;
+  }
+  return null;
+}
+
+function classifyLine(obj: unknown): LineKind {
+  if (!obj || typeof obj !== "object") return { kind: "none" };
   const o = obj as Record<string, unknown>;
 
   // Terminal result event carries the complete answer.
   if (o.type === "result" && typeof o.result === "string") {
-    return { delta: "", result: o.result };
+    return { kind: "result", result: o.result };
   }
 
-  // Anthropic streaming delta: { type: "content_block_delta",
-  //   delta: { type: "text_delta", text: "..." } }
-  if (o.type === "content_block_delta" && o.delta && typeof o.delta === "object") {
-    const d = o.delta as Record<string, unknown>;
-    if (typeof d.text === "string") return { delta: d.text, result: null };
+  // Direct Anthropic streaming delta.
+  const direct = contentBlockDeltaText(o);
+  if (direct !== null) return { kind: "partial", text: direct };
+
+  // Claude Code `--include-partial-messages` wraps the same delta:
+  //   { type: "stream_event", event: { type: "content_block_delta", delta } }
+  if (o.type === "stream_event" && o.event && typeof o.event === "object") {
+    const inner = contentBlockDeltaText(o.event as Record<string, unknown>);
+    if (inner !== null) return { kind: "partial", text: inner };
   }
 
-  // Full assistant message block(s): { type: "assistant",
-  //   message: { content: [{ type: "text", text: "..." }] } }
+  // Full assistant message block(s):
+  //   { type: "assistant", message: { content: [{ type: "text", text }] } }
   if (o.type === "assistant" && o.message && typeof o.message === "object") {
     const msg = o.message as Record<string, unknown>;
     if (Array.isArray(msg.content)) {
@@ -59,17 +79,21 @@ function extractTextFromLine(
           text += (block as Record<string, unknown>).text as string;
         }
       }
-      if (text) return { delta: text, result: null };
+      if (text) return { kind: "assistant", text };
     }
   }
 
-  return { delta: "", result: null };
+  return { kind: "none" };
 }
 
 export function createClaudeStreamParser(): StreamJsonParser {
   let buffer = "";
   let streamed = "";
   let result: string | null = null;
+  // Once we see fine-grained partial deltas, the later full `assistant`
+  // message is just their cumulative duplicate — skip it so the live stream
+  // and the delta fallback don't double-count the answer.
+  let sawPartial = false;
 
   function consumeLine(line: string): string {
     const trimmed = line.trim();
@@ -80,13 +104,22 @@ export function createClaudeStreamParser(): StreamJsonParser {
     } catch {
       return ""; // not a JSON line (banner, blank, partial) — ignore
     }
-    const { delta, result: res } = extractTextFromLine(obj);
-    if (res !== null) result = res;
-    if (delta) {
-      streamed += delta;
-      return delta;
+    const parsed = classifyLine(obj);
+    switch (parsed.kind) {
+      case "result":
+        result = parsed.result;
+        return "";
+      case "partial":
+        sawPartial = true;
+        streamed += parsed.text;
+        return parsed.text;
+      case "assistant":
+        if (sawPartial) return ""; // duplicate of the streamed deltas
+        streamed += parsed.text;
+        return parsed.text;
+      default:
+        return "";
     }
-    return "";
   }
 
   return {

@@ -59,6 +59,48 @@ describe("createClaudeStreamParser", () => {
     expect(p.finalText()).toBe("x");
   });
 
+  it("unwraps stream_event partial deltas (--include-partial-messages)", () => {
+    const p = createClaudeStreamParser();
+    let live = "";
+    live += p.push(
+      line({
+        type: "stream_event",
+        event: { type: "content_block_delta", delta: { type: "text_delta", text: "To" } },
+      }),
+    );
+    live += p.push(
+      line({
+        type: "stream_event",
+        event: { type: "content_block_delta", delta: { type: "text_delta", text: "ken" } },
+      }),
+    );
+    expect(live).toBe("Token");
+    expect(p.finalText()).toBe("Token");
+  });
+
+  it("does not double-count: a later full assistant block is skipped after partials", () => {
+    const p = createClaudeStreamParser();
+    let live = "";
+    live += p.push(
+      line({
+        type: "stream_event",
+        event: { type: "content_block_delta", delta: { type: "text_delta", text: "Hi " } },
+      }),
+    );
+    live += p.push(
+      line({
+        type: "stream_event",
+        event: { type: "content_block_delta", delta: { type: "text_delta", text: "there" } },
+      }),
+    );
+    // Claude then emits the cumulative full message — must be ignored.
+    live += p.push(
+      line({ type: "assistant", message: { content: [{ type: "text", text: "Hi there" }] } }),
+    );
+    expect(live).toBe("Hi there"); // not "Hi thereHi there"
+    expect(p.finalText()).toBe("Hi there");
+  });
+
   it("flushes a trailing newline-less result line on finalize", () => {
     const p = createClaudeStreamParser();
     p.push(line({ type: "content_block_delta", delta: { type: "text_delta", text: "partial" } }));
