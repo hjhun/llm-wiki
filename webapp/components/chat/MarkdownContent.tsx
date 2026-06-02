@@ -32,6 +32,7 @@ import remarkGfm from "remark-gfm";
 import rehypeHighlight from "rehype-highlight";
 import { detectCallout } from "@/lib/markdown-callout";
 import remarkWikilinks from "./remark-wikilinks";
+import { extractHeadings, slugify } from "@/lib/markdown-headings";
 import {
   getMermaidRenderConfig,
   MERMAID_THEME_OPTIONS,
@@ -44,6 +45,10 @@ type MarkdownContentProps = {
   content: string;
   emptyText?: string;
   liveMermaid?: boolean;
+  /** Render a table of contents above the body (for long documents). */
+  toc?: boolean;
+  /** Localized ToC heading label. */
+  tocLabel?: string;
 };
 
 type CodeElementProps = {
@@ -59,19 +64,8 @@ type SvgSize = {
 function createMarkdownComponents(liveMermaid: boolean): Components {
   return {
     a({ href, children, ...props }) {
-      const isExplorerLink = href?.startsWith("/explorer?");
-      if (isExplorerLink) {
-        return (
-          <a
-            href={href}
-            title={href}
-            className="not-prose inline-flex max-w-full items-center gap-1 rounded border border-accent/40 bg-accent/10 px-1.5 py-0.5 align-baseline font-mono text-[11px] text-accent no-underline hover:border-accent hover:bg-accent/15"
-            {...props}
-          >
-            <ExternalLink aria-hidden className="h-3 w-3 shrink-0" />
-            <span className="truncate">{children}</span>
-          </a>
-        );
+      if (href?.startsWith("/explorer?")) {
+        return <WikilinkChip href={href}>{children}</WikilinkChip>;
       }
       // Title-only wikilink: no resolvable path, so render a non-navigating
       // chip with a tooltip instead of a dead link.
@@ -97,6 +91,26 @@ function createMarkdownComponents(liveMermaid: boolean): Components {
         <div className="not-prose md-table-wrap">
           <table className="md-table">{children}</table>
         </div>
+      );
+    },
+    h1({ children }) {
+      return <h1 id={slugify(extractText(children))} className="scroll-mt-4">{children}</h1>;
+    },
+    h2({ children }) {
+      return <h2 id={slugify(extractText(children))} className="scroll-mt-4">{children}</h2>;
+    },
+    h3({ children }) {
+      return <h3 id={slugify(extractText(children))} className="scroll-mt-4">{children}</h3>;
+    },
+    h4({ children }) {
+      return <h4 id={slugify(extractText(children))} className="scroll-mt-4">{children}</h4>;
+    },
+    img({ src, alt }) {
+      return (
+        <ImageWithLightbox
+          src={typeof src === "string" ? src : undefined}
+          alt={typeof alt === "string" ? alt : undefined}
+        />
       );
     },
     blockquote({ children }) {
@@ -145,20 +159,53 @@ export default function MarkdownContent({
   content,
   emptyText,
   liveMermaid = false,
+  toc = false,
+  tocLabel = "목차",
 }: MarkdownContentProps) {
   const components = useMemo(
     () => createMarkdownComponents(liveMermaid),
     [liveMermaid],
   );
+  const headings = useMemo(
+    () =>
+      toc
+        ? extractHeadings(content).filter((h) => h.depth >= 2 && h.depth <= 3)
+        : [],
+    [toc, content],
+  );
 
   return (
-    <ReactMarkdown
-      remarkPlugins={[remarkGfm, remarkWikilinks]}
-      rehypePlugins={[[rehypeHighlight, { detect: true, ignoreMissing: true }]]}
-      components={components}
-    >
-      {content || emptyText || ""}
-    </ReactMarkdown>
+    <>
+      {headings.length >= 3 ? (
+        <nav className="not-prose mb-4 rounded-md border border-line bg-bg-subtle/60 px-3 py-2.5">
+          <div className="mb-1.5 font-mono text-[10px] uppercase tracking-widest text-ink-faint">
+            {tocLabel}
+          </div>
+          <ul className="space-y-0.5 text-[12.5px]">
+            {headings.map((heading, index) => (
+              <li
+                key={`${heading.slug}-${index}`}
+                style={{ paddingLeft: (heading.depth - 2) * 12 }}
+              >
+                <a
+                  href={`#${heading.slug}`}
+                  className="text-ink-dim no-underline hover:text-accent"
+                >
+                  {heading.text}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </nav>
+      ) : null}
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm, remarkWikilinks]}
+        rehypePlugins={[[rehypeHighlight, { detect: true, ignoreMissing: true }]]}
+        components={components}
+      >
+        {content || emptyText || ""}
+      </ReactMarkdown>
+    </>
   );
 }
 
@@ -174,6 +221,142 @@ function extractText(node: ReactNode): string {
     return extractText(element.props.children);
   }
   return "";
+}
+
+/** Strip YAML frontmatter and clamp to a short hover-preview snippet. */
+function stripPreview(content: string): string {
+  const withoutFrontmatter = content.replace(/^---\n[\s\S]*?\n---\n?/, "");
+  return withoutFrontmatter.trim().slice(0, 400);
+}
+
+type PreviewState = "idle" | "loading" | "ready" | "error";
+
+/**
+ * Path-style wikilink rendered as an Explorer chip. Hovering fetches the target
+ * page and shows a short content preview in a popover.
+ */
+function WikilinkChip({
+  href,
+  children,
+}: {
+  href: string;
+  children: ReactNode;
+}) {
+  const [state, setState] = useState<PreviewState>("idle");
+  const [preview, setPreview] = useState<string>("");
+  const [hover, setHover] = useState(false);
+
+  async function load() {
+    if (state !== "idle") return;
+    setState("loading");
+    try {
+      const query = href.split("?")[1] ?? "";
+      const params = new URLSearchParams(query);
+      const ws = params.get("ws") ?? "";
+      const path = params.get("path") ?? "";
+      const res = await fetch(
+        `/api/files/content?ws=${encodeURIComponent(ws)}&path=${encodeURIComponent(path)}`,
+        { cache: "no-store" },
+      );
+      if (!res.ok) throw new Error();
+      const json = (await res.json()) as { content?: string };
+      setPreview(stripPreview(json.content ?? ""));
+      setState("ready");
+    } catch {
+      setState("error");
+    }
+  }
+
+  return (
+    <span
+      className="not-prose relative inline-block align-baseline"
+      onMouseEnter={() => {
+        setHover(true);
+        void load();
+      }}
+      onMouseLeave={() => setHover(false)}
+    >
+      <a
+        href={href}
+        title={href}
+        className="inline-flex max-w-full items-center gap-1 rounded border border-accent/40 bg-accent/10 px-1.5 py-0.5 font-mono text-[11px] text-accent no-underline hover:border-accent hover:bg-accent/15"
+      >
+        <ExternalLink aria-hidden className="h-3 w-3 shrink-0" />
+        <span className="truncate">{children}</span>
+      </a>
+      {hover && state !== "idle" ? (
+        <span className="absolute left-0 top-full z-50 mt-1 block w-80 max-w-[80vw] rounded-md border border-line bg-bg-panel/95 p-2.5 text-[11.5px] leading-snug shadow-[0_18px_46px_rgb(0_0_0_/_0.28)] backdrop-blur-xl">
+          {state === "loading" ? (
+            <span className="text-ink-faint">…</span>
+          ) : state === "error" ? (
+            <span className="text-ink-faint">미리보기를 불러올 수 없습니다.</span>
+          ) : (
+            <span className="line-clamp-6 whitespace-pre-wrap font-sans text-ink-dim">
+              {preview || "(빈 문서)"}
+            </span>
+          )}
+        </span>
+      ) : null}
+    </span>
+  );
+}
+
+function ImageWithLightbox({ src, alt }: { src?: string; alt?: string }) {
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") setOpen(false);
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [open]);
+
+  if (!src) return null;
+
+  return (
+    <>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={src}
+        alt={alt ?? ""}
+        loading="lazy"
+        onClick={() => setOpen(true)}
+        className="cursor-zoom-in rounded-md border border-line"
+      />
+      {open ? (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label={alt || "image"}
+          onClick={() => setOpen(false)}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-bg/96 p-6 backdrop-blur-xl"
+        >
+          <button
+            type="button"
+            onClick={() => setOpen(false)}
+            aria-label="Close"
+            className="absolute right-4 top-4 inline-flex h-8 w-8 items-center justify-center rounded-md border border-line bg-bg-subtle text-ink-dim transition hover:border-danger/60 hover:text-danger"
+          >
+            <X aria-hidden className="h-4 w-4" />
+          </button>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={src}
+            alt={alt ?? ""}
+            onClick={(event) => event.stopPropagation()}
+            className="max-h-full max-w-full rounded-md border border-line shadow-[0_24px_60px_rgb(0_0_0_/_0.4)]"
+          />
+        </div>
+      ) : null}
+    </>
+  );
 }
 
 function CopyableCodeBlock({

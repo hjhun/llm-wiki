@@ -29,6 +29,7 @@ export const TEXT = {
       language: "언어",
       korean: "한국어",
       english: "English",
+      tableOfContents: "목차",
     },
     sidebar: {
       local: "local",
@@ -124,6 +125,7 @@ export const TEXT = {
       copyMessage: "메시지 복사",
       copiedMessage: "복사됨",
       saveRequested: "답변 저장을 요청했습니다.",
+      sourcesLabel: "참고한 소스",
       newChat: "+ New Chat",
       renameChat: "채팅 이름 변경",
       renameInput: "채팅 이름",
@@ -584,6 +586,7 @@ export const TEXT = {
       language: "Language",
       korean: "한국어",
       english: "English",
+      tableOfContents: "Contents",
     },
     sidebar: {
       local: "local",
@@ -683,6 +686,7 @@ export const TEXT = {
       copyMessage: "Copy message",
       copiedMessage: "Copied",
       saveRequested: "Requested to save the answer.",
+      sourcesLabel: "Sources",
       newChat: "+ New Chat",
       renameChat: "Rename chat",
       renameInput: "Chat name",
