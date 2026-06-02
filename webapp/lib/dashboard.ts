@@ -29,10 +29,28 @@ export type DashboardData = {
   lint: {
     latest: string | null;
     locked: boolean;
+    issues: LintCounts | null;
   };
   recentLog: LogEntry[];
   generatedAt: string;
 };
+
+export type LintCounts = {
+  todo: number;
+  done: number;
+  warnings: number;
+};
+
+/**
+ * Heuristic counts from a lint report: open checklist items (`- [ ]`), resolved
+ * items (`- [x]`), and warning markers (⚠️). Format-agnostic on purpose.
+ */
+export function parseLintCounts(text: string): LintCounts {
+  const todo = (text.match(/^\s*[-*]\s*\[ \]/gm) ?? []).length;
+  const done = (text.match(/^\s*[-*]\s*\[[xX]\]/gm) ?? []).length;
+  const warnings = (text.match(/⚠️|⚠/gu) ?? []).length;
+  return { todo, done, warnings };
+}
 
 /**
  * `wiki/log.md`의 append-only 항목을 파싱한다. 항목 헤딩은
@@ -162,6 +180,10 @@ export async function collectDashboard(): Promise<DashboardData> {
     readTextSafe("wiki", "log.md"),
   ]);
 
+  const lintText = latestLint
+    ? await readTextSafe("wiki", `lint/${latestLint}`)
+    : null;
+
   return {
     raw: {
       totalFiles: rawFiles.filter((path) => {
@@ -184,6 +206,7 @@ export async function collectDashboard(): Promise<DashboardData> {
     lint: {
       latest: latestLint,
       locked: lintLocked,
+      issues: lintText ? parseLintCounts(lintText) : null,
     },
     recentLog: logText ? parseRecentLog(logText, 6) : [],
     generatedAt: new Date().toISOString(),

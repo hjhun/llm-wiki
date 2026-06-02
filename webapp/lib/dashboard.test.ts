@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   countUnprocessedRaw,
   expectedSourcePath,
+  parseLintCounts,
   parseRecentLog,
 } from "./dashboard";
 
@@ -39,6 +40,24 @@ describe("countUnprocessedRaw", () => {
     const raw = ["a.md", "b/c.md"];
     const sources = ["a.md", "b/c.md"];
     expect(countUnprocessedRaw(raw, sources)).toBe(0);
+  });
+});
+
+describe("parseLintCounts", () => {
+  it("counts open/resolved checklist items and warnings", () => {
+    const report = [
+      "# Lint 2026-06-02",
+      "- [ ] broken wikilink in foo",
+      "- [x] fixed stale claim",
+      "- [ ] missing metadata",
+      "> ⚠️ Conflicts with bar",
+      "plain ⚠ note",
+    ].join("\n");
+    expect(parseLintCounts(report)).toEqual({ todo: 2, done: 1, warnings: 2 });
+  });
+
+  it("returns zeros for an empty report", () => {
+    expect(parseLintCounts("")).toEqual({ todo: 0, done: 0, warnings: 0 });
   });
 });
 

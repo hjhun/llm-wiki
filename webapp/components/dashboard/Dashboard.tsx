@@ -34,7 +34,11 @@ type DashboardData = {
     communities: number;
     updatedAt: string | null;
   };
-  lint: { latest: string | null; locked: boolean };
+  lint: {
+    latest: string | null;
+    locked: boolean;
+    issues: { todo: number; done: number; warnings: number } | null;
+  };
   recentLog: LogEntry[];
   generatedAt: string;
 };
@@ -83,6 +87,9 @@ export default function Dashboard() {
 
   useEffect(() => {
     void load();
+    // C1: keep the dashboard live with a light auto-refresh.
+    const timer = window.setInterval(() => void load(), 30_000);
+    return () => window.clearInterval(timer);
   }, [load]);
 
   return (
@@ -164,14 +171,19 @@ export default function Dashboard() {
                     }
                   />
                 ) : (
-                  <div className="grid grid-cols-3 gap-3">
-                    <Metric label={td.graphNodes} value={data.graph.nodes} />
-                    <Metric label={td.graphEdges} value={data.graph.edges} />
-                    <Metric
-                      label={td.graphCommunities}
-                      value={data.graph.communities}
-                    />
-                  </div>
+                  <Link href="/graph" className="block no-underline">
+                    <div className="grid grid-cols-3 gap-3">
+                      <Metric label={td.graphNodes} value={data.graph.nodes} />
+                      <Metric label={td.graphEdges} value={data.graph.edges} />
+                      <Metric
+                        label={td.graphCommunities}
+                        value={data.graph.communities}
+                      />
+                    </div>
+                    <span className="mt-3 inline-flex text-xs text-accent hover:underline">
+                      {td.openGraph}
+                    </span>
+                  </Link>
                 )}
               </Panel>
 
@@ -194,6 +206,23 @@ export default function Dashboard() {
                     <span className="text-ink-faint">{td.lintNone}</span>
                   )}
                 </div>
+                {data.lint.issues ? (
+                  <div className="mt-3 flex flex-wrap gap-1.5">
+                    <StatusBadge
+                      tone={data.lint.issues.todo > 0 ? "warning" : "ready"}
+                    >
+                      {td.lintTodo} {data.lint.issues.todo}
+                    </StatusBadge>
+                    <StatusBadge tone="ready">
+                      {td.lintDone} {data.lint.issues.done}
+                    </StatusBadge>
+                    {data.lint.issues.warnings > 0 ? (
+                      <StatusBadge tone="warning">
+                        ⚠ {data.lint.issues.warnings}
+                      </StatusBadge>
+                    ) : null}
+                  </div>
+                ) : null}
               </Panel>
 
               <Panel eyebrow="raw" title={td.rawUnprocessed}>
