@@ -1,5 +1,3 @@
-import fs from "node:fs/promises";
-import path from "node:path";
 import { z } from "zod";
 import { requireSession, errorMessage, jsonError } from "@/lib/api";
 import { createChatJob, createChatJobStream } from "@/lib/chat-jobs";
@@ -7,19 +5,12 @@ import type { ChatSendEvent } from "@/lib/chat-events";
 import { displayChunk } from "@/lib/cli-output";
 import { loadConfig } from "@/lib/config";
 import { CLI_NAMES, runCli, type CliName } from "@/lib/cli";
-import { PROJECT_ROOT } from "@/lib/paths";
 import {
   appendMessage,
   buildSessionPromptContext,
   newSession,
 } from "@/lib/sessions";
-import {
-  PROGRESS_STATE_PATH,
-  WIKI_LOG_REL,
-  buildProgressReference,
-  formatStateSummary,
-  summarizeIngestState,
-} from "@/lib/ingest-loop";
+import { buildProgressReference } from "@/lib/ingest-loop";
 import {
   isOrchestratedKind,
   runMultiAgentOperation,
@@ -28,18 +19,18 @@ import {
   snapshotAnswerMtimes,
   sweepAnswersForSecrets,
 } from "@/lib/answer-secret-sweep";
-
-const CHAT_KINDS = [
-  "chat",
-  "ingest",
-  "ingest-loop",
-  "preprocess",
-  "query",
-  "lint",
-  "graph",
-] as const;
-
-type ChatKindInput = (typeof CHAT_KINDS)[number];
+import {
+  CHAT_KINDS,
+  formatCancelledReply,
+  formatTimedOutReply,
+  initialOperationSummary,
+  normalizeKind,
+  operationTargetFromMessage,
+  querySingleAgentPolicy,
+  shorten,
+  type ChatKindInput,
+} from "@/lib/chat/send-helpers";
+import { startProgressWatcher } from "@/lib/chat/progress-watcher";
 
 const Body = z.object({
   sessionPath: z.string().min(1).optional(),
@@ -63,208 +54,6 @@ const Body = z.object({
    */
   kind: z.enum(CHAT_KINDS).optional(),
 });
-
-const LOG_HEADING_RE =
-  /^##\s+\[([^\]]+)\]\s+(ingest|preprocess|query|lint|graph)\s*\|\s*(.+?)\s*$/;
-
-type ProgressEvent = Extract<ChatSendEvent, { type: "progress" }>;
-
-/**
- * Polling watcher that exposes ingest sub-chunk progress to the chat stream.
- * Skills persist state to wiki/.progress/ingest/.state.json after every
- * sub-chunk and append a heading to wiki/log.md, so this watcher reads both
- * during runCli rather than relying on the CLI's stdout flushing behavior
- * (claude -p / codex exec frequently buffer until exit).
- *
- * Returns a disposer that stops the timer. The watcher swallows all I/O
- * errors — it must never break the main CLI stream.
- */
-function startProgressWatcher(
-  emit: (event: ProgressEvent) => void,
-  options: { sessionPath?: string } = {},
-): () => void {
-  const stateAbs = path.join(PROJECT_ROOT, PROGRESS_STATE_PATH);
-  const logAbs = path.join(PROJECT_ROOT, WIKI_LOG_REL);
-  let stopped = false;
-  let lastStateMtime = 0;
-  let lastSummary = "";
-  let baselineLogSize: number | null = null;
-
-  const tick = async () => {
-    if (stopped) return;
-    try {
-      const st = await fs.stat(stateAbs);
-      if (st.mtimeMs !== lastStateMtime) {
-        lastStateMtime = st.mtimeMs;
-        const raw = await fs.readFile(stateAbs, "utf8");
-        const summary = summarizeIngestState(raw, {
-          sessionPath: options.sessionPath,
-        });
-        if (summary) {
-          const line = formatStateSummary(summary);
-          if (line !== lastSummary) {
-            lastSummary = line;
-            emit({
-              type: "progress",
-              phase: "state",
-              summary: line,
-              active: summary.active_leaf,
-            });
-          }
-        }
-      }
-    } catch {
-      // ENOENT or partial JSON — try again on the next tick.
-    }
-    if (!options.sessionPath) {
-      try {
-        const st = await fs.stat(logAbs);
-        if (baselineLogSize == null) {
-          baselineLogSize = st.size;
-        } else if (st.size > baselineLogSize) {
-          const length = st.size - baselineLogSize;
-          const fh = await fs.open(logAbs, "r");
-          try {
-            const buf = Buffer.alloc(length);
-            await fh.read(buf, 0, length, baselineLogSize);
-            const text = buf.toString("utf8");
-            const lines = text.split("\n");
-            const completed = lines.slice(0, -1);
-            let consumedBytes = 0;
-            for (const line of completed) {
-              consumedBytes += Buffer.byteLength(line, "utf8") + 1;
-              const m = LOG_HEADING_RE.exec(line);
-              if (m) {
-                emit({
-                  type: "progress",
-                  phase: "log",
-                  ts: m[1],
-                  op: m[2],
-                  detail: m[3],
-                });
-              }
-            }
-            baselineLogSize += consumedBytes;
-          } finally {
-            await fh.close();
-          }
-        } else if (st.size < baselineLogSize) {
-          baselineLogSize = st.size;
-        }
-      } catch {
-        // log.md may not exist yet — that is fine.
-      }
-    }
-  };
-
-  void tick();
-  const handle = setInterval(() => {
-    void tick();
-  }, 1500);
-
-  return () => {
-    stopped = true;
-    clearInterval(handle);
-  };
-}
-
-function shorten(s: string, n: number): string {
-  const t = s.trim().replace(/\s+/g, " ");
-  return t.length > n ? `${t.slice(0, n - 1)}…` : t;
-}
-
-function formatCancelledReply(input: {
-  kind: string;
-  exitCode: number;
-  durationMs: number;
-}): string {
-  return [
-    "⛔ 사용자 Stop 요청으로 중단됨.",
-    "",
-    `- kind: ${input.kind}`,
-    `- exitCode: ${input.exitCode}`,
-    `- durationMs: ${input.durationMs}`,
-    "- result: 실행 중이던 CLI 프로세스에 SIGTERM을 보냈고, 추가 에이전트 응답 생성은 건너뛰었습니다.",
-  ].join("\n");
-}
-
-function formatTimedOutReply(input: { kind: string; durationMs: number }) {
-  return [
-    "⏱️ CLI 실행 시간이 설정된 제한을 초과해 중단되었습니다.",
-    "",
-    `- kind: ${input.kind}`,
-    `- durationMs: ${input.durationMs}`,
-    "- result: timeout 타이머가 실행 중이던 CLI 프로세스에 SIGTERM을 보냈습니다.",
-    "- note: 기본 설정에서는 query timeout이 비활성화되어야 합니다. 이 메시지가 보이면 config/local.json의 cli.timeouts 값을 확인하세요.",
-  ].join("\n");
-}
-
-function inferKind(message: string): ChatKindInput {
-  const head = message.trimStart().toLowerCase();
-  if (head.startsWith("/ingest-loop")) return "ingest-loop";
-  if (head.startsWith("/ingest")) return "ingest";
-  if (head.startsWith("/preprocess")) return "preprocess";
-  if (head.startsWith("/query")) return "query";
-  if (head.startsWith("/lint")) return "lint";
-  if (head.startsWith("wiki-graphify ")) return "graph";
-  if (head.startsWith("/")) return "chat";
-  return "query";
-}
-
-function operationTargetFromMessage(kind: ChatKindInput, message: string): string {
-  const trimmed = message.trim();
-  if (kind === "lint") return "wiki/";
-  if (kind === "graph") return "wiki/graph/";
-  if (kind === "preprocess") {
-    const target = trimmed.replace(/^\/preprocess\b/i, "").trim();
-    return target || "raw/";
-  }
-  if (kind === "ingest" || kind === "ingest-loop") {
-    const target = trimmed.replace(/^\/(?:ingest-loop|ingest)\b/i, "").trim();
-    return target || "raw/";
-  }
-  return "wiki/";
-}
-
-function initialOperationSummary(kind: ChatKindInput, target: string): string {
-  if (kind === "lint") {
-    return `lint 준비: ${target}의 링크, frontmatter, stale claim을 점검합니다.`;
-  }
-  if (kind === "ingest-loop") {
-    return `ingest-loop 준비: ${target} leaf와 source coverage를 반복 정비합니다.`;
-  }
-  if (kind === "ingest") {
-    return `ingest 준비: ${target} source page와 merge 상태를 정비합니다.`;
-  }
-  if (kind === "preprocess") {
-    return `preprocess 준비: ${target} 노이즈 제거 계획을 점검합니다.`;
-  }
-  if (kind === "graph") {
-    return `graph 준비: ${target} 그래프 산출물을 갱신합니다.`;
-  }
-  return `${kind} 준비: ${target}에서 필요한 증거를 확인합니다.`;
-}
-
-function normalizeKind(message: string, requested?: ChatKindInput): ChatKindInput {
-  const inferred = inferKind(message);
-  if (!requested || requested === "chat") return inferred;
-  return requested;
-}
-
-function querySingleAgentPolicy(): string {
-  return [
-    "This request is a single-agent /query operation.",
-    "Follow the LLM Wiki query pattern: answer from the persistent compiled wiki, not by treating raw documents or search snippets as one-off RAG chunks.",
-    "Use wiki-query: infer the user's intent, plan the investigation, read wiki/index.md first, select candidate pages, use available read-only retrieval/context tools such as wiki-search-qmd or wiki-graphify when useful, and read the evidence before answering.",
-    "Do not merely return search hits, excerpts, candidate pages, or tool output. Synthesize the evidence into an answer tailored to the user's actual question, with a clear conclusion first when possible.",
-    "If the question is a code/API/troubleshooting question, prioritize wiki/code pages and targeted read-only raw/ searches only when the Code Wiki is insufficient.",
-    "If the question requires current external facts or a tool outside wiki-query, first check what tools are available in this CLI context and use only read-only tools. Clearly separate external facts from wiki-grounded facts and link or cite only sources that are actually necessary for the answer.",
-    "Do not append a sources/references/candidate-pages section just because you inspected wiki/index.md or retrieval helpers. Mention or link wiki pages only when the answer materially relies on them and the link helps the user.",
-    "Treat wiki/index.md, wiki/log.md, sessions, progress files, and candidate-page lists as internal navigation unless the user specifically asks about those files.",
-    "Do not modify raw/. Only create or edit wiki/answers, wiki/index.md, or wiki/log.md when the user explicitly requested --save or clearly consents to saving the answer. If the answer contains a reusable synthesis, end with a concise save suggestion instead of writing files without consent.",
-    "Korean Markdown is a good default for structured query answers. For simple questions, answer briefly without unnecessary sections. Keep any plan summary concise and user-facing; do not expose private chain-of-thought.",
-  ].join("\n");
-}
 
 export async function POST(req: Request) {
   const unauth = await requireSession();
