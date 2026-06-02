@@ -62,6 +62,7 @@ function cloneConfig(config: SettingsConfig): SettingsConfig {
       paths: { ...config.agent.paths },
       orchestration: { ...config.agent.orchestration },
     },
+    cli: { ...config.cli },
     chunking: { ...config.chunking },
     graph: { ...config.graph },
     search: { ...config.search, qmd: { ...config.search.qmd } },
@@ -230,6 +231,7 @@ export default function Settings() {
         body: JSON.stringify({
           server: draft.server,
           agent: draft.agent,
+          cli: draft.cli,
           chunking: draft.chunking,
           graph: draft.graph,
           search: draft.search,
@@ -471,6 +473,26 @@ export default function Settings() {
                       onChange={(e) =>
                         updateDraft((next) => {
                           next.agent.safeMode = e.target.checked;
+                        })
+                      }
+                      className="h-4 w-4 accent-accent"
+                    />
+                  </label>
+                  <label className="mt-3 flex items-center justify-between gap-4 rounded border border-line bg-bg px-3 py-2">
+                    <span>
+                      <span className="block text-sm font-medium text-ink">
+                        {t.settings.streamTokens}
+                      </span>
+                      <span className="block text-xs text-ink-faint">
+                        {t.settings.streamTokensDesc}
+                      </span>
+                    </span>
+                    <input
+                      type="checkbox"
+                      checked={draft.cli.streamTokens}
+                      onChange={(e) =>
+                        updateDraft((next) => {
+                          next.cli.streamTokens = e.target.checked;
                         })
                       }
                       className="h-4 w-4 accent-accent"

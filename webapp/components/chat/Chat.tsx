@@ -96,14 +96,22 @@ function activeRound(progress: ChatProgress | null): number | null {
   return agent?.round ?? null;
 }
 
+function formatElapsed(ms: number): string {
+  const secs = Math.max(0, Math.floor(ms / 1000));
+  if (secs < 60) return `${secs}s`;
+  return `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, "0")}`;
+}
+
 function RunningOperationBar({
   kind,
   target,
   progress,
+  elapsedMs,
 }: {
   kind: ChatKind | null;
   target: string;
   progress: ChatProgress | null;
+  elapsedMs: number;
 }) {
   const { t } = useLanguage();
   const label = operationLabel(kind);
@@ -131,6 +139,13 @@ function RunningOperationBar({
               {t.chat.operationRound(round)}
             </span>
           ) : null}
+          <span
+            className="shrink-0 font-mono text-[10px] tabular-nums tracking-widest text-accent"
+            aria-label={t.chat.operationElapsed}
+            title={t.chat.operationElapsed}
+          >
+            {formatElapsed(elapsedMs)}
+          </span>
         </div>
         <div className="grid min-w-0 flex-1 gap-1 md:grid-cols-[minmax(9rem,0.7fr)_minmax(14rem,1.3fr)]">
           <div className="flex min-w-0 items-center gap-1.5">
@@ -162,6 +177,7 @@ export default function Chat() {
   const [sessions, setSessions] = useState<SessionRef[]>([]);
   const [active, setActive] = useState<ActiveSession | null>(null);
   const [pending, setPending] = useState(false);
+  const [elapsedMs, setElapsedMs] = useState(0);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [progress, setProgress] = useState<ChatProgress | null>(null);
@@ -232,6 +248,21 @@ export default function Chat() {
 
   // 초기에는 가장 최근 세션만 연다. 실행 중인 다른 세션의 job에 자동으로
   // 붙으면 채널 간 진행 내용이 섞여 보일 수 있다.
+  // Live elapsed-time counter for the running-operation bar. Coding-agent CLIs
+  // (codex exec / claude -p) buffer stdout until exit, so the answer often
+  // arrives in one burst at the end; a ticking timer reassures the user the
+  // run is still progressing instead of staring at a frozen screen.
+  useEffect(() => {
+    if (!pending) {
+      setElapsedMs(0);
+      return;
+    }
+    const startedAt = Date.now();
+    setElapsedMs(0);
+    const handle = setInterval(() => setElapsedMs(Date.now() - startedAt), 250);
+    return () => clearInterval(handle);
+  }, [pending]);
+
   useEffect(() => {
     (async () => {
       const list = await refreshSessions();
@@ -811,6 +842,7 @@ export default function Chat() {
             kind={activeKind}
             target={runningTarget}
             progress={progress}
+            elapsedMs={elapsedMs}
           />
         ) : null}
 

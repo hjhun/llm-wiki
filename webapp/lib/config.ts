@@ -191,6 +191,16 @@ export const ConfigSchema = z.object({
   }),
   cli: z.object({
     /**
+     * Opt-in token streaming. claude `-p` buffers all output until exit, so the
+     * chat answer arrives in one burst at the end. When enabled, the claude
+     * agent is run with `--output-format stream-json --verbose` and the JSON
+     * deltas are parsed back into incremental plain text, so onStdout delivers
+     * tokens as they are generated. Experimental and claude-only for now; other
+     * CLIs keep their buffered behavior regardless of this flag. Default off to
+     * preserve the verified output path.
+     */
+    streamTokens: z.boolean().default(false),
+    /**
      * Upper bound on how many characters of child stdout runCli buffers in
      * memory. When exceeded, content is dropped from the head, keeping the
      * tail, and a truncate marker is recorded.

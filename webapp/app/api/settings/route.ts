@@ -35,6 +35,11 @@ const Body = z.object({
       }),
     })
     .optional(),
+  cli: z
+    .object({
+      streamTokens: z.boolean(),
+    })
+    .optional(),
   chunking: z
     .object({
       maxFiles: z.number().int().min(1).max(100),
@@ -235,6 +240,9 @@ export async function PUT(req: Request) {
             ...current.publicQuery,
             ...parsed.data.publicQuery,
           }
+        : undefined,
+      cli: parsed.data.cli
+        ? { ...current.cli, ...parsed.data.cli }
         : undefined,
       autoIngest: parsed.data.autoIngest,
       autoLint: parsed.data.autoLint,

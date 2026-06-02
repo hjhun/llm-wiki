@@ -240,6 +240,7 @@ export async function readSettingsState() {
     config: {
       server: cfg.server,
       agent: cfg.agent,
+      cli: { streamTokens: cfg.cli.streamTokens },
       chunking: cfg.chunking,
       graph: cfg.graph,
       search: cfg.search,

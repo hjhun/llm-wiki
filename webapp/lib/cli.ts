@@ -4,6 +4,7 @@ import { spawn } from "node:child_process";
 import { existsSync, promises as fs } from "node:fs";
 import path from "node:path";
 import { loadConfig } from "./config";
+import { createClaudeStreamParser } from "./cli-stream-json";
 import {
   CLI_RUNTIME_DETECTED_PATH,
   CONFIG_ROOT,
@@ -156,6 +157,7 @@ function buildArgs(
   safeMode: boolean,
   projectRoot: string,
   skipGitRepoCheck: boolean,
+  streamTokens: boolean,
 ): string[] {
   switch (cli) {
     case "codex":
@@ -165,10 +167,16 @@ function buildArgs(
         ...(safeMode ? [] : ["--dangerously-bypass-approvals-and-sandbox"]),
         prompt,
       ];
-    case "claude":
+    case "claude": {
+      // Token streaming: NDJSON deltas are parsed back into plain text by the
+      // runCli stdout handler. Without it, `-p` buffers everything until exit.
+      const stream = streamTokens
+        ? ["--output-format", "stream-json", "--verbose"]
+        : [];
       return safeMode
-        ? ["-p", prompt]
-        : ["-p", prompt, "--dangerously-skip-permissions"];
+        ? ["-p", prompt, ...stream]
+        : ["-p", prompt, "--dangerously-skip-permissions", ...stream];
+    }
     case "agy":
       return safeMode
         ? [
@@ -914,12 +922,15 @@ export async function runCli(
 
   const cwd = opts.cwd ?? PROJECT_ROOT;
   const projectRoot = opts.projectRoot ?? cwd;
+  // Token streaming is opt-in and currently claude-only; other CLIs ignore it.
+  const streamTokens = (cfg.cli.streamTokens ?? false) && cli === "claude";
   const args = buildArgs(
     cli,
     prompt,
     opts.safeMode ?? false,
     projectRoot,
     opts.skipGitRepoCheck ?? false,
+    streamTokens,
   );
   const spawnPlan = opts.sandbox
     ? await buildBubblewrapSpawnPlan({
@@ -950,12 +961,21 @@ export async function runCli(
     });
     const stdoutBuf = new TailBuffer(stdoutCap);
     const stderrBuf = new TailBuffer(stderrCap);
+    // In streaming mode the raw NDJSON never reaches stdoutBuf or onStdout —
+    // the parser emits plain-text deltas live and the final plain text is
+    // pushed into stdoutBuf on close, so RunResult.stdout stays plain text.
+    const streamParser = streamTokens ? createClaudeStreamParser() : null;
     let closed = false;
     let timedOut = false;
     let aborted = false;
     let abortKillTimer: ReturnType<typeof setTimeout> | null = null;
     child.stdout.on("data", (d: Buffer) => {
       const chunk = d.toString();
+      if (streamParser) {
+        const text = streamParser.push(chunk);
+        if (text) opts.onStdout?.(text);
+        return;
+      }
       stdoutBuf.push(chunk);
       opts.onStdout?.(chunk);
     });
@@ -1005,6 +1025,10 @@ export async function runCli(
       if (timeoutKillTimer) clearTimeout(timeoutKillTimer);
       if (abortKillTimer) clearTimeout(abortKillTimer);
       if (killOnAbort) opts.signal?.removeEventListener("abort", onAbort);
+      if (streamParser) {
+        // Authoritative plain-text answer (result field, else accumulated deltas).
+        stdoutBuf.push(streamParser.finalText());
+      }
       resolve({
         stdout: stdoutBuf.toString(),
         stderr: stderrBuf.toString(),

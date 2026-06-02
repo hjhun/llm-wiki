@@ -85,6 +85,9 @@ export type SettingsConfig = {
       managerName: string;
     };
   };
+  cli: {
+    streamTokens: boolean;
+  };
   chunking: {
     maxFiles: number;
     maxBytes: number;
