@@ -127,3 +127,76 @@ fn truncate(s: &str, max: usize) -> String {
 pub fn body_stream(resp: Response) -> impl Stream<Item = reqwest::Result<Bytes>> {
     resp.bytes_stream()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn truncate_passes_through_short_strings() {
+        assert_eq!(truncate("hello", 10), "hello");
+        // Exactly at the limit is left intact (no ellipsis).
+        assert_eq!(truncate("hello", 5), "hello");
+    }
+
+    #[test]
+    fn truncate_cuts_long_strings_and_appends_ellipsis() {
+        assert_eq!(truncate("abcdef", 3), "abc…");
+    }
+
+    #[test]
+    fn truncate_counts_characters_not_bytes() {
+        // Multi-byte chars must not be split mid-byte.
+        assert_eq!(truncate("héllo", 5), "héllo");
+        assert_eq!(truncate("héllo!", 5), "héllo…");
+        assert_eq!(truncate("가나다라", 2), "가나…");
+    }
+
+    #[test]
+    fn chat_kind_serializes_kebab_case() {
+        assert_eq!(serde_json::to_value(ChatKind::Ingest).unwrap(), "ingest");
+        assert_eq!(
+            serde_json::to_value(ChatKind::IngestLoop).unwrap(),
+            "ingest-loop"
+        );
+        assert_eq!(serde_json::to_value(ChatKind::Query).unwrap(), "query");
+        assert_eq!(serde_json::to_value(ChatKind::Lint).unwrap(), "lint");
+    }
+
+    #[test]
+    fn chat_send_body_omits_none_fields() {
+        let body = ChatSendBody {
+            message: "/ingest raw/x",
+            kind: ChatKind::Ingest,
+            agent: None,
+            context: None,
+            session_path: None,
+        };
+        assert_eq!(
+            serde_json::to_value(&body).unwrap(),
+            json!({ "message": "/ingest raw/x", "kind": "ingest" })
+        );
+    }
+
+    #[test]
+    fn chat_send_body_renames_session_path_and_includes_set_fields() {
+        let body = ChatSendBody {
+            message: "/query hi",
+            kind: ChatKind::Query,
+            agent: Some("claude"),
+            context: Some("slim"),
+            session_path: Some("2026-06-02/x.md"),
+        };
+        assert_eq!(
+            serde_json::to_value(&body).unwrap(),
+            json!({
+                "message": "/query hi",
+                "kind": "query",
+                "agent": "claude",
+                "context": "slim",
+                "sessionPath": "2026-06-02/x.md"
+            })
+        );
+    }
+}
