@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import AgentEdgePanel from "@/components/agent-panel/AgentEdgePanel";
+import CommandPalette from "@/components/CommandPalette";
 import { LanguageProvider } from "@/components/i18n";
 import Sidebar from "@/components/Sidebar";
 import { ThemeProvider } from "@/components/theme";
@@ -37,6 +38,7 @@ export default async function ProtectedLayout({
             </main>
           </div>
           {cfg.ui.agentEdgePanelEnabled ? <AgentEdgePanel /> : null}
+          <CommandPalette />
         </ToastProvider>
       </LanguageProvider>
     </ThemeProvider>

@@ -30,6 +30,11 @@ export const TEXT = {
       korean: "한국어",
       english: "English",
       tableOfContents: "목차",
+      commandPalette: "명령 팔레트",
+      commandPalettePlaceholder: "이동하거나 명령을 검색…",
+      paletteThemeAction: "테마 전환",
+      paletteLanguageAction: "언어 전환",
+      paletteNoResults: "결과 없음",
     },
     sidebar: {
       local: "local",
@@ -587,6 +592,11 @@ export const TEXT = {
       korean: "한국어",
       english: "English",
       tableOfContents: "Contents",
+      commandPalette: "Command palette",
+      commandPalettePlaceholder: "Jump to or search commands…",
+      paletteThemeAction: "Switch theme",
+      paletteLanguageAction: "Switch language",
+      paletteNoResults: "No results",
     },
     sidebar: {
       local: "local",
