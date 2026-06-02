@@ -321,7 +321,7 @@ export const ConfigSchema = z.object({
     theme: z.enum(["default", "light", "dark"]).default("default"),
     appSubtitle: z.string().max(80).default(""),
     defaultTab: z
-      .enum(["chat", "explorer", "graph", "automations", "settings"])
+      .enum(["dashboard", "chat", "explorer", "graph", "automations", "settings"])
       .default("chat"),
     agentEdgePanelEnabled: z.boolean().default(true),
   }),

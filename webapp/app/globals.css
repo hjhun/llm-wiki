@@ -136,8 +136,217 @@ select {
   --tw-prose-td-borders: rgb(var(--color-line));
 }
 
+/* Inline code as a subtle chip, and drop the typography plugin's backtick
+   pseudo-quotes. Block code (inside <pre>) is excluded so highlighting and
+   the code-block chrome are untouched. */
+.prose-theme :where(code):not(pre code) {
+  background: rgb(var(--color-bg-subtle));
+  border: 1px solid rgb(var(--color-line));
+  border-radius: 4px;
+  padding: 0.1em 0.35em;
+  font-size: 0.85em;
+  font-weight: 500;
+}
+.prose-theme :where(code):not(pre code)::before,
+.prose-theme :where(code):not(pre code)::after {
+  content: none;
+}
+
+/* ── Code syntax highlighting (rehype-highlight / highlight.js) ──────────
+   highlight.js emits .hljs-* token classes; we map them onto the design
+   tokens so highlighting tracks the active theme instead of shipping a
+   separate light/dark stylesheet. The code block wrapper owns the bg, so
+   .hljs stays transparent. */
+.hljs {
+  background: transparent;
+  color: rgb(var(--color-ink));
+}
+.hljs-comment,
+.hljs-quote {
+  color: rgb(var(--color-ink-faint));
+  font-style: italic;
+}
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-literal,
+.hljs-doctag,
+.hljs-name {
+  color: rgb(var(--color-info));
+}
+.hljs-string,
+.hljs-regexp,
+.hljs-addition,
+.hljs-meta-string {
+  color: rgb(var(--color-success));
+}
+.hljs-number,
+.hljs-symbol,
+.hljs-bullet,
+.hljs-link {
+  color: rgb(var(--color-warning));
+}
+.hljs-title,
+.hljs-section,
+.hljs-built_in,
+.hljs-class .hljs-title,
+.hljs-title.class_,
+.hljs-title.function_ {
+  color: rgb(var(--color-accent));
+}
+.hljs-attr,
+.hljs-attribute,
+.hljs-variable,
+.hljs-template-variable,
+.hljs-type,
+.hljs-selector-class,
+.hljs-selector-attr,
+.hljs-selector-pseudo {
+  color: rgb(var(--color-info));
+}
+.hljs-meta,
+.hljs-deletion {
+  color: rgb(var(--color-danger));
+}
+.hljs-emphasis {
+  font-style: italic;
+}
+.hljs-strong {
+  font-weight: 700;
+}
+
+/* ── Markdown callouts ──────────────────────────────────────────────────
+   Rendered from blockquotes whose first line carries a callout marker
+   (e.g. the CLAUDE.md "⚠️ Conflicts with ..." convention). */
+.md-callout {
+  margin: 1rem 0;
+  border: 1px solid rgb(var(--color-line));
+  border-left-width: 3px;
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  color: rgb(var(--color-ink));
+  font-size: 0.875rem;
+  line-height: 1.55;
+}
+.md-callout > :first-child {
+  margin-top: 0;
+}
+.md-callout > :last-child {
+  margin-bottom: 0;
+}
+.md-callout-warning {
+  border-left-color: rgb(var(--color-warning));
+  background: rgb(var(--color-warning) / 0.1);
+}
+.md-callout-info {
+  border-left-color: rgb(var(--color-info));
+  background: rgb(var(--color-info) / 0.1);
+}
+.md-callout-danger {
+  border-left-color: rgb(var(--color-danger));
+  background: rgb(var(--color-danger) / 0.1);
+}
+
+/* ── Markdown tables (GFM) ──────────────────────────────────────────────
+   Wrapped in a horizontally scrollable container with a zebra body and a
+   sticky-feeling header tint. */
+.md-table-wrap {
+  margin: 1rem 0;
+  overflow-x: auto;
+  border: 1px solid rgb(var(--color-line));
+  border-radius: 8px;
+}
+.md-table {
+  width: 100%;
+  margin: 0;
+  border-collapse: collapse;
+  font-size: 0.8125rem;
+}
+.md-table th,
+.md-table td {
+  padding: 0.5rem 0.75rem;
+  text-align: left;
+  border-bottom: 1px solid rgb(var(--color-line));
+  border-right: 1px solid rgb(var(--color-line) / 0.6);
+}
+.md-table th:last-child,
+.md-table td:last-child {
+  border-right: none;
+}
+.md-table thead th {
+  background: rgb(var(--color-bg-subtle));
+  color: rgb(var(--color-ink));
+  font-weight: 600;
+  white-space: nowrap;
+}
+.md-table tbody tr:nth-child(even) {
+  background: rgb(var(--color-ink) / 0.03);
+}
+.md-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+/* Streaming caret shown at the tail of the live assistant message. */
+.md-stream-cursor {
+  display: inline-block;
+  width: 0.5rem;
+  height: 1rem;
+  margin-left: 1px;
+  vertical-align: text-bottom;
+  background: rgb(var(--color-accent));
+  border-radius: 1px;
+  animation: md-stream-blink 1s steps(2, start) infinite;
+}
+@keyframes md-stream-blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .md-stream-cursor {
+    animation: none;
+  }
+}
+
 .chat-message {
   color: rgb(var(--color-ink));
+  animation: chat-message-in 0.26s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes chat-message-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.toast-enter {
+  animation: toast-in 0.24s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-message,
+  .toast-enter {
+    animation: none;
+  }
 }
 
 .chat-message header {
