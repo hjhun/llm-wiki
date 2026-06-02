@@ -581,6 +581,8 @@ export const ConfigSchema = z.object({
        * docs/PLAN_TELEGRAM_BOT_2026-06-01.md for the full design.
        */
       enabled: z.boolean().default(false),
+      /** Push a Telegram notice to trusted chats when a long ingest run ends. */
+      notifyOnIngest: z.boolean().default(true),
       /** Bot token issued by @BotFather. Never returned by GET endpoints. */
       botToken: z.string().nullable().default(null),
       mode: z.enum(["polling", "webhook"]).default("polling"),
