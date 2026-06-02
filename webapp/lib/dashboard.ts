@@ -47,6 +47,9 @@ export function parseRecentLog(text: string, limit = 6): LogEntry[] {
     if (!match) continue;
     const timestamp = match[1].trim();
     const rest = match[2].trim();
+    // Skip the format-example heading in log.md's preamble, e.g.
+    // "## [YYYY-MM-DD HH:MM] ingest | query | lint | graph | <title>".
+    if (/YYYY|HH:MM/.test(timestamp) || /<[a-z ]+>/i.test(rest)) continue;
     const parts = rest
       .split("|")
       .map((part) => part.trim())

@@ -82,4 +82,15 @@ describe("parseRecentLog", () => {
   it("returns an empty array when there are no headings", () => {
     expect(parseRecentLog("just text\nno headings")).toEqual([]);
   });
+
+  it("skips the log.md format-example heading", () => {
+    const withTemplate = `## [YYYY-MM-DD HH:MM] ingest | query | lint | graph | <title>
+- format example
+
+## [2026-05-17 10:00] ingest | Real entry
+`;
+    const entries = parseRecentLog(withTemplate);
+    expect(entries).toHaveLength(1);
+    expect(entries[0].title).toBe("Real entry");
+  });
 });
