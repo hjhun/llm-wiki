@@ -27,6 +27,7 @@ import {
   ZoomIn,
   ZoomOut,
 } from "lucide-react";
+import { createPortal } from "react-dom";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeHighlight from "rehype-highlight";
@@ -307,6 +308,11 @@ function WikilinkChip({
 
 function ImageWithLightbox({ src, alt }: { src?: string; alt?: string }) {
   const [open, setOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     if (!open) return;
@@ -334,13 +340,14 @@ function ImageWithLightbox({ src, alt }: { src?: string; alt?: string }) {
         onClick={() => setOpen(true)}
         className="cursor-zoom-in rounded-md border border-line"
       />
-      {open ? (
+      {open && mounted
+        ? createPortal(
         <div
           role="dialog"
           aria-modal="true"
           aria-label={alt || "image"}
           onClick={() => setOpen(false)}
-          className="fixed inset-0 z-50 flex items-center justify-center bg-bg/96 p-6 backdrop-blur-xl"
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-bg/96 p-6 backdrop-blur-xl"
         >
           <button
             type="button"
@@ -357,8 +364,10 @@ function ImageWithLightbox({ src, alt }: { src?: string; alt?: string }) {
             onClick={(event) => event.stopPropagation()}
             className="max-h-full max-w-full rounded-md border border-line shadow-[0_24px_60px_rgb(0_0_0_/_0.4)]"
           />
-        </div>
-      ) : null}
+        </div>,
+        document.body,
+      )
+        : null}
     </>
   );
 }
@@ -435,6 +444,7 @@ function MermaidDiagram({
   const [rendering, setRendering] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [zoom, setZoom] = useState(1);
+  const [mounted, setMounted] = useState(false);
   const idRef = useRef<string | null>(null);
   const renderCountRef = useRef(0);
   const renderTokenRef = useRef(0);
@@ -444,6 +454,10 @@ function MermaidDiagram({
   if (!idRef.current) {
     idRef.current = `chat-mermaid-${Math.random().toString(36).slice(2)}`;
   }
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -756,12 +770,13 @@ function MermaidDiagram({
         className="overflow-auto p-3 [&_svg]:h-auto [&_svg]:max-w-full"
         dangerouslySetInnerHTML={{ __html: svg }}
       />
-      {expanded && svg && svgSize ? (
+      {expanded && svg && svgSize && mounted
+        ? createPortal(
         <div
           role="dialog"
           aria-modal="true"
           aria-label="Expanded Mermaid diagram"
-          className="fixed inset-0 z-50 flex flex-col bg-bg/96 text-ink backdrop-blur-xl"
+          className="fixed inset-0 z-[100] flex flex-col bg-bg/96 text-ink backdrop-blur-xl"
         >
           <div className="flex min-h-12 shrink-0 items-center justify-between gap-3 border-b border-line bg-bg-panel/90 px-4 py-2 shadow-sm">
             <div className="flex min-w-0 items-center gap-2">
@@ -831,8 +846,10 @@ function MermaidDiagram({
               />
             </div>
           </div>
-        </div>
-      ) : null}
+        </div>,
+            document.body,
+          )
+        : null}
     </div>
   );
 }
