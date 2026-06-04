@@ -13,7 +13,9 @@ import {
   buildProgressReference,
   clearStopFlag,
   decideLoopHalt,
+  ingestActivitySignature,
   ingestMadeProgress,
+  ingestRoundAdvanced,
   maybeAutoRunGraphify,
   readActionableLeafPaths,
   readIngestStateSummary,
@@ -610,6 +612,7 @@ async function runLoopOperation(input: {
             codeWikiStatusRef: await buildCodeWikiStatusReference({ rawScope }),
             rawScope,
           });
+    const activityBefore = await ingestActivitySignature();
     const runs = await runWorkerBatch({
       cfg: input.cfg,
       kind: "ingest-loop",
@@ -636,7 +639,15 @@ async function runLoopOperation(input: {
 
     const summary = await readIngestStateSummary({ rawScope });
     const snap = await readProgressSnapshot({ rawScope });
-    idleRounds = ingestMadeProgress(prevSnap, snap) ? 0 : idleRounds + 1;
+    const activityAfter = await ingestActivitySignature();
+    idleRounds = ingestRoundAdvanced({
+      before: prevSnap,
+      after: snap,
+      activityBefore,
+      activityAfter,
+    })
+      ? 0
+      : idleRounds + 1;
     prevSnap = snap;
 
     const decision = decideLoopHalt({

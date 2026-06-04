@@ -4,6 +4,7 @@ import {
   decideLoopHalt,
   formatStateSummary,
   ingestMadeProgress,
+  ingestRoundAdvanced,
   newlyDoneLeaves,
 } from "./loop-decision";
 import { EMPTY_SNAPSHOT } from "./types";
@@ -132,6 +133,44 @@ describe("ingestMadeProgress", () => {
 
   it("returns false when nothing advanced", () => {
     expect(ingestMadeProgress(snap(), snap())).toBe(false);
+  });
+});
+
+describe("ingestRoundAdvanced", () => {
+  it("counts a tracked counter moving as progress", () => {
+    expect(
+      ingestRoundAdvanced({
+        before: snap(),
+        after: snap({ leavesDone: 1 }),
+        activityBefore: "sig",
+        activityAfter: "sig",
+      }),
+    ).toBe(true);
+  });
+
+  it("counts a changed activity signature as progress even with no counter movement", () => {
+    // Enumeration discovering new leaves or merge-pass page synthesis mutates
+    // .state.json / wiki/log.md without moving a completion counter; that must
+    // reset the stagnation guard so the loop keeps going.
+    expect(
+      ingestRoundAdvanced({
+        before: snap(),
+        after: snap(),
+        activityBefore: "state:1:10|log:1:20",
+        activityAfter: "state:2:12|log:1:20",
+      }),
+    ).toBe(true);
+  });
+
+  it("reports no progress only when both counters and activity are unchanged", () => {
+    expect(
+      ingestRoundAdvanced({
+        before: snap(),
+        after: snap(),
+        activityBefore: "frozen",
+        activityAfter: "frozen",
+      }),
+    ).toBe(false);
   });
 });
 

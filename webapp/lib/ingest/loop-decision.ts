@@ -39,6 +39,37 @@ export function newlyDoneLeaves(
   return after.doneLeaves.filter((p) => !prev.has(p));
 }
 
+/**
+ * Whether an ingest round did anything worth resetting the stagnation counter.
+ *
+ * `ingestMadeProgress` only sees "done"-style counters (sub-chunks/leaves done,
+ * source pages written, missing-output counts dropping, merge done/pending).
+ * Plenty of legitimate rounds advance real work without moving any of those:
+ * enumeration discovering new pending leaves, entity/concept/map/index page
+ * synthesis during the merge pass, and partial sub-chunk advancement that does
+ * not yet flip a sub-chunk to `done`. Those rounds were miscounted as idle, so
+ * the loop gave up (`stalled` / incomplete) after only LOOP_STAGNATION_LIMIT
+ * rounds while actionable work still remained.
+ *
+ * `activityBefore`/`activityAfter` are opaque liveness fingerprints of the
+ * ingest state for the round (see `ingestActivitySignature`): if they differ,
+ * the worker mutated `.state.json` or appended to `wiki/log.md`, i.e. it did a
+ * real unit of work this round even when no completion counter moved. A truly
+ * frozen worker (stale `.lock`, stuck `in_progress`) leaves both untouched, so
+ * the stagnation guard still fires after the limit.
+ */
+export function ingestRoundAdvanced(input: {
+  before: ProgressSnapshot;
+  after: ProgressSnapshot;
+  activityBefore: string;
+  activityAfter: string;
+}): boolean {
+  return (
+    ingestMadeProgress(input.before, input.after) ||
+    input.activityBefore !== input.activityAfter
+  );
+}
+
 export type LoopDecision =
   | { halt: false }
   | {

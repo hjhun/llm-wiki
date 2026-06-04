@@ -41,6 +41,7 @@ import {
   decideLoopHalt,
   formatStateSummary,
   ingestMadeProgress,
+  ingestRoundAdvanced,
   newlyDoneLeaves,
   type LoopDecision,
 } from "./ingest/loop-decision";
@@ -56,6 +57,7 @@ import {
 export {
   normalizeRawScope,
   ingestMadeProgress,
+  ingestRoundAdvanced,
   newlyDoneLeaves,
   decideLoopHalt,
   buildLoopContinuationPrompt,
@@ -74,6 +76,28 @@ export const PROGRESS_LOCK_PATH = "wiki/.progress/ingest/.lock";
 export const PROGRESS_LEAVES_LOCK_DIR = "wiki/.progress/ingest/leaves";
 export const WIKI_LOG_REL = "wiki/log.md";
 export const WIKI_INDEX_REL = "wiki/index.md";
+
+/**
+ * Opaque liveness fingerprint of the ingest state. Combines the mtime+size of
+ * the progress `.state.json` with the append-only `wiki/log.md`, the two files
+ * the wiki-ingest skill touches on every real unit of work (a sub-chunk/leaf
+ * status update, an enumeration that adds leaves, or the per-chunk log line).
+ * The loop compares the signature before and after a worker round to tell
+ * "the worker did something" from "the worker did nothing", independent of
+ * whether a completion counter moved. See `ingestRoundAdvanced`.
+ */
+export async function ingestActivitySignature(): Promise<string> {
+  const parts: string[] = [];
+  for (const rel of [PROGRESS_STATE_PATH, WIKI_LOG_REL]) {
+    try {
+      const st = await fs.stat(path.join(PROJECT_ROOT, rel));
+      parts.push(`${rel}:${st.mtimeMs}:${st.size}`);
+    } catch {
+      parts.push(`${rel}:-`);
+    }
+  }
+  return parts.join("|");
+}
 
 export async function buildProgressReference(): Promise<string | null> {
   try {
@@ -1224,6 +1248,7 @@ export async function runIngestLoop(
       onChunk?.(banner);
     }
 
+    const activityBefore = await ingestActivitySignature();
     const attempt = await runCliWithIngestLoopRetries(
       {
         agent,
@@ -1264,7 +1289,15 @@ export async function runIngestLoop(
 
     const summary = await readIngestStateSummary({ rawScope });
     const snap = await readProgressSnapshot({ rawScope });
-    idleRounds = ingestMadeProgress(prevSnap, snap) ? 0 : idleRounds + 1;
+    const activityAfter = await ingestActivitySignature();
+    idleRounds = ingestRoundAdvanced({
+      before: prevSnap,
+      after: snap,
+      activityBefore,
+      activityAfter,
+    })
+      ? 0
+      : idleRounds + 1;
 
     if (result.exitCode === 0) {
       const incr = await maybeAutoRunGraphify({
