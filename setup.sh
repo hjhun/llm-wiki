@@ -33,15 +33,15 @@ CLIO_SKILL_TARGETS="${CLIO_SKILL_TARGETS:-global}"
 DETECT_CLI_RUNTIME=1
 
 log() {
-  printf '[llm-wiki] %s\n' "$*"
+  printf '[clio] %s\n' "$*"
 }
 
 warn() {
-  printf '[llm-wiki] warning: %s\n' "$*" >&2
+  printf '[clio] warning: %s\n' "$*" >&2
 }
 
 fail() {
-  printf '[llm-wiki] error: %s\n' "$*" >&2
+  printf '[clio] error: %s\n' "$*" >&2
   exit 2
 }
 
