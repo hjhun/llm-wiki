@@ -52,21 +52,36 @@ export function partitionActionableLeaves(
 export function buildLeafScopeReference(
   assignedLeaves: string[] | null,
   hasState: boolean,
+  stateFileExists = false,
 ): string {
   if (assignedLeaves === null) {
-    if (!hasState) {
+    if (hasState) {
       return [
         "===== ASSIGNED LEAF SCOPE =====",
-        "No prior wiki/.progress/ingest/.state.json exists. You are the bootstrap worker for this round:",
-        "perform leaf enumeration and initial sub-chunk planning per wiki-ingest Step 1, then process at most one sub-chunk.",
-        "Hold the global wiki/.progress/ingest/.lock only for the short enumeration/state-write critical section.",
+        "Unrestricted: pick any pending sub-chunk or merge-pass parent under the current raw scope.",
+        "Use a per-leaf lock at wiki/.progress/ingest/leaves/<sha1(leafPath)>.lock for sub-chunk work.",
+        "Hold the global wiki/.progress/ingest/.lock only briefly during enumeration or state-write critical sections.",
+      ].join("\n");
+    }
+    // No actionable leaf was partitioned, so worker 0 must (re-)enumerate. Two
+    // sub-cases need different wording so the prompt never misstates the state:
+    // the file may not exist yet (first ingest), or it may already exist but
+    // hold no actionable leaf for this scope (an un-enumerated scope subtree, or
+    // every in-scope leaf already done). Both run Step 1, but the second must
+    // not claim "no state.json exists" and must keep enumeration idempotent.
+    if (stateFileExists) {
+      return [
+        "===== ASSIGNED LEAF SCOPE =====",
+        "A wiki/.progress/ingest/.state.json already exists but lists no actionable leaf for the current scope.",
+        "You are the enumeration worker for this round: re-run wiki-ingest Step 1 over the requested raw scope to pick up newly added or changed leaves, updating .state.json idempotently (do not reset leaves already marked done/stale). If enumeration still yields no pending sub-chunk, exit successfully without writing pages.",
+        "Otherwise process at most one pending sub-chunk. Hold the global wiki/.progress/ingest/.lock only for the short enumeration/state-write critical section.",
       ].join("\n");
     }
     return [
       "===== ASSIGNED LEAF SCOPE =====",
-      "Unrestricted: pick any pending sub-chunk or merge-pass parent under the current raw scope.",
-      "Use a per-leaf lock at wiki/.progress/ingest/leaves/<sha1(leafPath)>.lock for sub-chunk work.",
-      "Hold the global wiki/.progress/ingest/.lock only briefly during enumeration or state-write critical sections.",
+      "No wiki/.progress/ingest/.state.json exists yet. You are the bootstrap worker for this round:",
+      "perform leaf enumeration and initial sub-chunk planning per wiki-ingest Step 1, then process at most one sub-chunk.",
+      "Hold the global wiki/.progress/ingest/.lock only for the short enumeration/state-write critical section.",
     ].join("\n");
   }
   if (assignedLeaves.length === 0) {

@@ -16,6 +16,7 @@ import {
   ingestActivitySignature,
   ingestMadeProgress,
   ingestRoundAdvanced,
+  ingestStateFileExists,
   maybeAutoRunGraphify,
   readActionableLeafPaths,
   readIngestStateSummary,
@@ -249,6 +250,10 @@ async function runWorkerBatch(input: {
   const partition = isIngest
     ? partitionActionableLeaves(input.workers.length, actionableLeaves)
     : null;
+  // Distinct from `partition.hasState` (does an actionable-leaf list exist):
+  // this tells the bootstrap worker whether a `.state.json` is already on disk,
+  // so its prompt never falsely claims the file is missing.
+  const stateFileExists = isIngest ? await ingestStateFileExists() : false;
   for (const worker of input.workers) {
     emitAgentProgress(input.onAgentProgress, worker, {
       status: "assigned",
@@ -265,6 +270,7 @@ async function runWorkerBatch(input: {
               ? partition.assignments[worker.index]
               : [],
             partition.hasState,
+            stateFileExists,
           )
         : null;
       const prompt = wrapWorkerPrompt({
@@ -569,8 +575,13 @@ async function runLoopOperation(input: {
   let prevSnap = loopBefore;
   let round = 0;
   let idleRounds = 0;
-  let haltKind: "normal" | "error" | "stopped" | "capped" | "stalled" =
-    "normal";
+  let haltKind:
+    | "normal"
+    | "error"
+    | "stopped"
+    | "capped"
+    | "stalled"
+    | "empty" = "normal";
   let haltReason = "";
   let allRuns: WorkerRun[] = [];
   let totalDurationMs = 0;
@@ -663,6 +674,7 @@ async function runLoopOperation(input: {
       codeLeavesMissingOutputs: snap.codeLeavesMissingOutputs,
       codeFilePagesMissing: snap.codeFilePagesMissing,
       codeDirectoryIndexesMissing: snap.codeDirectoryIndexesMissing,
+      rawScope,
     });
     if (decision.halt) {
       haltKind = decision.kind;

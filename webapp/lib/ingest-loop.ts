@@ -923,6 +923,21 @@ async function streamScanActionableLeaves(
  * unchanged state file are O(1), so the loop pays the parse/scan cost only
  * once per actual state mutation.
  */
+/**
+ * Whether `wiki/.progress/ingest/.state.json` exists on disk. Used to word the
+ * bootstrap-worker prompt precisely: `readActionableLeafPaths` returns `null`
+ * both when the file is absent and when it holds no actionable leaf for the
+ * scope, so the partition alone cannot tell those apart.
+ */
+export async function ingestStateFileExists(): Promise<boolean> {
+  try {
+    await fs.stat(path.join(PROJECT_ROOT, PROGRESS_STATE_PATH));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export async function readActionableLeafPaths(
   rawScope?: string | null,
 ): Promise<string[] | null> {
@@ -958,9 +973,10 @@ export async function readActionableLeafPaths(
       scope,
       ACTIONABLE_SCAN_CAP,
     );
-    // The scanner returns `[]` when the leaves map is empty after scanning;
-    // mirror parseStateJsonActionable's bootstrap fallback by promoting that
-    // to `null` so the partition still grants worker 0 unrestricted scope.
+    // No actionable leaf within scope is the bootstrap signal: promote `[]` to
+    // `null` so the partition still grants worker 0 unrestricted scope to run
+    // Step 1 enumeration (empty leaves map, an un-enumerated scope subtree, or a
+    // changed-but-not-yet-rescanned scope). Matches parseStateJsonActionable.
     if (data != null && data.length === 0) data = null;
   }
 
@@ -1175,7 +1191,7 @@ export type RunIngestLoopResult = {
   lastExitCode: number;
   totalDurationMs: number;
   iterations: number;
-  haltKind: "normal" | "error" | "stopped" | "capped" | "stalled";
+  haltKind: "normal" | "error" | "stopped" | "capped" | "stalled" | "empty";
   haltReason: string;
   loopBefore: ProgressSnapshot;
   loopAfter: ProgressSnapshot;
@@ -1205,8 +1221,13 @@ export async function runIngestLoop(
   let idleRounds = 0;
   let lastExitCode = 0;
   let lastDurationMs = 0;
-  let haltKind: "normal" | "error" | "stopped" | "capped" | "stalled" =
-    "normal";
+  let haltKind:
+    | "normal"
+    | "error"
+    | "stopped"
+    | "capped"
+    | "stalled"
+    | "empty" = "normal";
   let haltReason = "loop terminated without iterations";
   let aggregateReply = "";
   const kindTimeout = cfg.cli.timeouts["ingest-loop"];
@@ -1339,6 +1360,7 @@ export async function runIngestLoop(
       codeLeavesMissingOutputs: snap.codeLeavesMissingOutputs,
       codeFilePagesMissing: snap.codeFilePagesMissing,
       codeDirectoryIndexesMissing: snap.codeDirectoryIndexesMissing,
+      rawScope,
     });
     if (decision.halt) {
       haltKind = decision.kind;

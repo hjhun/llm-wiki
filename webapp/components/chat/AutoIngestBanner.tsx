@@ -19,7 +19,8 @@ type AutoIngestEvent =
         | "capped"
         | "stalled"
         | "skipped"
-        | "noop";
+        | "noop"
+        | "empty";
       reason: string;
       iterations: number;
       durationMs: number;

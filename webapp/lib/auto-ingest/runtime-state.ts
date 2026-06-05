@@ -21,6 +21,7 @@ export const AutoIngestRuntimeSchema = z.object({
         "stalled",
         "skipped",
         "noop",
+        "empty",
       ]),
       reason: z.string(),
       iterations: z.number().int().min(0),

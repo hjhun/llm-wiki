@@ -64,6 +64,70 @@ describe("decideLoopHalt — terminal conditions", () => {
   });
 });
 
+describe("decideLoopHalt — empty scope (nothing to ingest)", () => {
+  it("halts with kind 'empty' when a round enumerated no leaf at all", () => {
+    const d = decideLoopHalt({
+      ...baseDecision,
+      summary: summary({ total: 0, done: 0, pending: 0 }),
+    });
+    expect(d).toMatchObject({ halt: true, kind: "empty" });
+  });
+
+  it("names the scope in the reason when one was given", () => {
+    const d = decideLoopHalt({
+      ...baseDecision,
+      summary: summary({ total: 0, done: 0, pending: 0 }),
+      rawScope: "raw/tizen/alarm",
+    });
+    if (!d.halt) throw new Error("expected halt");
+    expect(d.kind).toBe("empty");
+    expect(d.reason).toContain("raw/tizen/alarm");
+  });
+
+  it("falls back to a raw/ message when no scope was given", () => {
+    const d = decideLoopHalt({
+      ...baseDecision,
+      summary: summary({ total: 0, done: 0, pending: 0 }),
+      rawScope: null,
+    });
+    if (!d.halt) throw new Error("expected halt");
+    expect(d.kind).toBe("empty");
+    expect(d.reason).toContain("raw/");
+  });
+
+  it("is NOT empty when leaves exist (genuine completion stays 'normal')", () => {
+    // total counts done leaves, so a fully-ingested scope must not be
+    // misclassified as empty.
+    const d = decideLoopHalt({
+      ...baseDecision,
+      summary: summary({ total: 2, done: 2, pending: 0 }),
+    });
+    expect(d).toMatchObject({ halt: true, kind: "normal" });
+  });
+
+  it("does not fire empty when summary is null (no state read yet)", () => {
+    const d = decideLoopHalt({ ...baseDecision, summary: null });
+    expect(d.halt).toBe(false);
+  });
+
+  it("error/stop/cap take priority over empty", () => {
+    expect(
+      decideLoopHalt({
+        ...baseDecision,
+        summary: summary({ total: 0 }),
+        exitCode: 1,
+      }),
+    ).toMatchObject({ kind: "error" });
+    expect(
+      decideLoopHalt({
+        ...baseDecision,
+        summary: summary({ total: 0 }),
+        stopRequested: true,
+      }),
+    ).toMatchObject({ kind: "stopped" });
+  });
+});
+
 describe("decideLoopHalt — completion", () => {
   it("completes when all leaves are done and no merge is pending, even with merge status idle", () => {
     const d = decideLoopHalt({

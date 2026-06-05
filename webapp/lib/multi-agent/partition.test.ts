@@ -47,10 +47,27 @@ describe("partitionActionableLeaves", () => {
 });
 
 describe("buildLeafScopeReference", () => {
-  it("null + no state → bootstrap instructions", () => {
-    const text = buildLeafScopeReference(null, false);
+  it("null + no state file → from-scratch bootstrap instructions", () => {
+    const text = buildLeafScopeReference(null, false, false);
     expect(text).toContain("bootstrap worker");
     expect(text).toContain("leaf enumeration");
+    expect(text).toContain("No wiki/.progress/ingest/.state.json exists yet");
+    // Must not contain the state-exists wording.
+    expect(text).not.toContain("already exists");
+  });
+
+  it("null + state file exists → idempotent re-enumeration instructions", () => {
+    const text = buildLeafScopeReference(null, false, true);
+    expect(text).toContain("already exists but lists no actionable leaf");
+    expect(text).toContain("enumeration worker");
+    expect(text).toContain("idempotently");
+    // Must not falsely claim the state file is missing.
+    expect(text).not.toContain("No wiki/.progress/ingest/.state.json exists yet");
+  });
+
+  it("defaults stateFileExists to false (from-scratch wording)", () => {
+    const text = buildLeafScopeReference(null, false);
+    expect(text).toContain("No wiki/.progress/ingest/.state.json exists yet");
   });
 
   it("null + has state → unrestricted instructions", () => {

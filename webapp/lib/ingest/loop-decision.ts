@@ -74,7 +74,7 @@ export type LoopDecision =
   | { halt: false }
   | {
       halt: true;
-      kind: "normal" | "error" | "stopped" | "capped" | "stalled";
+      kind: "normal" | "error" | "stopped" | "capped" | "stalled" | "empty";
       reason: string;
     };
 
@@ -98,6 +98,7 @@ export function decideLoopHalt(input: {
   codeLeavesMissingOutputs?: number;
   codeFilePagesMissing?: number;
   codeDirectoryIndexesMissing?: number;
+  rawScope?: string | null;
 }): LoopDecision {
   if (input.exitCode !== 0) {
     return {
@@ -121,6 +122,23 @@ export function decideLoopHalt(input: {
       halt: true,
       kind: "capped",
       reason: `최대 반복 ${input.maxIter}회에 도달`,
+    };
+  }
+  // Nothing to ingest: a round ran but enumerated no leaf within scope
+  // (`total` counts done leaves too, so genuine completion has total > 0).
+  // Without this branch the empty case falls into the completion branch below
+  // and is misreported as "모든 leaf 완료 (0/0)", hiding that the scope matched
+  // no source files at all — the exact confusion a wrong or non-existent
+  // /ingest-loop path produces. Halt explicitly with an actionable reason
+  // instead of spinning idle rounds into a generic "stalled".
+  if (input.summary && input.summary.total === 0) {
+    const scope = normalizeRawScope(input.rawScope);
+    return {
+      halt: true,
+      kind: "empty",
+      reason: scope
+        ? `지정한 스코프 ${scope}에 ingest할 파일이 없습니다. raw/ 아래에 해당 경로(또는 raw/ 하위의 승인된 심볼릭 링크)가 존재하는지 확인하세요.`
+        : `raw/ 아래에 ingest할 파일이 없습니다.`,
     };
   }
   // Completion: every leaf is done and no merge work is outstanding.

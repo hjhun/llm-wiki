@@ -132,13 +132,6 @@ export function parseStateJsonActionable(
     return null;
   }
   const leaves = (parsed as { leaves: Record<string, unknown> }).leaves;
-  // An empty `leaves` map means no enumeration has run yet, even though the
-  // state file exists. Treat it as bootstrap so worker 0 gets unrestricted
-  // scope and performs Step 1; otherwise every worker would receive an empty
-  // assignment and the loop would never enumerate `raw/`.
-  if (Object.keys(leaves).length === 0) {
-    return null;
-  }
   const actionable: string[] = [];
   for (const [leafPath, leafValue] of Object.entries(leaves)) {
     const leaf = (leafValue ?? {}) as Record<string, unknown>;
@@ -146,6 +139,17 @@ export function parseStateJsonActionable(
     if (status === "done" || status === "stale" || status === "error") continue;
     if (!leafMatchesScope(leafPath, leaf, rawScope)) continue;
     actionable.push(leafPath);
+  }
+  // No actionable leaf within scope is the bootstrap signal: worker 0 gets
+  // unrestricted scope and performs Step 1 enumeration. This covers three
+  // cases that all need enumeration — an empty `leaves` map (never enumerated),
+  // a scope whose subtree was never enumerated (so no recorded leaf matches it),
+  // and a previously-done scope whose raw files changed. Returning `[]` here
+  // instead would hand every worker an empty assignment, so the loop would
+  // never enumerate `raw/` and would stall. Mirrors the stream-scan path in
+  // readActionableLeafPaths, which already promotes empty results to null.
+  if (actionable.length === 0) {
+    return null;
   }
   actionable.sort();
   return actionable;

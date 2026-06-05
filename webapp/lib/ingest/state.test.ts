@@ -94,6 +94,33 @@ describe("parseStateJsonActionable", () => {
     expect(parseStateJsonActionable(stateJson({}), null)).toBeNull();
   });
 
+  it("returns null when a scope matches no enumerated leaf (bootstrap signal)", () => {
+    // Leaves exist for other subtrees but none fall inside the requested scope,
+    // so the scope was never enumerated. Must bootstrap, not hand every worker
+    // an empty assignment.
+    expect(
+      parseStateJsonActionable(
+        stateJson({
+          "raw/articles/a": { status: "pending" },
+          "raw/books/b": { status: "done" },
+        }),
+        "raw/tizen/alarm",
+      ),
+    ).toBeNull();
+  });
+
+  it("returns null when all leaves are terminal (bootstrap re-scan signal)", () => {
+    expect(
+      parseStateJsonActionable(
+        stateJson({
+          "raw/a": { status: "done" },
+          "raw/b": { status: "stale" },
+        }),
+        null,
+      ),
+    ).toBeNull();
+  });
+
   it("returns null for unparseable input", () => {
     expect(parseStateJsonActionable("nope", null)).toBeNull();
   });
