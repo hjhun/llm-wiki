@@ -307,6 +307,9 @@ export const TEXT = {
       noCommunity: "community 정보가 없습니다.",
       report: "report",
       noReport: "리포트 파일이 없습니다.",
+      viewAll: "전체",
+      viewWiki: "위키",
+      viewCode: "코드",
     },
     settings: {
       title: "Settings",
@@ -908,6 +911,9 @@ export const TEXT = {
       noCommunity: "No community data.",
       report: "report",
       noReport: "No report file.",
+      viewAll: "All",
+      viewWiki: "Wiki",
+      viewCode: "Code",
     },
     settings: {
       title: "Settings",

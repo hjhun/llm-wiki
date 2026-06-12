@@ -15,6 +15,12 @@ import type {
   GraphState,
 } from "./types";
 import type { ChatJobSnapshot, ChatSendEvent } from "@/lib/chat-events";
+import {
+  filterGraph,
+  graphCounts,
+  type GraphViewCounts,
+  type GraphViewMode,
+} from "@/lib/graph-view";
 
 type RunResult = {
   sessionPath: string;
@@ -158,6 +164,7 @@ function activeHistoryId(history: SelectionHistory): string | null {
 export default function Graph() {
   const { t } = useLanguage();
   const [state, setState] = useState<GraphState | null>(null);
+  const [viewMode, setViewMode] = useState<GraphViewMode>("all");
   const [selectionHistory, setSelectionHistory] = useState<SelectionHistory>(
     EMPTY_SELECTION_HISTORY,
   );
@@ -328,17 +335,28 @@ export default function Graph() {
     }
   }
 
-  const graph = state?.graph ?? null;
+  const fullGraph = state?.graph ?? null;
+  // The merged graph.json holds both the prose ("wiki") and code subgraphs. The
+  // view tabs project it down to one slice; selection detail still resolves
+  // against the full graph so cross-kind neighbour links keep their labels.
+  const graph = useMemo(
+    () => (fullGraph ? filterGraph(fullGraph, viewMode) : null),
+    [fullGraph, viewMode],
+  );
+  const counts = useMemo<GraphViewCounts>(
+    () => (fullGraph ? graphCounts(fullGraph) : { all: 0, wiki: 0, code: 0 }),
+    [fullGraph],
+  );
   const selected = useMemo(() => {
-    if (!graph || !selectedId) return null;
-    return graph.nodes.find((node) => node.id === selectedId) ?? null;
-  }, [graph, selectedId]);
+    if (!fullGraph || !selectedId) return null;
+    return fullGraph.nodes.find((node) => node.id === selectedId) ?? null;
+  }, [fullGraph, selectedId]);
   const selectedEdges = useMemo(() => {
-    if (!graph || !selectedId) return [];
-    return graph.edges.filter(
+    if (!fullGraph || !selectedId) return [];
+    return fullGraph.edges.filter(
       (edge) => edge.src === selectedId || edge.dst === selectedId,
     );
-  }, [graph, selectedId]);
+  }, [fullGraph, selectedId]);
 
   return (
     <div className="flex h-full w-full flex-col overflow-hidden">
@@ -425,6 +443,14 @@ export default function Graph() {
 
       <section className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_320px] overflow-hidden">
         <main className="flex min-w-0 flex-col overflow-hidden">
+          {fullGraph ? (
+            <ViewTabs
+              mode={viewMode}
+              counts={counts}
+              onChange={setViewMode}
+              text={t.graph}
+            />
+          ) : null}
           <div className="grid shrink-0 grid-cols-4 border-b border-line bg-bg-subtle">
             <Metric label={t.graph.nodes} value={graph?.nodes.length ?? 0} />
             <Metric label={t.graph.edges} value={graph?.edges.length ?? 0} />
@@ -502,6 +528,50 @@ function Metric({
         {label}
       </div>
       <div className="mt-1 truncate text-sm font-medium text-ink">{value}</div>
+    </div>
+  );
+}
+
+function ViewTabs({
+  mode,
+  counts,
+  onChange,
+  text,
+}: {
+  mode: GraphViewMode;
+  counts: GraphViewCounts;
+  onChange: (mode: GraphViewMode) => void;
+  text: ReturnType<typeof useLanguage>["t"]["graph"];
+}) {
+  const tabs: { key: GraphViewMode; label: string; count: number }[] = [
+    { key: "all", label: text.viewAll, count: counts.all },
+    { key: "wiki", label: text.viewWiki, count: counts.wiki },
+    { key: "code", label: text.viewCode, count: counts.code },
+  ];
+  return (
+    <div className="flex shrink-0 items-center gap-1 border-b border-line bg-bg-subtle px-3 py-1.5">
+      {tabs.map((tab) => {
+        const active = tab.key === mode;
+        return (
+          <button
+            key={tab.key}
+            type="button"
+            onClick={() => onChange(tab.key)}
+            aria-pressed={active}
+            className={[
+              "flex items-center gap-1.5 rounded px-2.5 py-1 text-xs font-medium transition-colors",
+              active
+                ? "bg-bg-panel text-ink shadow-sm"
+                : "text-ink-dim hover:bg-bg-panel/60 hover:text-ink",
+            ].join(" ")}
+          >
+            <span>{tab.label}</span>
+            <span className="font-mono text-[10px] text-ink-faint">
+              {tab.count}
+            </span>
+          </button>
+        );
+      })}
     </div>
   );
 }
