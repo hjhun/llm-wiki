@@ -351,6 +351,27 @@ Skill, call #2 (apply):
 3. Append a `wiki/log.md` entry and report `{ok, skipped, failed}`.
 4. Release lock.
 
+## Completion Checklist
+
+Verify every item before reporting the preprocess run complete. Render the
+result as a `- Checklist:` line inside the `wiki/log.md` preprocess entry,
+marking each item `[x]` done, `[ ]` + short reason when blocked, or `[-]` when
+not applicable. Do not claim the run finished while a required `[ ]` remains.
+
+Dry-run (default):
+
+- [ ] Validated the target path is under `raw/`; enumerated leaves leaf-first.
+- [ ] Produced `wiki/.progress/preprocess/<ts>-rules.{json,md}` and `<ts>-plan.json` and a chat summary.
+- [ ] Made NO mutation to `raw/` (no moves, no rewrites).
+
+Apply (`--apply`):
+
+- [ ] Backed up every original to `raw/.trash/<ISO-ts>_<basename>` before any move or in-place rewrite.
+- [ ] Applied only changes present in the approved `<ts>-plan.json`; touched nothing outside the described scope.
+- [ ] Wrote `wiki/.progress/preprocess/<ts>-applied.json`.
+- [ ] Never deleted `raw/chat/` captures or wrote outside `raw/` / `raw/.trash/`.
+- [ ] Appended one `wiki/log.md` preprocess entry.
+
 ## Related Skills
 
 - [wiki-ingest](../wiki-ingest/SKILL.md) — runs after preprocess. With

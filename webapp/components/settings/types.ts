@@ -99,12 +99,17 @@ export type SettingsConfig = {
       scope: "wiki" | "wiki+raw";
       maxNodesPerLeaf: number;
       maxConceptsPerSource: number;
-      maxCodeSymbolsPerFile: number;
       minConfidence: number;
       includeRationaleNodes: boolean;
       includeSemanticSimilarity: boolean;
       includeHyperedges: boolean;
       dropIsolatedDerivedNodes: boolean;
+      proseEdges: "explicit" | "explicit+semantic";
+      facetEdges: boolean;
+      semanticMinConfidence: number;
+      codeModel: "per-project-graphify-out";
+      projectsDir: string;
+      projectAnalysisDir: string;
     };
     autoUpdateOnIngest: boolean;
     autoUpdateStrategy: "auto" | "finalOnly" | "partialAndFinal";

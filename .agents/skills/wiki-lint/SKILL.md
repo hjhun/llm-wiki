@@ -194,6 +194,20 @@ Skill behavior:
 4. Append one line to `wiki/log.md`.
 5. Chat card: "8 automatic fixes, 2 manual items. View report ->".
 
+## Completion Checklist
+
+Verify every item before reporting the lint run complete. Render the result as a
+`- Checklist:` line inside the `wiki/log.md` lint entry, marking each item `[x]`
+done, `[ ]` + short reason when blocked, or `[-]` when not applicable. Do not
+claim the run finished while a required `[ ]` remains.
+
+- [ ] Checked contradictions, stale claims, orphan pages, broken `[[wiki/...]]` wikilinks, missing frontmatter, and frequently-mentioned concepts that lack their own page.
+- [ ] Separated automatically-fixable items from items needing manual review.
+- [ ] Wrote the report to `wiki/lint/<YYYY-MM-DD>.md`.
+- [ ] Masked any secrets/credentials found and flagged them in the report (never left in plaintext).
+- [ ] For `--fix`: applied only safe fixes, moved retired pages to `wiki/archive/` (no deletions), and queued `wiki-graphify update` separately if source paths were reorganized.
+- [ ] Appended one `wiki/log.md` lint entry.
+
 ## Related Skills
 
 - [wiki-ingest](../wiki-ingest/SKILL.md) — potential contradiction notifications can trigger after ingest.

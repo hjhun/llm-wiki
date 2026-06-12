@@ -37,10 +37,10 @@
 | `wiki/` | LLM | LLM may freely write/update | Main wiki body. All generated artifacts go here. |
 | `wiki/sources/` | LLM | LLM | Provenance ledger: one summary page per original `raw/` source, mirroring the logical `raw/` directory structure, plus a generated `wiki/sources/index.md` catalog for topic/entity/source-kind/date lookup. |
 | `wiki/maps/` | LLM | LLM | Optional associative trails and topic maps that connect sources, entities, concepts, answers, and open questions. |
-| `wiki/code/` | LLM | LLM | Optional human-readable code syntheses such as project overviews or saved answers. Not required for ingest completion; source-code structure is represented primarily by graphify artifacts under `wiki/graph/`. |
+| `wiki/code/` | LLM (graphify) | LLM | One detailed `wiki/code/<project>.md` analysis per code project, synthesized by `wiki-graphify` from that project's graphify-out. Replaces per-file code source pages. Source-code structure itself lives in the graph under `wiki/graph/`. |
 | `wiki/answers/` | LLM | LLM | Pages fed back from query answers. |
 | `wiki/lint/` | LLM | LLM | Lint reports (`<date>.md`). |
-| `wiki/graph/` | LLM (graphify) | LLM | Knowledge graph artifacts: `graph.json`, `GRAPH_REPORT.md`, `parts/`, `.state.json`. |
+| `wiki/graph/` | LLM (graphify) | LLM | Knowledge graph artifacts: `graph.json`, `GRAPH_REPORT.md`, prose page-title partials in `parts/`, per-project code graphify-out in `projects/<project>/`, `.state.json`. |
 | `wiki/archive/` | LLM | LLM | Old pages moved here instead of being deleted. |
 | `wiki/index.md` | LLM | LLM | Category catalog. |
 | `wiki/log.md` | LLM | append-only | Chronological operation log. |
@@ -93,10 +93,10 @@ Each operation maps to one or more project skills. If these rules conflict with 
 - Treat `raw/` code as immutable source evidence. Do not format, build, patch, delete, or vendor-prune it during Code Wiki operations.
 - Always follow the **leaf-directory chunks + merge pass** principle (Section 7), using the normal `wiki/.progress/ingest/` state. There is no separate user-facing Code Wiki command.
 - Outputs:
-  - `wiki/sources/<raw-relative-path>.md` source summaries for code files or code groups
-  - `wiki/graph/parts/<path-hash>.json` partial graph artifacts for code leaves
-  - `wiki/graph/graph.json` and `wiki/graph/GRAPH_REPORT.md` after `wiki-graphify update`
-  - optional human-readable syntheses under `wiki/code/<project>/` or `wiki/answers/` when explicitly useful
+  - one `wiki/sources/<project>/index.md` provenance stub per code project (not one page per source file)
+  - `wiki/graph/projects/<project>/` per-project graphify-out (real graphify output), produced by `wiki-graphify`
+  - `wiki/code/<project>.md` detailed project analysis synthesized from the graphify-out
+  - `wiki/graph/graph.json` and `wiki/graph/GRAPH_REPORT.md` after `wiki-graphify update` connects projects + prose
   - updated `wiki/index.md` and appended `wiki/log.md` entries
 - Use specialized Code Wiki skills only for optional synthesis after graph/source evidence exists:
   - [`code-documentation`](.agents/skills/code-documentation/SKILL.md) for module/API/runbook docs
@@ -198,8 +198,16 @@ its raw-mirrored provenance path stable.
   ## [YYYY-MM-DD HH:MM] ingest | <source title or folder name>
   - Changed files: `wiki/sources/articles/foo.md`, `wiki/concepts/bar.md`
   - Notes: N chunks, merge pass complete
+  - Checklist: [x] source pages · [x] log appended · [x] state persisted · [-] graph (separate)
   ```
 - Operation types: `ingest`, `query`, `lint`, `graph`.
+- **Completion Checklist**: each operation skill (`wiki-ingest`, `wiki-graphify`,
+  `wiki-query`, `wiki-lint`, `wiki-preprocess`) carries an authoritative
+  file-based **Completion Checklist** in its `SKILL.md`. Before reporting a run
+  complete, the agent verifies every item and records the result as the
+  `- Checklist:` line above, using `[x]` done, `[ ]` + short reason when blocked,
+  or `[-]` when not applicable. Do not claim a run finished while a required
+  `[ ]` remains. Appendix A is a human-readable summary of these checklists.
 - **Append-only**. Do not edit old entries; append a new entry to correct or supplement them.
 
 ## 6. Skill Routing
@@ -228,10 +236,10 @@ This applies to ingest, Code Wiki ingest, preprocess planning, and graphify. Nev
 2. **Process by chunk**: group only the files in each leaf and process them once.
 3. **Preserve partial outputs**:
    - ingest: immediately save chunk-level summaries/entity pages.
-   - graphify: save partial graphs to `wiki/graph/parts/<path-hash>.json`.
+   - graphify: save prose page-title partials to `wiki/graph/parts/<path-hash>.json`, and per-project code graphify-out to `wiki/graph/projects/<project>/`.
 4. **Merge pass as a separate step**:
    - ingest: update parent-level pages -> root synthesis page -> refresh `wiki/sources/index.md` and useful `wiki/maps/` pages -> reorder `index.md`.
-   - graphify: merge all partial graphs with node normalization and community recomputation, then finalize `wiki/graph/graph.json`.
+   - graphify: connect all prose partials and per-project graphify-out graphs with node normalization, project-to-wiki bridge edges, and community recomputation, then finalize `wiki/graph/graph.json`.
 5. **Persist state**:
    - ingest: record chunk checklists in `sessions/<date>/<time>_ingest.md`.
    - graphify: record last build time and hash per leaf in `wiki/graph/.state.json`.
@@ -242,13 +250,20 @@ This applies to ingest, Code Wiki ingest, preprocess planning, and graphify. Nev
 
 - Graph creation, update, and query operations must go through the [`wiki-graphify`](.agents/skills/wiki-graphify/SKILL.md) skill.
 - `wiki-graphify` builds an Obsidian-like page graph first: each Markdown page's
-  title/path is a stable node, and `[[wikilink]]`, Markdown links, frontmatter
-  `sources`, `raw_path`, and explicit facets become edges. graphify extraction
-  is a bounded enrichment layer, not the primary node model.
-- The default profile is a compact page-title topology graph: source/entity/
-  concept/project/map page nodes and explicit links/facets first, not one node
-  per heading, paragraph, rationale snippet, helper function, or incidental noun.
-- Code Wiki is graph-first: graphify reads code evidence under `raw/` plus generated wiki/source pages and writes graph nodes that connect code symbols, files, modules, concepts, and source summaries.
+  title/path is one stable node. Prose pages are connected by two edge classes
+  only — explicit links (`[[wikilink]]`, Markdown links, frontmatter `sources`,
+  `raw_path`) and high-confidence semantic relatedness (`related_to`) above the
+  configured threshold. Frontmatter facets stay as node metadata and are **not**
+  auto-converted to edges. graphify extraction is a bounded enrichment layer.
+- The default profile is a compact page-title topology graph: one node per page,
+  explicit + thresholded-semantic edges only, not one node per heading,
+  paragraph, rationale snippet, helper function, or incidental noun, and not a
+  dense facet mesh.
+- Code Wiki is graph-first and **per-project**: for each code project under
+  `raw/`, graphify produces a real graphify-out under
+  `wiki/graph/projects/<project>/`, a detailed `wiki/code/<project>.md` analysis
+  is synthesized from it, and the connect pass bridges each project subgraph to
+  the prose concepts/sources it implements or documents.
 - The web app Graph tab does not execute graphify directly. It sends `wiki-graphify build/update` requests to the coding agent CLI selected in Settings, and the coding agent follows this repository's rules and skills to run graphify, chunk processing, and the merge pass.
 - Wiki pages must not call the `graphify` binary directly. The coding agent running `wiki-graphify` chooses the execution path: global `graphify`, or `python3 -m graphify` when needed.
 - `wiki-query` may optionally use graph context from `wiki/graph/GRAPH_REPORT.md`, node adjacency, or `wiki-graphify query` as an auxiliary candidate/context source; it must still ground final answers in wiki/source pages.
@@ -304,6 +319,12 @@ If this file is updated, synchronize the counterpart file as well.
 
 ## Appendix A - Quick Checklist
 
+These are human-readable summaries. The **authoritative, agent-operated**
+checklists live in each operation skill's `## Completion Checklist` section
+(`wiki-ingest`, `wiki-graphify`, `wiki-query`, `wiki-lint`, `wiki-preprocess`);
+the agent verifies those and records a `- Checklist:` line in the `wiki/log.md`
+entry for the run (see §5.2).
+
 Mental checklist for one ingest run:
 
 - [ ] Did you list leaf directories and direct-file pseudo-leaves from the input tree?
@@ -319,9 +340,9 @@ Mental checklist for one Code Wiki run:
 - [ ] Did you process only code-looking leaves under `raw/` or the requested target?
 - [ ] Did you include direct source files in non-leaf directories as their own pseudo-leaf chunks?
 - [ ] Did you skip generated/vendor/build directories unless requested?
-- [ ] Did you write source summaries and record code/mixed leaves in progress state?
-- [ ] Did you avoid file-by-file LLM code documentation unless explicitly requested?
-- [ ] Did `wiki-graphify update` run or remain clearly queued as the follow-up that creates `wiki/graph/graph.json` and `GRAPH_REPORT.md`?
+- [ ] Did you write one `wiki/sources/<project>/index.md` provenance stub per project (not per file) and record code/mixed leaves in progress state?
+- [ ] Did you avoid per-file code source pages and file-by-file LLM code documentation?
+- [ ] Did `wiki-graphify update` run or remain clearly queued as the follow-up that creates `wiki/graph/projects/<project>/`, `wiki/code/<project>.md`, `wiki/graph/graph.json`, and `GRAPH_REPORT.md`?
 - [ ] Did graph nodes/source summaries connect directories/modules/APIs/tests to existing concepts where evidence supports it?
 - [ ] Did you update `wiki/index.md` under the `Code` category?
 - [ ] Did you update `wiki/sources/index.md` and any relevant `wiki/maps/` trails?

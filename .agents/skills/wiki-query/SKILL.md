@@ -182,6 +182,20 @@ Skill behavior:
 
 6. If the user clicks the rendered Save button (or replies with `/query --save <question>`), feed the answer back and update `index.md` and `log.md`.
 
+## Completion Checklist
+
+Verify every item before returning the answer. When the answer is saved back to
+the wiki, render the result as a `- Checklist:` line inside the `wiki/log.md`
+query entry, marking each item `[x]` done, `[ ]` + short reason when blocked, or
+`[-]` when not applicable. Do not present the answer as grounded while a
+required `[ ]` remains.
+
+- [ ] Read `wiki/index.md` to narrow candidate pages before answering; used `raw/` only as fallback.
+- [ ] Grounded the answer in actual wiki/source pages; treated qmd and graph context as auxiliary only.
+- [ ] Cited sources inline with wikilinks; invented no external URLs (marked "source unknown" when absent).
+- [ ] Answered in Korean unless another format/flag was explicitly requested.
+- [ ] If `--save` or user consent: wrote `wiki/answers/<slug>.md` with required frontmatter and updated `wiki/index.md` + appended a `wiki/log.md` query entry.
+
 ## Related Skills
 
 - [wiki-ingest](../wiki-ingest/SKILL.md) — if new material arrived, ingest it before querying.

@@ -19,7 +19,7 @@ Code Wiki graph updates and Korean wiki writing.
 
 Read material newly dropped by the user into `raw/` and perform the following.
 
-1. Write one `wiki/sources/<raw-relative-path>.md` summary page per original source, mirroring the logical `raw/` directory structure instead of filing sources by ingest/source date.
+1. Write one `wiki/sources/<raw-relative-path>.md` summary page per original prose source, mirroring the logical `raw/` directory structure instead of filing sources by ingest/source date. **Code sources are the exception:** instead of one page per file, write a single project provenance stub `wiki/sources/<project>/index.md`, and let `wiki-graphify` produce the per-project graphify-out and the detailed `wiki/code/<project>.md` analysis.
 2. Create or update related entity/concept pages, reusing existing pages instead of creating near-duplicates (see Step 2.3).
 3. If a leaf is code-heavy, keep the normal LLM Wiki ingest contract: write provenance/source summaries and progress state, then let the separate `wiki-graphify update` workflow build the code knowledge graph from the immutable code under `raw/`.
 4. Refresh `wiki/sources/index.md` as a compact source catalog organized by metadata facets such as topic, entity, source kind, source date, raw path prefix, status, and recent updates.
@@ -208,24 +208,34 @@ For exactly **one** sub-chunk whose `status === "pending"`:
    - Add source facets when knowable: `source_kind`, `raw_path`, `language`, `topics`, `entities`, `concepts`, `projects`, `claims`, and `status`. These fields drive retrieval and cataloging; do not encode date or topic taxonomy in the source file path.
    - Preserve dates as metadata only. Choose `source_date` by this priority: explicit source text date -> raw path/metadata date -> raw file mtime -> ingest date. If only the year is known, store the year or `YYYY-MM` when the month is knowable; do not create date folders from it.
    - Body: one-line gist → key points (max 12 bullets) → quotes → wiki connections (`[[Entity]]`, `[[Concept]]`, and useful `[[wiki/maps/<topic>]]` trails) → source path/URL.
-   - For code files, keep the source summary lightweight: identify the file or
-     group as code evidence, note obvious project/module context from filenames
-     or manifests, and defer detailed symbols, dependencies, and line-level
-     structure to graphify.
+   - **For code files, do NOT write a per-file `wiki/sources/<...>/file.md`
+     page.** Per-file code summaries are removed — they were inefficient. Instead
+     ensure exactly **one provenance stub per project** exists at
+     `wiki/sources/<project>/index.md` (create it on first encounter, append the
+     file to its `raw_path`/file list on later encounters). The stub is
+     lightweight: project name, language/stack, the `raw/...` root, and a pointer
+     to the detailed `wiki/code/<project>.md` analysis that `wiki-graphify`
+     produces from the per-project graphify-out. Defer all symbols,
+     dependencies, and line-level structure to graphify.
    - Update the per-leaf JSON entry: `processed: true`, `summary_page: "wiki/sources/<raw-relative-path>.md"`.
    - **Discard the file body from working memory** before opening the next file. Do not keep two file bodies in context simultaneously.
 3. If the sub-chunk is code-heavy, keep Code Wiki work graph-first:
-   - Do **not** create mirrored `wiki/code/<project>/<relative-file>.md` pages
-     or per-directory `index.md` pages as a completion requirement.
-   - Do **not** run `scripts/code-index.mjs` as the normal path. It is a legacy
-     fallback/debug helper only.
+   - Do **not** create per-file `wiki/sources/<...>/file.md` pages or mirrored
+     `wiki/code/<project>/<relative-file>.md` pages. The only code page ingest
+     writes is the one project provenance stub `wiki/sources/<project>/index.md`.
+   - Do **not** write `wiki/code/<project>.md` here. That detailed analysis page
+     is synthesized by `wiki-graphify` from the per-project graphify-out, not by
+     re-reading code files during ingest.
+   - Do **not** run `scripts/code-index.mjs` or `scripts/code-facts.mjs` as the
+     normal path. They are legacy fallback/debug helpers only.
    - Record enough progress state for the backend to know which logical
-     `raw/...` leaf and files were processed. `source_pages_written` remains
-     the provenance contract; `code_outputs` is legacy compatibility and may be
-     omitted for new code ingests.
-   - The Code Wiki artifact for source code is the graphify output produced by
-     a later `wiki-graphify update`: `wiki/graph/parts/<hash>.json`,
-     `wiki/graph/graph.json`, and `wiki/graph/GRAPH_REPORT.md`.
+     `raw/...` leaf, project, and files were processed. `source_pages_written`
+     (the project stub) remains the provenance contract; `code_outputs` is
+     legacy compatibility and may be omitted for new code ingests.
+   - The Code Wiki artifacts for source code are produced by a later
+     `wiki-graphify update`: per-project `wiki/graph/projects/<project>/`
+     graphify-out, `wiki/code/<project>.md`, the connected `wiki/graph/graph.json`,
+     and `wiki/graph/GRAPH_REPORT.md`.
    - If a user explicitly asks for a human-readable architecture, testing, API,
      or debug synthesis after the graph exists, answer from the graph and
      source summaries and optionally save that synthesis as ordinary wiki pages.
@@ -309,21 +319,25 @@ cross-references, and answers. Source-code structure itself is represented by
 the graphify knowledge graph, not by forcing the LLM to write one Markdown page
 per source file.
 
-Primary Code Wiki graph artifacts:
+Primary Code Wiki graph artifacts (the code graph unit is a **whole project**):
 
-- `wiki/graph/parts/<sha1(leafPath)>.json` — partial graph for a raw code leaf.
-- `wiki/graph/facts/<sha1(leafPath)>.json` — normalized Code Facts extracted
-  from raw code before graph conversion.
-- `wiki/graph/graph.json` — merged graph across wiki and raw code evidence.
+- `wiki/graph/projects/<project>/` — the real per-project graphify-out
+  (`graph.json`, `GRAPH_REPORT.md`, native artifacts), produced by
+  `wiki-graphify`. Replaces the old per-leaf `parts/`/`facts/` code path.
+- `wiki/code/<project>.md` — one detailed project analysis synthesized by
+  `wiki-graphify` from that project's graphify-out. Replaces per-file code
+  source pages.
+- `wiki/graph/graph.json` — final connected graph across prose pages and code
+  projects.
 - `wiki/graph/GRAPH_REPORT.md` — human-readable graph report.
-- `wiki/sources/<raw-relative-path>.md` — provenance summary for raw code,
-  logs, tests, or runtime evidence.
+- `wiki/sources/<project>/index.md` — one lightweight provenance stub per code
+  project (the only code page ingest writes). For logs, tests, or runtime
+  evidence that is not source code, a normal `wiki/sources/<raw-relative-path>.md`
+  summary is still appropriate.
 
-Optional human-readable code pages may still be created when they are useful
-synthesis, such as an answer saved under `wiki/answers/` or a project overview
-under `wiki/code/<project>/overview.md`. They are not required for ingest
-completion, and they should be derived from source summaries plus graphify
-evidence rather than ad hoc file-by-file code reading.
+Do not create per-file code source pages or file-by-file `wiki/code` pages.
+Detailed code synthesis is derived from the graphify-out by `wiki-graphify`,
+not by ad hoc file-by-file code reading during ingest.
 
 For code locations, prefer graph nodes and edges containing `source_file` and
 `source_location`. Use logical `raw/...` paths in any saved wiki page:
@@ -458,6 +472,34 @@ Skill behavior on call #1:
 
 Call #2 (`/ingest` again with no arg):
 1. State shows leaf `done`, `merge_pass.pending_parents = ["raw/articles/"]`. Run §Step 3 for that parent. Reorder index. Done.
+
+## Completion Checklist
+
+Verify every item before reporting this run complete. Render the result as a
+`- Checklist:` line inside the `wiki/log.md` entry you append for this run,
+marking each item `[x]` done, `[ ]` + short reason when blocked, or `[-]` when
+not applicable. Do not claim the run finished while a required `[ ]` remains.
+This is the authoritative, file-based checklist for ingest; the Appendix A list
+in `CLAUDE.md`/`AGENTS.md` is a summary of it.
+
+Per sub-chunk (Step 2):
+
+- [ ] Processed exactly one `pending` sub-chunk; read its files one at a time (never two file bodies in memory).
+- [ ] Wrote `wiki/sources/<raw-relative-path>.md` with required frontmatter for each prose file — OR, for code, ensured one `wiki/sources/<project>/index.md` stub and wrote no per-file code pages.
+- [ ] Updated entity/concept pages from takeaways only, reusing existing pages (checked `wiki/index.md` for case/spacing/EN-KO variants; no near-duplicates).
+- [ ] Recorded any contradiction as a block quote on the affected page.
+- [ ] Appended one `wiki/log.md` entry for this sub-chunk.
+- [ ] Marked sub-chunk `done`; if leaf finished, set leaf `done` and queued its parent into `merge_pass.pending_parents`; persisted `.state.json`.
+- [ ] Regenerated `DASHBOARD.md`; released per-leaf lock (and global mutex); returned without starting another sub-chunk.
+
+Per merge pass (Step 3):
+
+- [ ] Ran only when every in-scope leaf is `done` and `merge_pass.status !== "done"`.
+- [ ] Integrated child-leaf summaries into the parent concept/synthesis pages.
+- [ ] Refreshed `wiki/sources/index.md` (via `scripts/build-sources-index.mjs`) and any useful `wiki/maps/` trails.
+- [ ] When `pending_parents` drained: reordered and deduped `wiki/index.md` in bulk.
+- [ ] Ran `scripts/mini-lint.mjs` and surfaced the one-line summary.
+- [ ] Appended the merge `wiki/log.md` entry; left `wiki-graphify update` as a separate follow-up invocation (not bundled into this call).
 
 ## Related Skills
 

@@ -96,12 +96,30 @@ export const ConfigSchema = z.object({
         scope: z.enum(["wiki", "wiki+raw"]).default("wiki"),
         maxNodesPerLeaf: z.number().int().min(1).default(40),
         maxConceptsPerSource: z.number().int().min(1).default(8),
-        maxCodeSymbolsPerFile: z.number().int().min(0).default(12),
         minConfidence: z.number().min(0).max(1).default(0.65),
         includeRationaleNodes: z.boolean().default(false),
-        includeSemanticSimilarity: z.boolean().default(false),
         includeHyperedges: z.boolean().default(false),
         dropIsolatedDerivedNodes: z.boolean().default(true),
+        /**
+         * Prose pages connect with explicit links + thresholded semantic
+         * relatedness only. Facets stay as node metadata, not edges.
+         */
+        proseEdges: z
+          .enum(["explicit", "explicit+semantic"])
+          .default("explicit+semantic"),
+        facetEdges: z.boolean().default(false),
+        includeSemanticSimilarity: z.boolean().default(true),
+        semanticMinConfidence: z.number().min(0).max(1).default(0.72),
+        /**
+         * Code graph unit is a whole project: graphify produces a real
+         * graphify-out per project under projectsDir, and a detailed
+         * <project>.md analysis under projectAnalysisDir.
+         */
+        codeModel: z
+          .enum(["per-project-graphify-out"])
+          .default("per-project-graphify-out"),
+        projectsDir: z.string().default("wiki/graph/projects"),
+        projectAnalysisDir: z.string().default("wiki/code"),
       })
       .default({
         primaryNodeModel: "page-title",
@@ -109,12 +127,17 @@ export const ConfigSchema = z.object({
         scope: "wiki",
         maxNodesPerLeaf: 40,
         maxConceptsPerSource: 8,
-        maxCodeSymbolsPerFile: 12,
         minConfidence: 0.65,
         includeRationaleNodes: false,
-        includeSemanticSimilarity: false,
         includeHyperedges: false,
         dropIsolatedDerivedNodes: true,
+        proseEdges: "explicit+semantic",
+        facetEdges: false,
+        includeSemanticSimilarity: true,
+        semanticMinConfidence: 0.72,
+        codeModel: "per-project-graphify-out",
+        projectsDir: "wiki/graph/projects",
+        projectAnalysisDir: "wiki/code",
       }),
     autoUpdateOnIngest: z.boolean().default(true),
     /**
