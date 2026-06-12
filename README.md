@@ -2,28 +2,84 @@
   <img src="docs/svg/clio.svg" alt="CLIO" width="220">
 </p>
 
-# CLIO
+<h1 align="center">CLIO</h1>
 
-**CLIO is a local-first LLM Wiki and Code Wiki workbench.** Put source material or source code in `raw/`, ask a coding agent to ingest it, and grow a durable Markdown wiki in `wiki/` that you can read, search, lint, graph, and improve over time.
+<p align="center">
+  <strong>A local-first LLM Wiki workbench.</strong><br>
+  Drop sources in <code>raw/</code>, let a coding agent compile them into a durable,
+  interlinked Markdown wiki you own — readable, searchable, graphable, and version-controlled.
+</p>
 
-CLIO packages Andrej Karpathy's LLM Wiki pattern into a runnable local project. The user stays in the curator role: you collect source material, decide what matters, and ask questions. The agent does the maintenance work: summarizing sources, creating concept/entity pages, updating indexes, recording logs, checking wiki health, and building graph artifacts.
+<p align="center">
+  <a href="LICENSE"><img alt="License: Apache-2.0" src="https://img.shields.io/badge/License-Apache_2.0-blue.svg"></a>
+  <img alt="Version" src="https://img.shields.io/badge/version-0.12.1-informational">
+  <img alt="Node" src="https://img.shields.io/badge/node-%3E%3D20-success">
+  <img alt="Local-first" src="https://img.shields.io/badge/local--first-yes-brightgreen">
+</p>
 
-## Why CLIO?
+---
 
-Most "chat with your documents" tools hide knowledge in a transcript or an opaque vector store. CLIO keeps the useful result in ordinary Markdown files.
+## The idea
 
-| Capability | What it means |
+Most "chat with your documents" tools are RAG: you upload files, and the LLM
+rediscovers the relevant chunks *from scratch on every question*. Nothing
+accumulates. Ask something that spans five documents and the model re-pieces
+the answer every time.
+
+CLIO is built on Andrej Karpathy's [LLM Wiki pattern](./llm-wiki.md): instead of
+retrieving raw chunks at query time, an agent **incrementally compiles a
+persistent wiki** that sits between you and your sources. Add a source and the
+agent reads it, extracts what matters, updates the relevant entity and concept
+pages, cross-links them, and flags contradictions. The knowledge is compiled
+once and then *kept current* — not re-derived per query.
+
+The result is not a transcript and not an opaque vector store. It is a folder of
+plain Markdown files you can read in any editor, grep, diff, commit, and trust.
+
+> **You curate, the agent maintains.** You decide what goes in `raw/` and what
+> questions matter. The agent does the summarizing, filing, cross-referencing,
+> linting, and graph-building.
+
+## What you actually get
+
+Run one ingest over two short articles and a small code module, and the wiki
+fills itself in:
+
+```text
+wiki/
+├── sources/                      # one evidence card per original source
+│   ├── articles/
+│   │   ├── leaf-first-merge.md   #   ← summary of raw/articles/leaf-first-merge.md
+│   │   └── raw-immutability.md
+│   ├── code/throttle/index.md    #   ← directory-level summary of a code+image leaf
+│   └── index.md                  #   ← generated source catalog (facets, dates)
+├── concepts/                     # the synthesis layer, cross-linked to sources
+│   ├── leaf-first-merge-pass.md
+│   ├── raw-immutability.md
+│   └── sliding-window-rate-limit.md
+├── graph/                        # graphify-backed knowledge graph (graph.json, report)
+├── index.md                      # category catalog
+└── log.md                        # append-only operation history
+```
+
+Want to see real output before installing anything? Browse
+[`examples/mini-wiki/`](./examples/mini-wiki/) — a complete, hand-curated
+snapshot showing the exact shape of source pages, concept pages, the generated
+catalog, and the log.
+
+## Why developers might care
+
+| | |
 |---|---|
-| Local-first source library | Your original material lives in `raw/`; agents treat it as read-only. |
-| Maintained Markdown wiki | Summaries, concepts, entities, answers, lint reports, and graph reports live in `wiki/`. |
-| Code Wiki | Code under `raw/` becomes a graphify-backed code knowledge graph under `wiki/graph/`, with optional human-readable syntheses when useful. |
-| Agent-operated workflows | `codex`, `claude`, `agy`, or `cline` can run `/ingest`, `/query`, `/lint`, preprocess, and graph workflows. |
-| Browser workbench | A Next.js UI provides Chat, Explorer, Graph, Automations, and Settings tabs. |
-| Incremental processing | Large folders are processed leaf-first in small chunks, then merged into a coherent wiki. |
-| Automation support | Auto Ingest, Auto Lint, and draft-only scheduled jobs help keep the wiki moving without hiding the artifacts. |
-| Reviewable outputs | Wiki pages, logs, sessions, and graph JSON are files you can inspect and version. |
+| **Plain files, no lock-in** | Every artifact is Markdown or JSON under `wiki/`. Read it, grep it, commit it, throw it in Obsidian. |
+| **Your sources stay immutable** | Originals live in `raw/` and agents treat them as read-only evidence — never rewritten behind your back. |
+| **Bring your own agent** | Works with `codex`, `claude`, `agy` (Antigravity), or `cline`. CLIO orchestrates; the CLI you trust does the reasoning. |
+| **Code Wiki** | Point it at a repo and get a graphify knowledge graph of the codebase under `wiki/graph/`, bridged to the prose wiki. |
+| **Incremental & resumable** | Big folders are processed leaf-first in small chunks and merged. Interrupted runs resume from saved progress. |
+| **Browser + CLI + Telegram** | A Next.js UI (Chat, Explorer, Graph, Automations, Settings), a native `clio` CLI, and a `/query` Telegram bot. |
+| **Reviewable automation** | Auto Ingest, Auto Lint, and draft-only scheduled jobs keep the wiki moving without hiding what they did. |
 
-## How It Works
+## How it works
 
 ```mermaid
 flowchart LR
@@ -36,552 +92,159 @@ flowchart LR
     Wiki --> Query["/query<br/>cited answers"]
     Wiki --> Graph["Graph tab<br/>knowledge graph"]
     Wiki --> Lint["/lint<br/>health checks"]
-    Skills --> Automation["Automations<br/>draft-only scheduled jobs"]
-    Automation --> RawAutomation["raw/automation/<br/>run records"]
 ```
 
-The important split is ownership:
+The contract is ownership. You own `raw/`; the agent owns `wiki/`:
 
 | Path | Owner | Purpose |
 |---|---|---|
-| `raw/` | You | Original source files. Agents treat them as immutable except through explicit preprocess or user-driven file operations. |
-| `raw/chat/` | You via Chat | User-approved external captures from Chat, such as browser/search/tool findings, ready for later ingest. |
-| `raw/automation/` | Automations | Draft-only scheduled job records. Treat them as source candidates for later ingest. |
-| `wiki/` | Agent | Generated and maintained Markdown wiki. |
-| `wiki/sources/<raw-relative-path>.md` | Agent | One source summary page per original source, mirroring the `raw/` path. |
-| `wiki/answers/` | Agent | Saved answers from query workflows. |
-| `wiki/lint/` | Agent | Wiki health reports. |
-| `wiki/graph/` | Agent + graphify | Graph JSON, graph report, partial graph state. |
-| `sessions/` | System | Chat and CLI session records. |
-| `.agents/skills/` | Project | Local instructions that define CLIO operations. |
-| `webapp/` | Project | Next.js browser UI. |
+| `raw/` | You | Original sources. Immutable to agents except through explicit preprocess. |
+| `raw/chat/`, `raw/automation/` | You / Automations | Append-only capture and draft job records, ready for later ingest. |
+| `wiki/sources/<raw-path>.md` | Agent | One source summary per original, mirroring the `raw/` path. |
+| `wiki/` (concepts, answers, lint, graph) | Agent | The generated, maintained knowledge base. |
+| `.agents/skills/` | Project | The skills that define every CLIO operation. |
+| `webapp/`, `cli-rs/` | Project | Next.js UI and the native `clio` CLI. |
 
-## Quick Start
+## Quick start
 
-Install the latest GitHub release into `~/.clio`, run setup, and start the web app:
+Install the latest release into `~/.clio`, run setup, and start the web app:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/hjhun/llm-wiki/main/scripts/install.sh | bash -s -- --start
 cd ~/.clio
 ```
 
-The installer defaults to `~/.clio`. Pass `--dir <path>` (or set `CLIO_INSTALL_DIR`)
-to install somewhere else. If the target already contains CLIO, `install`
-refreshes project files while preserving `raw/`, `wiki/`, `sessions/`,
-`config/local.json`, `.run/`, `webapp/node_modules/`, `webapp/.next/`, and
-`webapp/.env*`.
-
-`setup.sh` installs the `clio` agent skill globally by default. The release
-installer runs `setup.sh`, so the quick-start command installs it too:
-
-```text
-~/.agents/skills/clio
-```
-
-This lets compatible coding agents use CLIO as local project memory from other
-repositories. Change the skill target with `--clio-skill` on either
-`scripts/install.sh` or `setup.sh`:
-
-```bash
-bash scripts/install.sh --clio-skill global   # default
-bash scripts/install.sh --clio-skill project  # <install-dir>/.agents/skills/clio
-bash scripts/install.sh --clio-skill both
-bash scripts/install.sh --clio-skill none
-
-./setup.sh --clio-skill both
-```
-
-The global skill requires the agent runtime to include `~/.agents/skills` in its
-skill search path. CLIO-compatible launchers are expected to do this.
-
-Open:
+Then open:
 
 ```text
 http://127.0.0.1:9091
 ```
 
-On the first visit, CLIO redirects to `/setup`. Set the administrator password, log in, then open **Settings** and choose the default coding agent CLI.
+On first visit, CLIO redirects to `/setup`. Set an administrator password, log
+in, then open **Settings** and choose your default coding agent CLI.
 
-CLIO binds to `0.0.0.0` by default, so machines on the same trusted LAN can connect at `http://<server-ip>:9091`. To restrict the server to this machine:
+> CLIO binds to `0.0.0.0` by default so other machines on a trusted LAN can
+> reach `http://<server-ip>:9091`. For local-only, install with
+> `./setup.sh --host 127.0.0.1 --start`.
 
-```bash
-./setup.sh --host 127.0.0.1 --start
-```
+**Prerequisites:** `bash`, `tar`, and `curl`/`wget` for the installer; then
+Node.js `>=20`, npm, Python 3, and at least one supported agent CLI (`codex`,
+`claude`, `agy`, or `cline`). A Rust toolchain is optional — releases ship a
+prebuilt `clio` binary and fall back to `cargo build` only when needed.
+`graphify` and `qmd` install by default; Marp and `agent-browser` are optional.
 
-## Prerequisites
-
-The release installer needs:
-
-- `bash`
-- `tar`
-- `curl` or `wget`
-
-The project setup and full workflows need:
-
-- Node.js `>=20`
-- npm
-- Python 3
-- At least one supported coding agent CLI: `codex`, `claude`, `agy`
-  (Antigravity), or `cline`
-- Optional: a Rust toolchain (`cargo`) to build the `clio` CLI from source.
-  Release installs try the prebuilt `clio` asset for Ubuntu, Windows, or macOS
-  first, then fall back to a local cargo build when no matching asset exists.
-- Helper tools: `graphify` and `qmd` install by default; Marp CLI is optional
-- Optional: `agent-browser` for browser-based automation jobs
-
-`setup.sh` detects installed agent CLIs and writes the result to `config/cli-detected.json`. It also runs a best-effort runtime config detection pass and writes `config/cli-runtime-detected.json`; that file records HOME-relative config paths that should be exposed to the public bwrap sandbox. Missing CLIs can be installed manually or configured by path in Settings.
-
-## Current State
-
-The current app is a working local-first workbench rather than a thin prototype. The implemented surfaces include authenticated setup/login, a bilingual Korean/English UI, Chat sessions with append-only external captures under `raw/chat/`, Explorer browsing for `raw/`, `wiki/`, and `sessions/` with file operations where allowed, Cytoscape graph inspection, Auto Ingest, Auto Lint, draft-only Automations, the native `clio` CLI, release/update scripts, and optional systemd service installation.
-
-The project is still evolving. The agent skills, graph schema, automation templates, and setup ergonomics should be treated as active interfaces that may change between releases.
-
-## First Wiki in Five Minutes
-
-Copy the sample source into `raw/`:
+## Your first wiki in five minutes
 
 ```bash
 mkdir -p raw/demo
 cp examples/raw/llm-wiki-demo.md raw/demo/
 ```
 
-In the **Chat** tab, run:
+In the **Chat** tab:
 
 ```text
 /ingest-loop raw/demo
-```
-
-Then ask:
-
-```text
 /query Why is the leaf-first merge pass necessary in LLM Wiki?
 ```
 
-Expected result:
+You should see a source summary appear under `wiki/sources/`, related
+concept/entity pages created or updated, `wiki/index.md` and `wiki/log.md`
+refreshed, and a query answer that cites the wiki pages it used.
 
-- A source summary appears under `wiki/sources/<raw-relative-path>.md` (mirroring the `raw/` path).
-- Related concept/entity pages may be created or updated.
-- `wiki/index.md` and `wiki/log.md` are updated.
-- The query answer cites wiki/source pages.
+Full walkthrough: [docs/GUIDE.md](./docs/GUIDE.md) · 한국어 안내서:
+[docs/GUIDE_ko.md](./docs/GUIDE_ko.md).
 
-For a full walkthrough, read [docs/GUIDE.md](./docs/GUIDE.md). 한국어 안내서는 [docs/GUIDE_ko.md](./docs/GUIDE_ko.md)를 참고하세요.
+## Core workflows
 
-Want to see the output shape before running anything? Open
-[`examples/mini-wiki/`](./examples/mini-wiki/) — a hand-curated snapshot of
-two `raw/` articles ingested end-to-end (source pages, concept pages,
-generated source catalog, log).
-
-## Core Workflows
-
-Run these from the **Chat** tab:
+Run these from the **Chat** tab, the `clio` CLI, or the Telegram bot:
 
 | Command | Use it for |
 |---|---|
-| `/ingest raw/<path>` | Process one ingest sub-chunk, then stop. Useful for careful manual stepping. |
-| `/ingest-loop raw/<path>` | Keep invoking ingest until the selected folder is complete. Transient CLI failures are retried and resume from saved progress. Recommended for normal use. |
+| `/ingest raw/<path>` | Process one ingest sub-chunk, then stop — careful manual stepping. |
+| `/ingest-loop raw/<path>` | Keep ingesting until the folder is complete. Retries transient failures and resumes from saved progress. Recommended. |
 | `/ingest-loop` | Incrementally ingest all of `raw/`. |
 | `/query <question>` | Answer from the wiki first, with citations. |
-| `/lint` | Check metadata, links, contradictions, index consistency, and sensitive information. |
-| `/lint --fix` | Apply safe automatic fixes and write a lint report. |
-| `/preprocess raw/<path> <rules>` | Dry-run cleanup planning for noise under `raw/`; only `/preprocess --apply` mutates files after backups. |
-
-CLIO also exposes the **/query** flow through a Telegram bot. Set the bot
-token under **Settings → Telegram**, switch the delivery mode (polling or
-webhook) to fit your hosting, approve specific chat ids, and ask wiki
-questions from your phone or a shared group. See
-[docs/GUIDE.md §15](./docs/GUIDE.md#15-telegram-bot) (한국어:
-[GUIDE_ko.md §15](./docs/GUIDE_ko.md#15-텔레그램-봇)) for the full setup
-walkthrough.
+| `/lint` / `/lint --fix` | Check metadata, links, contradictions, and consistency; `--fix` applies safe fixes and writes a report. |
+| `/preprocess raw/<path> <rules>` | Dry-run cleanup planning for noise under `raw/`; only `--apply` mutates files (after backups). |
 
 ## Code Wiki
 
-CLIO can document software projects as part of the same local-first knowledge
-base. Put a repository snapshot or an approved symlink under `raw/`, then run
-the normal ingest flow:
+Put a repo snapshot (or an approved symlink) under `raw/` and run the normal
+ingest flow:
 
 ```text
 /ingest-loop raw/repos/<project>
 ```
 
-The selected coding agent auto-detects code-heavy leaves, writes normal
-`wiki/sources/` provenance summaries, records resumable ingest progress, and
-then relies on `wiki-graphify update` to materialize source-code structure as a
-knowledge graph under `wiki/graph/`: per-leaf parts, `graph.json`, and
-`GRAPH_REPORT.md`. Code sources remain read-only evidence under `raw/`; actual
-code edits are separate coding tasks, not ingest work.
+The agent auto-detects code-heavy leaves, writes `wiki/sources/` provenance
+summaries, then relies on `wiki-graphify update` to materialize source-code
+structure as a knowledge graph under `wiki/graph/` (`graph.json`,
+`GRAPH_REPORT.md`, per-project parts). Code stays read-only evidence — actual
+code edits are separate tasks, never ingest work. Graph nodes bridge back to the
+prose wiki where code implements a documented concept.
 
-Human-readable project overviews, API notes, testing notes, or debug notes can
-still be saved under `wiki/code/` or `wiki/answers/` when they are useful
-syntheses, but ingest completion no longer requires one Markdown page per
-source file. Questions can bridge prose knowledge and implementation details
-through the graph plus source summaries.
+Run **Build** / **Incremental Update** from the **Graph** tab. The web app never
+calls `graphify` directly; the selected agent reads the `wiki-graphify` skill and
+runs the global `graphify` command (or `python3 -m graphify`).
 
-Run graph workflows from the **Graph** tab:
+## Command-line interface
 
-| Button | What happens |
-|---|---|
-| Build | Requests `wiki-graphify build` through the selected coding agent. |
-| Incremental Update | Requests `wiki-graphify update` through the selected coding agent. |
-
-The web app does not execute `graphify` directly. The selected coding agent reads the `wiki-graphify` skill and uses the global `graphify` command from `PATH`, or `python3 -m graphify` when appropriate.
-
-## Command-Line Interface (`clio`)
-
-`setup.sh` installs a native Rust CLI to `<install-dir>/bin/clio`. Release
-installs use a prebuilt binary when one is available for the current OS and CPU;
-source checkouts fall back to `cargo build --release`. The CLI runs the same
-operations as the Chat tab, so you can drive a wiki from a terminal or a script.
-
-Add it to your `PATH` (the installer prints this line when needed):
+`setup.sh` installs a native Rust CLI at `<install-dir>/bin/clio` that runs the
+same operations as the Chat tab, so you can drive a wiki from a terminal or
+script:
 
 ```bash
 export PATH="$HOME/.clio/bin:$PATH"
-```
 
-| Command | What it does |
-|---|---|
-| `clio raw add <path>...` | Copy files or folders into `raw/`. Use `--symlink` to add links instead of copying bytes. Re-adding an existing path replaces it and moves the previous entry to `raw/.trash/`. |
-| `clio raw remove <raw-path>...` | Soft-delete a file from `raw/` (moves it to `raw/.trash/`). |
-| `clio raw list [raw-path]` | List files currently under `raw/`. |
-| `clio ingest [path]` | Run one `/ingest` pass through the configured coding agent. |
-| `clio ingest-loop [path]` | Run `/ingest-loop [path]` until the progress state is drained. |
-| `clio query <question>` | Ask the wiki a question. |
-| `clio lint [--fix]` | Run the wiki-lint health check. |
-| `clio start` | Start the webapp through `clio-web.service` when installed, otherwise through `setup.sh --start`. |
-| `clio shutdown` | Stop the webapp through `clio-web.service` when installed, otherwise through `setup.sh --shutdown`. Alias: `clio stop`. |
-| `clio restart` | Restart the webapp; falls back to `setup.sh --shutdown` then `setup.sh --start` on systems without a service file. |
-| `clio status` | Show the resolved project, webapp URL, and token status. |
+clio raw add ./notes/          # copy material into raw/ (--symlink to link instead)
+clio ingest-loop raw/notes     # process it through the configured agent
+clio query "What changed?"     # ask the wiki
+clio lint --fix                # health check + safe fixes
+clio status                    # project, webapp URL, token status
+```
 
 `ingest`, `ingest-loop`, `query`, and `lint` call the **running webapp's HTTP
-API**, so they behave exactly like the Chat tab — same coding agent, same
-ingest-loop orchestration, same session logs. Start the webapp first
-(`./setup.sh --start`). `raw` subcommands work offline; they only touch the
-filesystem.
-
-`start`, `shutdown`, and `restart` do not require the webapp to already be
-reachable. They use the installed `clio-web.service` when systemd reports it;
-otherwise they manage the checkout-local server with `setup.sh`.
-
-The CLI finds its project by checking `$CLIO_HOME`, then walking up from the
-current directory, then falling back to `~/.clio`. It reads the webapp port and the
-`auth.cliToken` from `config/local.json`. Override any of these with
-`--home`, `--base-url`, or `--token` (or the matching `CLIO_*` env vars).
-
-## Adding Your Own Raw Data
-
-`raw/` is the only place you should put original material.
-
-Recommended layout:
-
-```text
-raw/
-├── articles/
-│   └── 2026-05-llm-wiki/
-│       ├── karpathy-llm-wiki.md
-│       └── notes.md
-├── papers/
-│   └── retrieval/
-│       └── paper.pdf
-├── meetings/
-│   └── 2026-05-17-project-kickoff.md
-├── repos/
-│   └── my-service/              # copied repo or approved symlink
-│       ├── package.json
-│       └── src/
-└── web-clips/
-    └── graphify-readme.md
-```
-
-Tips:
-
-- Prefer clear folder names by topic, project, date, author, or source type.
-- Put related files in the same leaf folder so CLIO can summarize them together.
-- Do not put secrets, API keys, private tokens, or unnecessary personal data into `raw/`.
-- If a PDF or image is scanned and has no selectable text, OCR it first or add a companion `.md` note.
-- After adding files, run `/ingest-loop raw/<folder>` or enable Auto Ingest in Settings.
-- From a terminal, `clio raw add <file>` copies material in; `clio raw add --symlink <folder>` links an external folder; `clio ingest-loop` processes it.
+API**, so they behave exactly like the Chat tab — start the webapp first. `raw`
+subcommands work offline. `start` / `shutdown` / `restart` manage the server via
+`clio-web.service` when installed, otherwise via `setup.sh`. The CLI finds its
+project via `$CLIO_HOME`, then by walking up from the current directory, then
+`~/.clio`.
 
 ## Web UI
 
 | Tab | Purpose |
 |---|---|
-| Chat | Run `/ingest`, `/ingest-loop`, `/query`, `/lint`, `/preprocess`, or natural-language requests. |
-| Explorer | Browse `raw/`, `wiki/`, and generated reports. |
-| Graph | Build, update, and inspect the knowledge graph. |
-| Automations | Schedule draft-only multi-CLI jobs and inspect their run records under `raw/automation/`. |
-| Settings | Configure agent CLI, server host/port, graph behavior, Auto Ingest, Auto Lint, language, theme, default tab, and password. |
+| **Chat** | Run `/ingest`, `/query`, `/lint`, `/preprocess`, or natural-language requests. |
+| **Explorer** | Browse `raw/`, `wiki/`, and generated reports. |
+| **Graph** | Build, update, and inspect the Cytoscape knowledge graph. |
+| **Automations** | Schedule draft-only multi-CLI jobs; inspect runs under `raw/automation/`. |
+| **Settings** | Agent CLI, host/port, graph behavior, Auto Ingest/Lint, language, theme, password. |
 
-## Public CLIO Sharing and Sandboxed CLI Login
+CLIO ships a bilingual Korean/English UI. The `/query` flow is also available
+through a Telegram bot — set the token under **Settings → Telegram**, pick
+polling or webhook delivery, approve chat ids, and ask from your phone. See
+[docs/GUIDE.md §15](./docs/GUIDE.md#15-telegram-bot).
 
-Administrators can enable a passwordless, read-only public chat at `/clio`
-from **Settings > Access > Public Query**. Public CLIO never exposes `raw/`,
-`wiki/`, `sessions/`, `config/local.json`, or `.env*` directly to visitors.
-The server selects small wiki excerpts when needed, then runs the selected
-agent CLI inside a `bubblewrap` sandbox with a dedicated CLI home:
+## Adding your own sources
 
-```text
-config/public-cli-home/
-```
-
-`setup.sh` installs `bubblewrap` (`bwrap`) on Linux when it can. If your host
-does not have `bwrap`, public CLIO falls back to safe read-only responses
-instead of running the host CLI outside the sandbox.
-
-The public sandbox uses a dedicated writable HOME, then overlays selected host
-agent configuration paths read-only so the CLI can see existing login, MCP,
-plugin, and skill state without modifying the host files. By default these
-HOME-relative paths are exposed:
-
-```json
-{
-  "publicQuery": {
-    "sandboxReadOnlyHomePaths": [
-      ".codex",
-      ".claude",
-      ".cline",
-      ".agy",
-      ".antigravity",
-      ".agents",
-      ".claude.json",
-      ".codex.json",
-      ".cline.json",
-      ".agy.json",
-      ".config/codex",
-      ".config/claude",
-      ".config/cline",
-      ".config/agy",
-      ".config/antigravity",
-      ".config/anthropic",
-      ".config/gcloud",
-      ".config/google-cloud",
-      ".local/share/codex",
-      ".local/share/claude",
-      ".local/share/cline",
-      ".local/share/agy",
-      ".local/share/anthropic",
-      ".local/share/antigravity",
-      ".local/state/codex",
-      ".local/state/claude",
-      ".local/state/cline",
-      ".local/state/agy",
-      ".local/state/anthropic",
-      ".local/state/antigravity",
-      ".cache/codex",
-      ".cache/claude",
-      ".cache/cline",
-      ".cache/agy",
-      ".cache/anthropic",
-      ".cache/antigravity"
-    ]
-  }
-}
-```
-
-Override that list in `config/local.json` when another CLI keeps its config in
-a different HOME-relative path. When the host uses custom XDG base directories
-such as `XDG_CONFIG_HOME` under the same HOME, CLIO maps the matching allowlist
-entry to that subpath as well, for example `.config/codex` can also expose
-`$XDG_CONFIG_HOME/codex`. Cline variants whose names begin with `.cline` are
-detected and added automatically. If `config/cli-runtime-detected.json` exists,
-public CLI sandboxing also merges the detected paths for the selected CLI into
-the bwrap read-only HOME binds. The setup detection combines known CLI/XDG
-locations, Cline editor-extension storage candidates, and `strace` file-access
-evidence when `strace` is available; it stores paths only, never file contents.
-
-Snap-packaged agent CLIs cannot run inside this
-unprivileged `bwrap` sandbox because `snap-confine` needs host cgroup and
-capability setup that the sandbox intentionally does not provide. Install those
-CLIs with npm or a standalone binary when they need to serve public sandboxed
-queries.
-
-If you do not want to share the host login state, remove the relevant path from
-`sandboxReadOnlyHomePaths` and log in once using the dedicated public CLI home:
-
-```bash
-cd ~/.clio
-mkdir -p config/public-cli-home
-chmod 700 config/public-cli-home
-HOME="$PWD/config/public-cli-home" codex login
-```
-
-For the closest match to the runtime isolation, enter a `bubblewrap` shell and
-log in from there. This example prepares a Codex login shell; replace
-`CLI=codex` with another configured CLI when needed:
-
-```bash
-cd ~/.clio
-CLI=codex
-PUBLIC_HOME="$PWD/config/public-cli-home"
-WORKDIR="$(mktemp -d)"
-CLI_BIN="$(command -v "$CLI")"
-CLI_REAL="$(readlink -f "$CLI_BIN")"
-RESOLV_CONF_REAL="$(readlink -f /etc/resolv.conf)"
-CLI_BIN_DIR="$(dirname "$CLI_BIN")"
-CLI_ROOT="$(node -e '
-const path = require("node:path");
-const real = process.argv[1];
-const parts = real.split(path.sep);
-const i = parts.lastIndexOf("node_modules");
-if (i >= 0) {
-  const end = parts[i + 1]?.startsWith("@") ? i + 3 : i + 2;
-  console.log(parts.slice(0, end).join(path.sep));
-} else {
-  console.log(path.dirname(real));
-}
-' "$CLI_REAL")"
-
-mkdir -p "$PUBLIC_HOME"
-chmod 700 "$PUBLIC_HOME"
-
-bwrap \
-  --die-with-parent \
-  --unshare-pid \
-  --unshare-ipc \
-  --unshare-uts \
-  --proc /proc \
-  --dev /dev \
-  --tmpfs /tmp \
-  --tmpfs /run \
-  --dir /home \
-  --bind "$PUBLIC_HOME" "$HOME" \
-  --ro-bind /usr /usr \
-  --ro-bind /bin /bin \
-  --ro-bind /lib /lib \
-  --ro-bind /lib64 /lib64 \
-  --ro-bind /etc /etc \
-  --dir "$(dirname "$RESOLV_CONF_REAL")" \
-  --ro-bind "$RESOLV_CONF_REAL" "$RESOLV_CONF_REAL" \
-  --ro-bind "$CLI_BIN_DIR" "$CLI_BIN_DIR" \
-  --ro-bind "$CLI_ROOT" "$CLI_ROOT" \
-  --bind "$WORKDIR" "$WORKDIR" \
-  --chdir "$WORKDIR" \
-  --clearenv \
-  --setenv HOME "$HOME" \
-  --setenv PATH "$PATH" \
-  --setenv NODE_ENV production \
-  /usr/bin/env bash --noprofile --norc
-```
-
-Inside that shell, run the CLI login command:
-
-```bash
-codex login
-```
-
-Then verify that public CLIO can use the same sandboxed home:
-
-```bash
-codex exec --skip-git-repo-check "Reply with OK only."
-```
-
-The dedicated public CLI home may contain credentials or refresh tokens, so it
-is ignored by git. Treat it like `config/local.json`: keep it local, back it up
-only through your own secret-management process, and rotate credentials if the
-machine is shared more broadly than intended.
-
-## Setup Options
-
-The release installer downloads a GitHub source tarball and then runs `setup.sh`.
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/hjhun/llm-wiki/main/scripts/install.sh | bash -s -- --dir ./my-clio --skip-graphify --port 7788 --start
-```
-
-To update an existing install without touching `raw/` or `wiki/` data:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/hjhun/llm-wiki/main/scripts/install.sh | bash -s -- update --dir ./my-clio --skip-build
-```
-
-From inside the installed CLIO directory, `--dir` is optional:
-
-```bash
-bash scripts/install.sh update --skip-build
-```
-
-Installer options:
-
-| Option | Description |
-|---|---|
-| `install` | Default command. Create a new install directory, or refresh project files when the target already contains CLIO. |
-| `update`, `upgrade` | Update an existing install from the selected release/ref. Preserves `raw/`, `wiki/`, `sessions/`, `config/local.json`, `.run/`, `webapp/node_modules/`, `webapp/.next/`, and `webapp/.env*`. |
-| `--dir <path>` | Install directory. Default: `~/.clio`. Existing CLIO directories are refreshed with user data preserved. |
-| `--version <ver>` | GitHub release tag to install, or `latest`. Default: `latest`. |
-| `--ref <ref>` | GitHub tag, branch, or commit to install exactly. Overrides `--version`. |
-| `--repo <repo>` | GitHub repo as `owner/name` or a `github.com` URL. Default: `hjhun/llm-wiki`. |
-| `--no-setup` | Download and unpack only. |
-
-Any other arguments are passed to `setup.sh`.
-
-To install a specific release:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/hjhun/llm-wiki/main/scripts/install.sh | bash -s -- --version v0.1.0
-```
-
-Inside an installed or cloned checkout:
-
-```bash
-./setup.sh --help
-```
-
-Common `setup.sh` options:
-
-| Option | Description |
-|---|---|
-| `--start` | Start the web server in the background after setup. |
-| `--shutdown` | Stop the running CLIO web server. |
-| `--no-restart` | With `--start`, fail if the target port is already in use. |
-| `--port <n>` | Web UI port. Default: `9091`. |
-| `--host <addr>` | Web UI host. Default: `0.0.0.0`. Use `127.0.0.1` for local-only. |
-| `--dev` | Use the development server command. |
-| `--skip-graphify` | Do not install or upgrade graphify. |
-| `--skip-bubblewrap` | Do not install `bubblewrap`; public CLI sandboxing will require a manual install. |
-| `--skip-detect-cli-runtime` | Skip the default CLI runtime config path detection pass for bwrap. |
-| `--skip-npm-install` | Skip `webapp/` dependency checks and installation. |
-| `--skip-build` | Skip `npm run build`. |
-| `--skip-cli` | Skip building the Rust `clio` CLI. |
-| `--skip-qmd` | Do not install qmd. Setup installs project-local qmd by default. |
-| `--with-marp` | Best-effort optional Marp CLI setup. |
-| `--with-agent-browser` | Best-effort optional agent-browser setup for browser automation tasks. |
-| `--install-cli=<names>` | Best-effort CLI install for `codex`, `claude`, `agy`, or `cline`. |
-
-Runtime files are written under `.run/`:
+`raw/` is the only place to put original material. A useful layout:
 
 ```text
-.run/webapp.pid
-.run/webapp.log
+raw/
+├── articles/2026-05-llm-wiki/karpathy-llm-wiki.md
+├── papers/retrieval/paper.pdf
+├── meetings/2026-05-17-kickoff.md
+├── repos/my-service/          # copied repo or approved symlink
+└── web-clips/graphify.md
 ```
 
-## Start on Boot with systemd
+- Group related files in the same leaf folder so they get summarized together.
+- Never put secrets, API keys, or unnecessary personal data in `raw/`.
+- OCR scanned PDFs/images first, or add a companion `.md` note.
+- Then run `/ingest-loop raw/<folder>`, enable Auto Ingest, or use
+  `clio raw add` + `clio ingest-loop` from a terminal.
 
-On Ubuntu 22.04/24.04 or similar systemd hosts, install the web UI as a system service:
-
-```bash
-./systemd/install-clio-web-service.sh
-```
-
-The script prepares the web app, renders `systemd/clio-web.service` for the current checkout path and user, installs the unit, runs `systemctl daemon-reload`, enables it for `multi-user.target`, and restarts it. It uses `sudo` only for the systemd install/start steps, so Ubuntu will prompt for your password when needed.
-
-By default the unit is installed into `/etc/systemd/system`, which is the safest local-administrator location. If you intentionally want the Ubuntu vendor-style unit directory, use:
-
-```bash
-./systemd/install-clio-web-service.sh --unit-dir vendor
-```
-
-On current Ubuntu releases, `vendor` selects `/usr/lib/systemd/system` when present and falls back to `/lib/systemd/system`. In both cases `systemctl enable clio-web.service` creates the appropriate `multi-user.target.wants/` symlink.
-
-Useful commands:
-
-```bash
-sudo systemctl status clio-web.service
-sudo journalctl -u clio-web.service -f
-sudo systemctl restart clio-web.service
-sudo systemctl disable --now clio-web.service
-```
-
-## Supported Agent CLIs
+## Supported agent CLIs
 
 | CLI | Invocation shape |
 |---|---|
@@ -590,95 +253,164 @@ sudo systemctl disable --now clio-web.service
 | `agy` (Antigravity) | `agy --prompt "<prompt>"` |
 | `cline` | `cline -y "<prompt>"` |
 
-Each CLI must be authenticated in the host environment where the web app runs. If Chat or Graph says that no default agent is configured, open Settings and choose one. If a Graph Build/Update request asks for an API key, it usually means the selected coding agent CLI is not logged in or the webapp process was started without the CLI's normal environment.
+Each CLI must be authenticated in the environment where the web app runs. If
+Chat or Graph reports no default agent, choose one in Settings. A Graph request
+asking for an API key usually means the selected CLI is not logged in, or the
+webapp was started without the CLI's normal environment.
+
+<details>
+<summary><strong>Installation & setup options</strong></summary>
+
+The release installer downloads a GitHub source tarball, then runs `setup.sh`.
+It defaults to `~/.clio`; pass `--dir <path>` (or set `CLIO_INSTALL_DIR`) to
+install elsewhere. Re-installing refreshes project files while preserving
+`raw/`, `wiki/`, `sessions/`, `config/local.json`, `.run/`, and
+`webapp/node_modules|.next|.env*`.
+
+```bash
+# custom dir, skip graphify, custom port, then start
+curl -fsSL https://raw.githubusercontent.com/hjhun/llm-wiki/main/scripts/install.sh \
+  | bash -s -- --dir ./my-clio --skip-graphify --port 7788 --start
+
+# update an existing install without touching raw/ or wiki/
+curl -fsSL https://raw.githubusercontent.com/hjhun/llm-wiki/main/scripts/install.sh \
+  | bash -s -- update --dir ./my-clio --skip-build
+
+# pin a specific release
+curl -fsSL .../install.sh | bash -s -- --version v0.1.0
+```
+
+**Installer options:** `install` (default) · `update`/`upgrade` ·
+`--dir <path>` · `--version <ver>` · `--ref <ref>` · `--repo <owner/name>` ·
+`--no-setup`. Any other args pass through to `setup.sh`.
+
+**`setup.sh` options** (`./setup.sh --help` for all): `--start` · `--shutdown` ·
+`--port <n>` · `--host <addr>` · `--dev` · `--skip-graphify` ·
+`--skip-bubblewrap` · `--skip-npm-install` · `--skip-build` · `--skip-cli` ·
+`--skip-qmd` · `--with-marp` · `--with-agent-browser` ·
+`--install-cli=<codex|claude|agy|cline>`.
+
+**Global skill.** `setup.sh` installs the `clio` agent skill to
+`~/.agents/skills/clio` by default, letting compatible agents use CLIO as
+project memory from other repos. Change the target with `--clio-skill
+global|project|both|none`.
+
+Runtime files land in `.run/webapp.pid` and `.run/webapp.log`.
+
+</details>
+
+<details>
+<summary><strong>Run on boot with systemd</strong></summary>
+
+On systemd hosts (Ubuntu 22.04/24.04, etc.):
+
+```bash
+./systemd/install-clio-web-service.sh
+```
+
+This renders `systemd/clio-web.service` for the current checkout and user,
+installs the unit into `/etc/systemd/system` (use `--unit-dir vendor` for the
+vendor directory), reloads systemd, enables it for `multi-user.target`, and
+restarts it. It uses `sudo` only for the install/start steps.
+
+```bash
+sudo systemctl status clio-web.service
+sudo journalctl -u clio-web.service -f
+sudo systemctl restart clio-web.service
+```
+
+</details>
+
+<details>
+<summary><strong>Public sharing &amp; sandboxed CLI login</strong></summary>
+
+Admins can enable a passwordless, read-only public chat at `/clio` from
+**Settings → Access → Public Query**. Public CLIO never exposes `raw/`, `wiki/`,
+`sessions/`, `config/local.json`, or `.env*` to visitors. The server selects
+small wiki excerpts, then runs the agent CLI inside a `bubblewrap` sandbox with a
+dedicated home at `config/public-cli-home/`. `setup.sh` installs `bwrap` on Linux
+when it can; without it, public CLIO falls back to safe read-only responses.
+
+The sandbox uses a writable HOME and overlays selected host agent config paths
+read-only (login, MCP, plugin, skill state) without modifying host files. The
+default `publicQuery.sandboxReadOnlyHomePaths` allowlist covers `.codex`,
+`.claude`, `.cline`, `.agy`, `.antigravity`, `.agents`, and their
+`.config/.local/.cache` variants; override it in `config/local.json` as needed.
+Snap-packaged CLIs cannot run in this unprivileged sandbox — install those via
+npm or a standalone binary.
+
+To keep host login state private, remove the relevant allowlist entries and log
+in once using the dedicated home:
+
+```bash
+cd ~/.clio
+mkdir -p config/public-cli-home && chmod 700 config/public-cli-home
+HOME="$PWD/config/public-cli-home" codex login
+```
+
+The full `bwrap` login-shell recipe (closest match to runtime isolation) lives
+in [docs/GUIDE.md](./docs/GUIDE.md). The public CLI home may hold credentials, so
+it is git-ignored — treat it like `config/local.json`.
+
+</details>
 
 ## Development
-
-Clone and set up:
 
 ```bash
 git clone https://github.com/hjhun/llm-wiki.git
 cd llm-wiki
 ./setup.sh
+
+./setup.sh --start --dev --skip-build   # dev server
+cd webapp && npm run typecheck && npm run build
+./scripts/smoke-test.sh                 # smoke test
 ```
 
-Start development mode:
-
-```bash
-./setup.sh --start --dev --skip-build
-```
-
-Typecheck and build:
-
-```bash
-cd webapp
-npm run typecheck
-npm run build
-```
-
-Smoke test:
-
-```bash
-./scripts/smoke-test.sh
-```
-
-Create a GitHub release:
-
-1. Add release notes under `docs/releases/vX.Y.Z.md`.
-2. Open **Actions** -> **Release** -> **Run workflow**.
-3. Enter a version tag such as `v0.2.0`.
-
-The workflow validates release-critical scripts, creates the Git tag, and creates
-the GitHub Release. Before tagging, it also updates `webapp/package.json` and
-`webapp/package-lock.json` to the release version, so the installed web UI shows
-the same version as the GitHub release. `scripts/install.sh` installs that
-release when it is the latest release, or when users pass `--version vX.Y.Z`.
-
-## Project Structure
+**Releases:** add notes under `docs/releases/vX.Y.Z.md`, then **Actions → Release
+→ Run workflow** with a tag like `v0.2.0`. The workflow validates scripts, bumps
+`webapp/package.json` to the release version, tags, and publishes the GitHub
+Release.
 
 ```text
 .
-├── .agents/skills/       # Project-local agent skills
-├── .github/workflows/     # GitHub Actions release automation
-├── cli-rs/               # Native Rust `clio` CLI source
-├── config/               # Default and local configuration
-├── docs/                 # User guides, QA notes, release notes
-├── examples/raw/         # Sample source material
-├── raw/                  # User-owned source material
-├── scripts/              # Installer and utility scripts
-├── tools/                # Project-local helper tools such as qmd
-├── webapp/               # Next.js web application
-└── wiki/                 # Agent-maintained Markdown wiki
+├── .agents/skills/   # project-local agent skills (CLIO operations)
+├── cli-rs/           # native Rust `clio` CLI source
+├── config/           # default + local configuration
+├── docs/             # user guides, QA notes, release notes
+├── examples/         # sample sources + mini-wiki snapshot
+├── raw/              # user-owned source material
+├── scripts/          # installer and utilities
+├── webapp/           # Next.js web application
+└── wiki/             # agent-maintained Markdown wiki
 ```
 
-Important documents:
+## Project status
 
-| Document | What's covered |
-|---|---|
-| [docs/GUIDE.md](./docs/GUIDE.md) | Complete English user guide. |
-| [docs/GUIDE_ko.md](./docs/GUIDE_ko.md) | Complete Korean user guide. |
-| [AGENTS.md](./AGENTS.md) | Repository operating rules for coding agents. |
-| [CLAUDE.md](./CLAUDE.md) | Claude-side mirror of the same operating rules. |
-| [docs/IDEATION.md](./docs/IDEATION.md) | Product and architecture notes. |
-| [tools/README.md](./tools/README.md) | graphify, qmd, and Marp notes. |
+CLIO is a usable local-first workbench: authenticated setup/login, a bilingual
+UI, Chat with external captures, Explorer, Cytoscape graph, ingest/query/lint,
+the native `clio` CLI, Auto Ingest/Lint, draft-only Automations, a Telegram bot,
+release/update scripts, and optional systemd install are all implemented. The
+agent skills, graph schema, automation templates, and setup ergonomics are
+active interfaces that may still change between releases.
 
-## Security Notes
+## Security notes
 
-- CLIO's administrator password is the only built-in authentication layer.
-- The default host is `0.0.0.0`, which is LAN-reachable. Use `127.0.0.1` on untrusted networks.
-- `config/local.json`, sessions, runtime logs, local CLI detection, and generated graph state are git-ignored by default.
-- `raw/` is immutable from the agent's perspective. Agents must not modify, delete, or move original sources.
-- Do not store credentials, API keys, or sensitive personal data in `raw/` or `wiki/`.
+- The administrator password is the only built-in authentication layer.
+- The default host `0.0.0.0` is LAN-reachable — use `127.0.0.1` on untrusted
+  networks.
+- `config/local.json`, sessions, runtime logs, CLI detection, and graph state
+  are git-ignored by default.
+- Agents treat `raw/` as immutable. Do not store credentials, API keys, or
+  sensitive personal data in `raw/` or `wiki/`.
 
 ## References
 
-- [Andrej Karpathy, `llm-wiki.md`](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f) - the original LLM Wiki pattern.
-- [safishamsi/graphify](https://github.com/safishamsi/graphify) - knowledge graph generation used by CLIO's graph workflow.
+- [Andrej Karpathy, `llm-wiki.md`](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f) — the original LLM Wiki pattern.
+- [safishamsi/graphify](https://github.com/safishamsi/graphify) — knowledge graph generation behind CLIO's graph workflow.
+- [docs/GUIDE.md](./docs/GUIDE.md) / [docs/GUIDE_ko.md](./docs/GUIDE_ko.md) — complete user guides.
+- [AGENTS.md](./AGENTS.md) / [CLAUDE.md](./CLAUDE.md) — operating rules for coding agents.
+- [docs/IDEATION.md](./docs/IDEATION.md) — product and architecture notes.
 
 ## License
 
-This project is licensed under the Apache License 2.0. See [LICENSE](./LICENSE).
-
-## Status
-
-CLIO is a usable local-first workbench with the main browser, CLI, ingest/query/lint, graph, automation, and setup surfaces implemented. The skills, graph schema, automation templates, and setup ergonomics are still expected to evolve.
+Licensed under the Apache License 2.0. See [LICENSE](./LICENSE).
