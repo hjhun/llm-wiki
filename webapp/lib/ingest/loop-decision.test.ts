@@ -181,6 +181,54 @@ describe("decideLoopHalt — stagnation", () => {
   });
 });
 
+describe("decideLoopHalt — configurable stagnationLimit", () => {
+  it("does not stall below a higher configured limit where the default would", () => {
+    // idleRounds 3 trips the default LOOP_STAGNATION_LIMIT (3) but not a
+    // configured budget of 10 — productive Ralph-loop tolerance.
+    const d = decideLoopHalt({
+      ...baseDecision,
+      idleRounds: 3,
+      stagnationLimit: 10,
+    });
+    expect(d.halt).toBe(false);
+  });
+
+  it("stalls once idleRounds reaches the configured limit", () => {
+    const d = decideLoopHalt({
+      ...baseDecision,
+      idleRounds: 10,
+      stagnationLimit: 10,
+    });
+    expect(d).toMatchObject({ halt: true, kind: "stalled" });
+  });
+
+  it("honors the configured limit for the missing-output stall branch", () => {
+    const below = decideLoopHalt({
+      ...baseDecision,
+      idleRounds: 4,
+      sourcePagesMissing: 1,
+      stagnationLimit: 5,
+    });
+    expect(below.halt).toBe(false);
+
+    const at = decideLoopHalt({
+      ...baseDecision,
+      idleRounds: 5,
+      sourcePagesMissing: 1,
+      stagnationLimit: 5,
+    });
+    expect(at).toMatchObject({ halt: true, kind: "stalled" });
+    if (at.halt) expect(at.reason).toContain("산출물 누락");
+  });
+
+  it("falls back to LOOP_STAGNATION_LIMIT when stagnationLimit is omitted", () => {
+    expect(decideLoopHalt({ ...baseDecision, idleRounds: 2 }).halt).toBe(false);
+    expect(
+      decideLoopHalt({ ...baseDecision, idleRounds: 3 }),
+    ).toMatchObject({ halt: true, kind: "stalled" });
+  });
+});
+
 describe("ingestMadeProgress", () => {
   it("detects forward movement in any tracked counter", () => {
     expect(

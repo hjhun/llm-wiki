@@ -79,9 +79,11 @@ export type LoopDecision =
     };
 
 /**
- * Consecutive progress-free rounds tolerated before the loop is declared
- * stalled. A stuck `in_progress` sub-chunk or a stale `.lock` would otherwise
- * spin every remaining iteration up to `maxIterations`.
+ * Default number of consecutive progress-free rounds tolerated before the loop
+ * is declared stalled. A stuck `in_progress` sub-chunk or a stale `.lock` would
+ * otherwise spin every remaining iteration up to `maxIterations`. Callers may
+ * override this with a configured `stagnationLimit`
+ * (`cli.ingestLoop.maxStagnantRounds`); this constant is the fallback.
  */
 export const LOOP_STAGNATION_LIMIT = 3;
 
@@ -94,12 +96,18 @@ export function decideLoopHalt(input: {
   stopRequested: boolean;
   iteration: number;
   maxIter: number;
+  /**
+   * Consecutive progress-free rounds tolerated before halting as `stalled`.
+   * Defaults to `LOOP_STAGNATION_LIMIT` when omitted.
+   */
+  stagnationLimit?: number;
   sourcePagesMissing?: number;
   codeLeavesMissingOutputs?: number;
   codeFilePagesMissing?: number;
   codeDirectoryIndexesMissing?: number;
   rawScope?: string | null;
 }): LoopDecision {
+  const stagnationLimit = input.stagnationLimit ?? LOOP_STAGNATION_LIMIT;
   if (input.exitCode !== 0) {
     return {
       halt: true,
@@ -167,7 +175,7 @@ export function decideLoopHalt(input: {
     };
   }
   if (
-    input.idleRounds >= LOOP_STAGNATION_LIMIT &&
+    input.idleRounds >= stagnationLimit &&
     ((input.sourcePagesMissing ?? 0) > 0 ||
       (input.codeLeavesMissingOutputs ?? 0) > 0 ||
       (input.codeFilePagesMissing ?? 0) > 0 ||
@@ -190,7 +198,7 @@ export function decideLoopHalt(input: {
   // nothing — a stuck `in_progress` sub-chunk, a stale `.lock`, or a merge
   // pass that cannot proceed — spinning to maxIter is pure waste. Halt and let
   // the manager report the stall.
-  if (input.idleRounds >= LOOP_STAGNATION_LIMIT) {
+  if (input.idleRounds >= stagnationLimit) {
     return {
       halt: true,
       kind: "stalled",

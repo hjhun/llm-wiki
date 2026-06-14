@@ -87,6 +87,9 @@ export type SettingsConfig = {
   };
   cli: {
     streamTokens: boolean;
+    ingestLoop: {
+      maxStagnantRounds: number;
+    };
   };
   chunking: {
     maxFiles: number;

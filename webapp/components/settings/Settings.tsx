@@ -62,7 +62,10 @@ function cloneConfig(config: SettingsConfig): SettingsConfig {
       paths: { ...config.agent.paths },
       orchestration: { ...config.agent.orchestration },
     },
-    cli: { ...config.cli },
+    cli: {
+      ...config.cli,
+      ingestLoop: { ...config.cli.ingestLoop },
+    },
     chunking: { ...config.chunking },
     graph: { ...config.graph },
     search: { ...config.search, qmd: { ...config.search.qmd } },
@@ -496,6 +499,31 @@ export default function Settings() {
                         })
                       }
                       className="h-4 w-4 accent-accent"
+                    />
+                  </label>
+                  <label className="mt-3 flex items-center justify-between gap-4 rounded border border-line bg-bg px-3 py-2">
+                    <span>
+                      <span className="block text-sm font-medium text-ink">
+                        {t.settings.ingestLoopMaxStagnant}
+                      </span>
+                      <span className="block text-xs text-ink-faint">
+                        {t.settings.ingestLoopMaxStagnantDesc}
+                      </span>
+                    </span>
+                    <input
+                      type="number"
+                      min={1}
+                      max={1000}
+                      value={draft.cli.ingestLoop.maxStagnantRounds}
+                      onChange={(e) =>
+                        updateDraft((next) => {
+                          next.cli.ingestLoop.maxStagnantRounds = Math.max(
+                            1,
+                            Math.floor(Number(e.target.value) || 1),
+                          );
+                        })
+                      }
+                      className="w-24 rounded border border-line bg-bg px-2 py-1.5 text-right font-mono text-sm text-ink outline-none focus:border-accent"
                     />
                   </label>
                   <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-4">

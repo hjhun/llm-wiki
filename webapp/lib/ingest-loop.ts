@@ -1208,10 +1208,11 @@ export async function runIngestLoop(
     await clearStopFlag(sessionPath);
   }
   const maxIter = cfg.cli.ingestLoop.maxIterations;
+  const stagnationLimit = cfg.cli.ingestLoop.maxStagnantRounds;
   await appendMessage(
     sessionPath,
     "system",
-    `🔁 /ingest-loop 시작 (최대 ${maxIter} 반복).`,
+    `🔁 /ingest-loop 시작 (Ralph 루프 · 진행이 있으면 계속, 연속 무진행 ${stagnationLimit}회 시 중단).`,
   ).catch(() => undefined);
 
   const loopBefore = await readProgressSnapshot({ rawScope });
@@ -1356,6 +1357,7 @@ export async function runIngestLoop(
       stopRequested: await stopFlagExists(sessionPath),
       iteration,
       maxIter,
+      stagnationLimit,
       sourcePagesMissing: snap.sourcePagesMissing,
       codeLeavesMissingOutputs: snap.codeLeavesMissingOutputs,
       codeFilePagesMissing: snap.codeFilePagesMissing,

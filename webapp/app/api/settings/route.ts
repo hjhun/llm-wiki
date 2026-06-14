@@ -38,6 +38,11 @@ const Body = z.object({
   cli: z
     .object({
       streamTokens: z.boolean(),
+      ingestLoop: z
+        .object({
+          maxStagnantRounds: z.number().int().min(1).max(1000),
+        })
+        .optional(),
     })
     .optional(),
   chunking: z
@@ -247,7 +252,14 @@ export async function PUT(req: Request) {
           }
         : undefined,
       cli: parsed.data.cli
-        ? { ...current.cli, ...parsed.data.cli }
+        ? {
+            ...current.cli,
+            streamTokens: parsed.data.cli.streamTokens,
+            ingestLoop: {
+              ...current.cli.ingestLoop,
+              ...(parsed.data.cli.ingestLoop ?? {}),
+            },
+          }
         : undefined,
       autoIngest: parsed.data.autoIngest,
       autoLint: parsed.data.autoLint,

@@ -313,12 +313,24 @@ export const ConfigSchema = z.object({
     ingestLoop: z
       .object({
         /**
-         * Hard upper bound on how many sub-chunk invocations a single
-         * /ingest-loop run may perform before halting. Acts as a safety net
-         * against runaway loops if the skill ever fails to advance the
-         * progress state.
+         * Absolute safety ceiling (runaway guard) on how many rounds a single
+         * /ingest-loop run may ever perform. This is NOT the user-facing
+         * budget: productive rounds are effectively unbounded — a healthy loop
+         * terminates via the completion branch in `decideLoopHalt` long before
+         * this. The user-tunable bound on *unproductive* work is
+         * `maxStagnantRounds` below. Kept high so it only ever trips if
+         * progress detection itself breaks.
          */
-        maxIterations: z.number().int().min(1).default(200),
+        maxIterations: z.number().int().min(1).default(1000),
+        /**
+         * Ralph-loop budget: maximum number of *consecutive* rounds that make
+         * no progress before the loop halts as `stalled`. The counter resets
+         * to zero whenever a round advances real work (see
+         * `ingestRoundAdvanced`), so productive runs are never cut off — only a
+         * genuinely stuck loop (stale `.lock`, repeated CLI failure, empty
+         * scope) consumes this budget. Surfaced in Settings.
+         */
+        maxStagnantRounds: z.number().int().min(1).default(10),
         /**
          * Number of times the backend should try the same ingest-loop
          * iteration when the host CLI throws or exits non-zero. This counts
@@ -334,7 +346,8 @@ export const ConfigSchema = z.object({
           .default([5000, 30_000]),
       })
       .default({
-        maxIterations: 200,
+        maxIterations: 1000,
+        maxStagnantRounds: 10,
         maxRetryAttempts: 3,
         retryBackoffMs: [5000, 30_000],
       }),

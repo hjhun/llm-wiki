@@ -430,6 +430,9 @@ export const TEXT = {
       streamTokens: "토큰 스트리밍 (실험적, claude 전용)",
       streamTokensDesc:
         "켜면 claude를 stream-json 모드로 실행해 답변을 생성되는 대로 토큰 단위로 흘려줍니다. claude 외 CLI는 영향 없음.",
+      ingestLoopMaxStagnant: "/ingest-loop 무진행 허용 라운드",
+      ingestLoopMaxStagnantDesc:
+        "랄프 루프 budget입니다. 진행이 있는 라운드는 무제한으로 계속하고, 진행이 없는(실패) 라운드가 연속으로 이 횟수에 도달하면 루프를 중단합니다. 진행이 감지되면 카운트는 0으로 리셋됩니다.",
       multiAgentCli: "멀티 에이전트 CLI",
       followDefaultCli: "기본 CLI 따름",
       maxConcurrentAgents: "최대 동시 에이전트",
@@ -1034,6 +1037,9 @@ export const TEXT = {
       streamTokens: "Token streaming (experimental, claude only)",
       streamTokensDesc:
         "When on, claude runs in stream-json mode so the answer streams token-by-token as it is generated. Other CLIs are unaffected.",
+      ingestLoopMaxStagnant: "/ingest-loop stall budget",
+      ingestLoopMaxStagnantDesc:
+        "Ralph-loop budget. Productive rounds run unbounded; the loop halts only after this many consecutive no-progress (failed) rounds. The counter resets to zero whenever a round makes progress.",
       multiAgentCli: "Multi-agent CLI",
       followDefaultCli: "Follow default CLI",
       maxConcurrentAgents: "Max concurrent agents",

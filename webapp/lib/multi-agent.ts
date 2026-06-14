@@ -570,6 +570,7 @@ async function runLoopOperation(input: {
     kind: "ingest-loop",
   });
   const maxRounds = input.cfg.cli.ingestLoop.maxIterations;
+  const stagnationLimit = input.cfg.cli.ingestLoop.maxStagnantRounds;
   const timeoutMs = input.cfg.cli.timeouts["ingest-loop"] ?? undefined;
   const loopBefore = await readProgressSnapshot({ rawScope });
   let prevSnap = loopBefore;
@@ -594,7 +595,7 @@ async function runLoopOperation(input: {
   await appendMessage(
     input.sessionPath,
     "system",
-    `multi-agent /ingest-loop 시작 (workers=${workers.length}, maxRounds=${maxRounds}).`,
+    `multi-agent /ingest-loop 시작 (workers=${workers.length}, Ralph 루프 · 연속 무진행 ${stagnationLimit}회 시 중단, 안전 상한 ${maxRounds}).`,
   ).catch(() => undefined);
 
   while (round < maxRounds) {
@@ -670,6 +671,7 @@ async function runLoopOperation(input: {
       stopRequested: await stopFlagExists(input.sessionPath),
       iteration: round,
       maxIter: maxRounds,
+      stagnationLimit,
       sourcePagesMissing: snap.sourcePagesMissing,
       codeLeavesMissingOutputs: snap.codeLeavesMissingOutputs,
       codeFilePagesMissing: snap.codeFilePagesMissing,
