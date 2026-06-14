@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/svg/clio.svg" alt="CLIO" width="220">
+  <img src="docs/svg/clio.svg" alt="CLIO" width="120">
 </p>
 
 <h1 align="center">CLIO</h1>
