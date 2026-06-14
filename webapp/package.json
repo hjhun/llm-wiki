@@ -1,7 +1,7 @@
 {
   "name": "clio",
   "private": true,
-  "version": "0.15.0",
+  "version": "0.15.1",
   "license": "Apache-2.0",
   "description": "Local web UI for the LLM Wiki pattern. Chat, Explorer, Graph, Settings on top of raw/ + wiki/.",
   "scripts": {
