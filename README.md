@@ -287,7 +287,8 @@ curl -fsSL .../install.sh | bash -s -- --version v0.1.0
 **`setup.sh` options** (`./setup.sh --help` for all): `--start` · `--shutdown` ·
 `--port <n>` · `--host <addr>` · `--dev` · `--skip-graphify` ·
 `--skip-bubblewrap` · `--skip-npm-install` · `--skip-build` · `--skip-cli` ·
-`--skip-qmd` · `--with-marp` · `--with-agent-browser` ·
+`--skip-qmd` · `--with-marp` · `--with-agent-browser` · `--with-gh` ·
+`--with-yt-dlp` · `--with-automation-tools` ·
 `--install-cli=<codex|claude|agy|cline>`.
 
 **Global skill.** `setup.sh` installs the `clio` agent skill to

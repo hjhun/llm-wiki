@@ -28,6 +28,8 @@ RESTART_EXISTING=1
 SKIP_QMD=0
 WITH_MARP=0
 WITH_AGENT_BROWSER=0
+WITH_GH=0
+WITH_YT_DLP=0
 INSTALL_CLI=""
 CLIO_SKILL_TARGETS="${CLIO_SKILL_TARGETS:-global}"
 DETECT_CLI_RUNTIME=1
@@ -67,6 +69,12 @@ Options:
   --with-qmd                    Deprecated no-op; qmd is installed by default
   --with-marp                   Best-effort optional Marp CLI install
   --with-agent-browser          Best-effort optional agent-browser install
+  --with-gh                     Best-effort optional GitHub CLI (gh) install for
+                                GitHub automation fetch jobs (needs gh auth login)
+  --with-yt-dlp                 Best-effort optional yt-dlp install for YouTube
+                                automation fetch jobs
+  --with-automation-tools       Best-effort install the automation fetch toolset
+                                (agent-browser + gh + yt-dlp)
   --install-cli=<names>         Best-effort install for codex,claude,agy,cline
   --detect-cli-runtime          Detect CLI config paths for bwrap (default)
   --skip-detect-cli-runtime     Skip CLI runtime config path detection
@@ -80,6 +88,7 @@ Examples:
   ./setup.sh
   ./setup.sh --port 7788 --skip-graphify
   ./setup.sh --install-cli=claude,agy --with-marp
+  ./setup.sh --with-automation-tools
   ./setup.sh --clio-skill both
 EOF
 }
@@ -146,6 +155,20 @@ while [[ $# -gt 0 ]]; do
       ;;
     --with-agent-browser)
       WITH_AGENT_BROWSER=1
+      shift
+      ;;
+    --with-gh)
+      WITH_GH=1
+      shift
+      ;;
+    --with-yt-dlp)
+      WITH_YT_DLP=1
+      shift
+      ;;
+    --with-automation-tools)
+      WITH_AGENT_BROWSER=1
+      WITH_GH=1
+      WITH_YT_DLP=1
       shift
       ;;
     --install-cli=*)
@@ -660,6 +683,63 @@ install_agent_browser_best_effort() {
   else
     warn "agent-browser install failed; install it manually if browser automation jobs need it"
   fi
+}
+
+install_gh_best_effort() {
+  if command -v gh >/dev/null 2>&1; then
+    log "gh already available: $(command -v gh)"
+    return
+  fi
+  log "best-effort install: GitHub CLI (gh) for GitHub automation fetch jobs"
+  if command -v brew >/dev/null 2>&1 && brew install gh; then
+    command -v gh >/dev/null 2>&1 && { log "gh installed via brew"; return; }
+  fi
+  if command -v apt-get >/dev/null 2>&1; then
+    if run_privileged_best_effort apt-get update && run_privileged_best_effort apt-get install -y gh; then
+      command -v gh >/dev/null 2>&1 && { log "gh installed via apt-get"; return; }
+    fi
+  elif command -v dnf >/dev/null 2>&1; then
+    if run_privileged_best_effort dnf install -y gh; then
+      command -v gh >/dev/null 2>&1 && { log "gh installed via dnf"; return; }
+    fi
+  elif command -v yum >/dev/null 2>&1; then
+    if run_privileged_best_effort yum install -y gh; then
+      command -v gh >/dev/null 2>&1 && { log "gh installed via yum"; return; }
+    fi
+  elif command -v zypper >/dev/null 2>&1; then
+    if run_privileged_best_effort zypper --non-interactive install gh; then
+      command -v gh >/dev/null 2>&1 && { log "gh installed via zypper"; return; }
+    fi
+  fi
+  warn "could not install gh automatically. See https://cli.github.com/ to install it, then run 'gh auth login'. GitHub automation fetch jobs stay inactive until gh is installed and authenticated."
+}
+
+install_yt_dlp_best_effort() {
+  if command -v yt-dlp >/dev/null 2>&1; then
+    log "yt-dlp already available: $(command -v yt-dlp)"
+    return
+  fi
+  log "best-effort install: yt-dlp for YouTube automation fetch jobs"
+  if command -v pipx >/dev/null 2>&1 && pipx install yt-dlp; then
+    command -v yt-dlp >/dev/null 2>&1 && { log "yt-dlp installed via pipx"; return; }
+  fi
+  if command -v python3 >/dev/null 2>&1 && python3 -m pip install --user -U yt-dlp >/dev/null 2>&1; then
+    command -v yt-dlp >/dev/null 2>&1 && { log "yt-dlp installed via pip --user"; return; }
+  fi
+  # Fallback: official self-contained binary into ~/.local/bin (covers
+  # PEP 668 externally-managed environments where pip --user is blocked).
+  mkdir -p "${HOME}/.local/bin"
+  local dest="${HOME}/.local/bin/yt-dlp"
+  if command -v curl >/dev/null 2>&1 && curl -fsSL https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o "${dest}"; then
+    chmod +x "${dest}"
+    if command -v yt-dlp >/dev/null 2>&1; then
+      log "yt-dlp installed to ${dest}"
+    else
+      warn "yt-dlp downloaded to ${dest} but not on PATH; add ~/.local/bin to PATH"
+    fi
+    return
+  fi
+  warn "could not install yt-dlp automatically. Install via 'pipx install yt-dlp' or your OS package manager. YouTube automation fetch jobs stay inactive until yt-dlp is installed."
 }
 
 run_privileged_best_effort() {
@@ -1570,6 +1650,14 @@ main() {
 
   if [[ "${WITH_AGENT_BROWSER}" -eq 1 ]]; then
     install_agent_browser_best_effort
+  fi
+
+  if [[ "${WITH_GH}" -eq 1 ]]; then
+    install_gh_best_effort
+  fi
+
+  if [[ "${WITH_YT_DLP}" -eq 1 ]]; then
+    install_yt_dlp_best_effort
   fi
 
   install_webapp

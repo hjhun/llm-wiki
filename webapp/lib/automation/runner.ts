@@ -102,10 +102,12 @@ async function runAgent(input: {
   const started = Date.now();
   try {
     const cfg = await loadConfig();
+    const automationTimeout = cfg.cli.timeouts.automation;
     const result = await runCli(input.agent, prompt, {
       cwd: workspacePath,
       projectRoot: workspacePath,
       safeMode: cfg.agent.safeMode,
+      timeoutMs: automationTimeout ?? undefined,
       killOnAbort: true,
     });
     const durationMs = result.durationMs || Date.now() - started;
@@ -114,6 +116,11 @@ async function runAgent(input: {
     await fs.writeFile(path.join(cliArtifactAbs, fileName), body + "\n", "utf8");
     await fs.writeFile(path.join(cliArtifactAbs, "stdout.log"), result.stdout, "utf8");
     await fs.writeFile(path.join(cliArtifactAbs, "stderr.log"), result.stderr, "utf8");
+    const errorMessage = result.timedOut
+      ? `automation 실행이 타임아웃(${Math.round((automationTimeout ?? 0) / 1000)}s)으로 중단되었습니다`
+      : result.exitCode === 0
+        ? null
+        : `CLI exitCode=${result.exitCode}`;
     return {
       agent: input.agent,
       status: result.exitCode === 0 ? "success" : "error",
@@ -121,7 +128,7 @@ async function runAgent(input: {
       artifactPath: cliArtifactRel,
       exitCode: result.exitCode,
       durationMs,
-      error: result.exitCode === 0 ? null : `CLI exitCode=${result.exitCode}`,
+      error: errorMessage,
     };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);

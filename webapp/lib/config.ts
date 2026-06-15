@@ -294,6 +294,18 @@ export const ConfigSchema = z.object({
         query: z.number().int().min(1000).nullable().default(null),
         lint: z.number().int().min(1000).nullable().default(30 * 60 * 1000),
         graph: z.number().int().min(1000).nullable().default(30 * 60 * 1000),
+        /**
+         * Per-agent timeout for a single automation job run. Automation jobs
+         * run host CLIs in isolated workspaces, often fetching external data
+         * (web/GitHub/YouTube); a stalled network fetch would otherwise hang
+         * the job forever and pin its inFlight slot. 30 minutes mirrors lint.
+         */
+        automation: z
+          .number()
+          .int()
+          .min(1000)
+          .nullable()
+          .default(30 * 60 * 1000),
       })
       .default({
         chat: null,
@@ -303,6 +315,7 @@ export const ConfigSchema = z.object({
         query: null,
         lint: 30 * 60 * 1000,
         graph: 30 * 60 * 1000,
+        automation: 30 * 60 * 1000,
       }),
     /**
      * Settings that apply to the /ingest-loop driver. The loop repeatedly

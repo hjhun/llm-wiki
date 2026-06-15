@@ -115,7 +115,7 @@ CLIO는 단순히 문서에 채팅하는 도구가 아닙니다. 중요한 결�
 
 `setup.sh`는 기본적으로 graphify 설치 또는 업그레이드를 시도합니다. 원하지 않으면 `--skip-graphify`를 사용하세요. 코딩 에이전트 CLI는 자동 감지하지만 기본적으로 자동 설치하지 않습니다. 필요하면 `--install-cli=codex,claude,agy`처럼 명시적으로 요청할 수 있습니다.
 
-브라우저 기반 자동화 작업이 필요하다면 `./setup.sh --with-agent-browser`로 선택 도구인 `agent-browser` 설치를 best-effort로 시도할 수 있습니다.
+자동화 fetch 작업에 필요한 선택 도구는 opt-in best-effort 설치입니다: `--with-agent-browser`(웹 페이지·브라우저 경유 Confluence), `--with-gh`(GitHub, 이후 `gh auth login` 필요), `--with-yt-dlp`(YouTube). 한 번에 모두 설치하려면 `./setup.sh --with-automation-tools`를 사용하세요. 도구가 없으면 Automations 도구 패널에 해당 설치 안내가 표시됩니다.
 
 ## 4. 설치하기
 
@@ -667,10 +667,11 @@ YouTube 요약, GitHub/Gerrit 패치 리뷰, 이메일 sync, custom prompt 템�
 
 여러 CLI를 선택하면 CLIO가 병렬로 실행하고 각 에이전트의 plan/result를 `cli/<agent>/` 아래에 따로 저장합니다.
 
-**Build from prompt** 패널은 개발자가 아닌 사용자를 위한 설정 흐름입니다. 원하는 주기 작업을 자연어로 적고 선호 CLI를 고르면 CLIO가 job 초안, 필요한 도구, 누락 요구사항, 검증 단계, 위험 메모를 제안합니다. `agent-browser` 같은 선택 도구는 먼저 감지하고, allowlist된 설치 명령을 실행하기 전에 사용자에게 확인을 받습니다. 설치 시점에 미리 준비하려면 다음 옵션을 사용할 수 있습니다.
+**Build from prompt** 패널은 개발자가 아닌 사용자를 위한 설정 흐름입니다. 원하는 주기 작업을 자연어로 적고 선호 CLI를 고르면 CLIO가 job 초안, 필요한 도구, 누락 요구사항, 검증 단계, 위험 메모를 제안합니다. `agent-browser` 같은 선택 도구는 먼저 감지하고, allowlist된 설치 명령을 실행하기 전에 사용자에게 확인을 받습니다. 설치 시점에 fetch 도구 세트를 미리 준비하려면 다음 옵션을 사용할 수 있습니다.
 
 ```bash
-./setup.sh --with-agent-browser
+./setup.sh --with-automation-tools   # agent-browser + gh + yt-dlp
+# 개별 설치: --with-agent-browser  --with-gh  --with-yt-dlp
 ```
 
 ## 15. 텔레그램 봇

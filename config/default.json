@@ -75,7 +75,8 @@
       "preprocess": 3600000,
       "query": null,
       "lint": 1800000,
-      "graph": 1800000
+      "graph": 1800000,
+      "automation": 1800000
     },
     "ingestLoop": {
       "maxIterations": 1000,

@@ -47,9 +47,11 @@ const TOOL_NAMES: AutomationToolName[] = [
 ];
 
 const INSTALL_HINTS: Partial<Record<AutomationToolName, string>> = {
-  "agent-browser": "npm install -g agent-browser && agent-browser install",
-  "yt-dlp": "Install yt-dlp with your OS package manager, pipx, or pip.",
-  gh: "Install GitHub CLI from https://cli.github.com/ and authenticate with gh auth login.",
+  "agent-browser":
+    "Run ./setup.sh --with-agent-browser (or --with-automation-tools), or npm install -g agent-browser && agent-browser install.",
+  "yt-dlp":
+    "Run ./setup.sh --with-yt-dlp (or --with-automation-tools), or install with pipx/pip/your OS package manager.",
+  gh: "Run ./setup.sh --with-gh (or --with-automation-tools), then authenticate with gh auth login. Manual: https://cli.github.com/.",
   qmd: "Run ./setup.sh or install with npm install --prefix tools/qmd @tobilu/qmd.",
   marp: "Run ./setup.sh --with-marp or npm install -g @marp-team/marp-cli.",
 };
