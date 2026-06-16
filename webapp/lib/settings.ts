@@ -224,15 +224,57 @@ async function detectOptionalTool(
   };
 }
 
+/**
+ * Tool/CLI detection spawns several child processes (`<cli> --version`,
+ * `qmd collection list`, graphify version probe), some with multi-second
+ * timeouts. Without caching, every Settings page entry paid that cost and the
+ * page felt slow to open. The set of installed binaries changes rarely, so we
+ * memoize the probe results for a short window; `loadConfig` stays uncached so
+ * config edits are still reflected immediately.
+ */
+const DETECTION_CACHE_MS = 60_000;
+let detectionCache: {
+  expiresAt: number;
+  value: Promise<{
+    cli: Awaited<ReturnType<typeof detectAllCli>>;
+    tools: ToolStatus[];
+  }>;
+} | null = null;
+
+function detectToolsAndCli(): Promise<{
+  cli: Awaited<ReturnType<typeof detectAllCli>>;
+  tools: ToolStatus[];
+}> {
+  if (detectionCache && detectionCache.expiresAt > Date.now()) {
+    return detectionCache.value;
+  }
+  const value = (async () => {
+    const [cli, graphify, qmd, marp, bwrap] = await Promise.all([
+      detectAllCli(),
+      detectGraphify(),
+      detectQmd(),
+      detectOptionalTool("marp", "marp"),
+      detectOptionalTool("bwrap", "bwrap"),
+    ]);
+    return { cli, tools: [graphify, qmd, marp, bwrap] };
+  })();
+  // Cache the promise so concurrent callers share one probe; drop it on failure
+  // so a transient error is not pinned for the whole TTL.
+  value.catch(() => {
+    if (detectionCache?.value === value) detectionCache = null;
+  });
+  detectionCache = { expiresAt: Date.now() + DETECTION_CACHE_MS, value };
+  return value;
+}
+
+/** Drop the memoized detection so the next read re-probes immediately. */
+export function invalidateDetectionCache(): void {
+  detectionCache = null;
+}
+
 export async function readSettingsState() {
   const cfg = await loadConfig();
-  const [cli, graphify, qmd, marp, bwrap] = await Promise.all([
-    detectAllCli(),
-    detectGraphify(),
-    detectQmd(),
-    detectOptionalTool("marp", "marp"),
-    detectOptionalTool("bwrap", "bwrap"),
-  ]);
+  const { cli, tools } = await detectToolsAndCli();
 
   return {
     projectRoot: PROJECT_ROOT,
@@ -286,6 +328,6 @@ export async function readSettingsState() {
       autoLint: cfg.autoLint,
     },
     cli,
-    tools: [graphify, qmd, marp, bwrap],
+    tools,
   };
 }

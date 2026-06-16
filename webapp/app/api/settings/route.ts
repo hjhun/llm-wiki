@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireSession, errorMessage, jsonError } from "@/lib/api";
 import { loadConfig, patchLocalConfig, type Config } from "@/lib/config";
-import { readSettingsState } from "@/lib/settings";
+import { readSettingsState, invalidateDetectionCache } from "@/lib/settings";
 import { getAutoIngestManager } from "@/lib/auto-ingest/manager";
 import { getAutoLintManager } from "@/lib/auto-lint/manager";
 
@@ -265,6 +265,9 @@ export async function PUT(req: Request) {
       autoLint: parsed.data.autoLint,
     } satisfies Partial<Config>;
     await patchLocalConfig(patch);
+    // Agent paths can change which binaries resolve; drop the detection cache
+    // so the response reflects the new config rather than a stale probe.
+    invalidateDetectionCache();
     if (parsed.data.autoIngest) {
       // Rebooting the watcher/scheduler is cheap; do it whenever the user
       // touches auto-ingest so the new mode / debounce / interval takes
