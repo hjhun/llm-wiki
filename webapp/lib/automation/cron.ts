@@ -141,9 +141,18 @@ function parseField(raw: string, min: number, max: number, label: string): Set<n
     if (!Number.isInteger(step) || step < 1) {
       throw new Error(`${label} step must be a positive integer`);
     }
-    const rangeMatch = /^(\d+)-(\d+)$/.exec(body);
-    const start = rangeMatch ? Number(rangeMatch[1]) : Number(body);
-    const end = rangeMatch ? Number(rangeMatch[2]) : Number(body);
+    // A "*" base in a step (e.g. */10) means the full range for the field;
+    // otherwise the body is a single value or an explicit a-b range.
+    let start: number;
+    let end: number;
+    if (body === "*") {
+      start = min;
+      end = max;
+    } else {
+      const rangeMatch = /^(\d+)-(\d+)$/.exec(body);
+      start = rangeMatch ? Number(rangeMatch[1]) : Number(body);
+      end = rangeMatch ? Number(rangeMatch[2]) : Number(body);
+    }
     if (
       !Number.isInteger(start) ||
       !Number.isInteger(end) ||
