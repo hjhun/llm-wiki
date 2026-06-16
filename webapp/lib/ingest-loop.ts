@@ -754,24 +754,92 @@ export async function clearStopFlag(sessionPath?: string): Promise<void> {
   }
 }
 
+/**
+ * A lock is considered stale once its owning process is gone or it has simply
+ * been held too long. The agent that writes the lock is expected to release it
+ * on exit, but a crash, timeout, or hard kill (`killOnAbort`) can orphan one —
+ * and because the auto-ingest skip check is a pure existence test, a single
+ * orphaned lock would otherwise block every future trigger forever.
+ *
+ * `started_at` older than this (default ~60 min) is treated as stale even when
+ * we cannot verify the pid (e.g. the lock was written by an agent on a
+ * different host over a network share, where pid liveness is meaningless).
+ */
+const STALE_LOCK_MS = 60 * 60 * 1000;
+
+type LockMeta = { pid?: number; started_at?: string };
+
+/** ESRCH ⇒ no such process. EPERM ⇒ exists but not ours, i.e. alive. */
+function isPidAlive(pid: number): boolean {
+  if (!Number.isInteger(pid) || pid <= 0) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (err) {
+    return (err as NodeJS.ErrnoException).code === "EPERM";
+  }
+}
+
+/**
+ * Decide whether a lock file is stale and, when it is, remove it. Returns true
+ * when the lock is live (a real in-flight worker), false when it is absent or
+ * was reaped. Conservative on purpose: a young lock whose pid we cannot resolve
+ * (missing/foreign-host pid) is kept until the age TTL elapses.
+ */
+async function lockIsLive(absPath: string): Promise<boolean> {
+  let meta: LockMeta = {};
+  try {
+    meta = JSON.parse(await fs.readFile(absPath, "utf8")) as LockMeta;
+  } catch (err) {
+    // Unreadable means it was just removed; an unparseable body falls back to
+    // the file's age below.
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") return false;
+  }
+
+  const startedMs = meta.started_at ? Date.parse(meta.started_at) : NaN;
+  let ageMs = Number.isNaN(startedMs) ? NaN : Date.now() - startedMs;
+  if (Number.isNaN(ageMs)) {
+    // No usable started_at; fall back to the lock file's mtime.
+    ageMs = await fs
+      .stat(absPath)
+      .then((st) => Date.now() - st.mtimeMs)
+      .catch(() => 0);
+  }
+
+  const pidDead = typeof meta.pid === "number" && !isPidAlive(meta.pid);
+  const tooOld = ageMs > STALE_LOCK_MS;
+  if (pidDead || tooOld) {
+    await fs.rm(absPath, { force: true }).catch(() => undefined);
+    return false;
+  }
+  return true;
+}
+
 export async function lockFileExists(): Promise<boolean> {
   // "Busy" under the two-tier lock model means either the global state mutex
   // is held (enumeration / state-write / merge-pass) OR at least one per-leaf
   // lock is held by an active worker. Both indicate an in-flight ingest.
+  // Stale locks (dead owner / past the age TTL) are reaped here so a crashed
+  // run cannot wedge auto-ingest indefinitely.
+  const globalLock = path.join(PROJECT_ROOT, PROGRESS_LOCK_PATH);
   try {
-    await fs.access(path.join(PROJECT_ROOT, PROGRESS_LOCK_PATH));
-    return true;
+    await fs.access(globalLock);
+    if (await lockIsLive(globalLock)) return true;
   } catch {
-    // fall through to per-leaf check
+    // global lock absent; fall through to per-leaf check
   }
+  let entries: string[];
   try {
-    const entries = await fs.readdir(
-      path.join(PROJECT_ROOT, PROGRESS_LEAVES_LOCK_DIR),
-    );
-    return entries.some((name) => name.endsWith(".lock"));
+    entries = await fs.readdir(path.join(PROJECT_ROOT, PROGRESS_LEAVES_LOCK_DIR));
   } catch {
     return false;
   }
+  for (const name of entries) {
+    if (!name.endsWith(".lock")) continue;
+    const abs = path.join(PROJECT_ROOT, PROGRESS_LEAVES_LOCK_DIR, name);
+    if (await lockIsLive(abs)) return true;
+  }
+  return false;
 }
 
 /**
