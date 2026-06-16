@@ -15,6 +15,8 @@ import {
 } from "lucide-react";
 import { Button, EmptyState, PageHeader, StatusBadge } from "../ui";
 import MarkdownPreview from "../explorer/MarkdownPreview";
+import ScheduleBuilder from "./ScheduleBuilder";
+import { validateFriendly, cronToFriendly } from "@/lib/automation/schedule-format";
 
 type CliName = "codex" | "claude" | "agy" | "cline";
 type Template = "youtube-summary" | "github-gerrit-review" | "email-sync" | "custom";
@@ -127,7 +129,6 @@ const TEMPLATES: Array<{ value: Template; label: string }> = [
   { value: "email-sync", label: "Email sync" },
   { value: "custom", label: "Custom" },
 ];
-const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 function blankJob(): AutomationJob {
   return {
@@ -166,9 +167,6 @@ function formatTime(iso: string | null): string {
   }
 }
 
-function pad2(n: number): string {
-  return n < 10 ? `0${n}` : `${n}`;
-}
 
 function statusTone(status: AutomationRuntime["status"]) {
   switch (status) {
@@ -333,6 +331,14 @@ export default function Automations() {
     if (!runtime?.nextRunAt) return "—";
     return formatTime(runtime.nextRunAt);
   }, [runtime?.nextRunAt]);
+
+  const scheduleError = useMemo(() => {
+    const f =
+      draft.schedule.mode === "cron"
+        ? cronToFriendly(draft.schedule.cron)
+        : null;
+    return f ? validateFriendly(f).error : null;
+  }, [draft.schedule]);
 
   async function saveGlobal(next: Partial<AutomationConfig>) {
     if (!config) return;
@@ -867,102 +873,12 @@ export default function Automations() {
                 </Panel>
 
                 <Panel title="Schedule" eyebrow="cron">
-                  <div className="grid gap-3 md:grid-cols-2">
-                    <label className="rounded border border-line bg-bg px-3 py-2">
-                      <span className="text-xs text-ink-faint">Mode</span>
-                      <select
-                        value={draft.schedule.mode}
-                        onChange={(e) =>
-                          updateSchedule((schedule) => {
-                            schedule.mode = e.target.value as "preset" | "cron";
-                          })
-                        }
-                        className="mt-1 block w-full rounded border border-line bg-bg-panel px-2 py-1.5 text-sm text-ink outline-none focus:border-accent"
-                      >
-                        <option value="preset">Preset</option>
-                        <option value="cron">5-field cron</option>
-                      </select>
-                    </label>
-                    <label className="rounded border border-line bg-bg px-3 py-2">
-                      <span className="text-xs text-ink-faint">Preset</span>
-                      <select
-                        value={draft.schedule.preset}
-                        disabled={draft.schedule.mode !== "preset"}
-                        onChange={(e) =>
-                          updateSchedule((schedule) => {
-                            schedule.preset = e.target.value as AutomationJob["schedule"]["preset"];
-                          })
-                        }
-                        className="mt-1 block w-full rounded border border-line bg-bg-panel px-2 py-1.5 text-sm text-ink outline-none focus:border-accent disabled:opacity-50"
-                      >
-                        <option value="hourly">Hourly</option>
-                        <option value="daily">Daily</option>
-                        <option value="weekly">Weekly</option>
-                        <option value="monthly">Monthly</option>
-                      </select>
-                    </label>
-                    <label className="rounded border border-line bg-bg px-3 py-2">
-                      <span className="text-xs text-ink-faint">Time</span>
-                      <input
-                        type="time"
-                        value={`${pad2(draft.schedule.time.hour)}:${pad2(
-                          draft.schedule.time.minute,
-                        )}`}
-                        onChange={(e) => {
-                          const [h, m] = e.target.value.split(":").map(Number);
-                          updateSchedule((schedule) => {
-                            schedule.time = {
-                              hour: Math.min(23, Math.max(0, h || 0)),
-                              minute: Math.min(59, Math.max(0, m || 0)),
-                            };
-                          });
-                        }}
-                        className="mt-1 block w-full rounded border border-line bg-bg px-2 py-1.5 font-mono text-sm text-ink outline-none focus:border-accent"
-                      />
-                    </label>
-                    <label className="rounded border border-line bg-bg px-3 py-2">
-                      <span className="text-xs text-ink-faint">Cron</span>
-                      <input
-                        value={draft.schedule.cron}
-                        disabled={draft.schedule.mode !== "cron"}
-                        onChange={(e) =>
-                          updateSchedule((schedule) => {
-                            schedule.cron = e.target.value;
-                          })
-                        }
-                        className="mt-1 block w-full rounded border border-line bg-bg px-2 py-1.5 font-mono text-sm text-ink outline-none focus:border-accent disabled:opacity-50"
-                      />
-                    </label>
-                    <label className="rounded border border-line bg-bg px-3 py-2">
-                      <span className="text-xs text-ink-faint">Weekday</span>
-                      <select
-                        value={draft.schedule.dayOfWeek}
-                        onChange={(e) =>
-                          updateSchedule((schedule) => {
-                            schedule.dayOfWeek = Number(e.target.value) || 0;
-                          })
-                        }
-                        className="mt-1 block w-full rounded border border-line bg-bg-panel px-2 py-1.5 text-sm text-ink outline-none focus:border-accent"
-                      >
-                        {WEEKDAYS.map((day, idx) => (
-                          <option key={day} value={idx}>
-                            {day}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <NumberField
-                      label="Day of month"
-                      value={draft.schedule.dayOfMonth}
-                      min={1}
-                      max={28}
-                      onChange={(value) =>
-                        updateSchedule((schedule) => {
-                          schedule.dayOfMonth = value;
-                        })
-                      }
-                    />
-                  </div>
+                  <ScheduleBuilder
+                    schedule={draft.schedule}
+                    onChange={(next) =>
+                      setDraft((current) => ({ ...current, schedule: next }))
+                    }
+                  />
                 </Panel>
               </div>
 
@@ -1037,7 +953,11 @@ export default function Automations() {
                   <div className="grid gap-2">
                     <Button
                       onClick={() => void saveJob()}
-                      disabled={busy != null || draft.selectedAgents.length === 0}
+                      disabled={
+                        busy != null ||
+                        draft.selectedAgents.length === 0 ||
+                        scheduleError != null
+                      }
                       variant="primary"
                       icon={Save}
                     >
@@ -1092,17 +1012,6 @@ export default function Automations() {
       )}
     </div>
   );
-
-  function updateSchedule(mutator: (schedule: AutomationJob["schedule"]) => void) {
-    setDraft((current) => {
-      const schedule = {
-        ...current.schedule,
-        time: { ...current.schedule.time },
-      };
-      mutator(schedule);
-      return { ...current, schedule };
-    });
-  }
 
   function toggleAgent(agent: CliName) {
     setDraft((current) => {
@@ -1174,35 +1083,6 @@ function TextField({
   );
 }
 
-function NumberField({
-  label,
-  value,
-  min,
-  max,
-  onChange,
-}: {
-  label: string;
-  value: number;
-  min: number;
-  max: number;
-  onChange: (value: number) => void;
-}) {
-  return (
-    <label className="rounded border border-line bg-bg px-3 py-2">
-      <span className="text-xs text-ink-faint">{label}</span>
-      <input
-        type="number"
-        min={min}
-        max={max}
-        value={value}
-        onChange={(e) =>
-          onChange(Math.min(max, Math.max(min, Number(e.target.value) || min)))
-        }
-        className="mt-1 block w-full rounded border border-line bg-bg px-2 py-1.5 font-mono text-sm text-ink outline-none focus:border-accent"
-      />
-    </label>
-  );
-}
 
 function InfoRow({ label, value }: { label: string; value: string }) {
   return (
