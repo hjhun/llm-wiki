@@ -373,12 +373,29 @@ export default function Automations() {
     setNotice(null);
     try {
       const isNew = !draft.id;
+      // Persist the schedule's timezone so the server fires at the same
+      // wall-clock instant the user picked here. Fall back to the browser's
+      // IANA zone when the draft has none (e.g. an untouched preset default).
+      const browserTz = (() => {
+        try {
+          return Intl.DateTimeFormat().resolvedOptions().timeZone || "";
+        } catch {
+          return "";
+        }
+      })();
+      const payload = {
+        ...draft,
+        schedule: {
+          ...draft.schedule,
+          timezone: draft.schedule.timezone || browserTz,
+        },
+      };
       const res = await fetch(
         isNew ? "/api/automation/jobs" : `/api/automation/jobs/${draft.id}`,
         {
           method: isNew ? "POST" : "PUT",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify(withoutId(draft)),
+          body: JSON.stringify(withoutId(payload)),
         },
       );
       if (!res.ok) throw await asError(res);

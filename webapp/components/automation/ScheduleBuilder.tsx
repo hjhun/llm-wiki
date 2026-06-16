@@ -126,11 +126,16 @@ export default function ScheduleBuilder({
     }
   }, [schedule]);
 
+  // The zone the schedule is interpreted in. Default to the browser's IANA
+  // zone so a fire time the user picks here means the same wall-clock instant
+  // the server will fire at, regardless of the server's own timezone.
+  const tz = schedule.timezone || localTimeZone();
+
   function update(next: FriendlySchedule) {
     setFriendly(next);
     const c = friendlyToCron(next);
     lastCron.current = c;
-    onChange({ ...schedule, mode: "cron", cron: c });
+    onChange({ ...schedule, mode: "cron", cron: c, timezone: tz });
   }
 
   function setTime(value: string) {
@@ -155,7 +160,7 @@ export default function ScheduleBuilder({
   // what the parent's Save guard validates).
   const cron = friendlyToCron(friendly);
   const v = validateFriendly(cronToFriendly(cron));
-  const fires = nextCronFires(cron, 3);
+  const fires = nextCronFires(cron, 3, new Date(), tz);
 
   return (
     <div className="space-y-3">
@@ -324,6 +329,7 @@ export default function ScheduleBuilder({
         {fires.length > 0 ? (
           <div className="mt-1 text-xs text-ink-dim">
             다음: {fires.map((d) => formatFire(d)).join(" · ")}
+            {tz ? <span className="text-ink-faint"> ({tz})</span> : null}
           </div>
         ) : null}
         <div className="mt-1.5 flex items-center gap-2 text-xs">
@@ -339,6 +345,14 @@ export default function ScheduleBuilder({
       </div>
     </div>
   );
+}
+
+function localTimeZone(): string {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || "";
+  } catch {
+    return "";
+  }
 }
 
 function chip(on: boolean): string {
