@@ -70,6 +70,26 @@ export function validateCronExpression(expr: string): string | null {
   }
 }
 
+export function nextCronFires(
+  cron: string,
+  count: number,
+  from: Date = new Date(),
+): Date[] {
+  if (validateCronExpression(cron) !== null) return [];
+  const out: Date[] = [];
+  let cursor = from;
+  for (let i = 0; i < count; i += 1) {
+    try {
+      const next = computeNextCronFire(cursor, cron);
+      out.push(next);
+      cursor = next;
+    } catch {
+      break;
+    }
+  }
+  return out;
+}
+
 function computeNextCronFire(now: Date, expr: string): Date {
   const fields = parseCronExpression(expr);
   const cursor = new Date(now.getTime());
