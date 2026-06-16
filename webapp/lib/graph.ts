@@ -549,6 +549,50 @@ export async function readGraphState(): Promise<GraphState> {
   };
 }
 
+export type GraphStats = {
+  status: GraphState["status"];
+  nodes: number;
+  edges: number;
+  communities: number;
+  updatedAt: string | null;
+};
+
+/**
+ * Lightweight counts for the dashboard. Unlike {@link readGraphState} this does
+ * not call `attachDocuments`, which fans out a filesystem `stat` per node/edge
+ * source and dominates the cost on large graphs. We only need the totals here.
+ */
+export async function readGraphStats(): Promise<GraphStats> {
+  const [graphText, updatedAt, diagnosticsBase] = await Promise.all([
+    readTextIfExists(WIKI_GRAPH_PATH),
+    fileUpdatedAt(WIKI_GRAPH_PATH),
+    graphDiagnostics(),
+  ]);
+  if (!graphText) {
+    const partialOnly =
+      diagnosticsBase.partsCount > 0 || diagnosticsBase.stateExists;
+    return {
+      status: partialOnly ? "partial-only" : "missing",
+      nodes: 0,
+      edges: 0,
+      communities: 0,
+      updatedAt: null,
+    };
+  }
+  try {
+    const graph = normalizeGraph(JSON.parse(graphText));
+    return {
+      status: "ready",
+      nodes: graph.nodes.length,
+      edges: graph.edges.length,
+      communities: graph.communities.length,
+      updatedAt,
+    };
+  } catch {
+    return { status: "invalid", nodes: 0, edges: 0, communities: 0, updatedAt };
+  }
+}
+
 /**
  * Starts a graphify run as a background chat job and returns the job so the
  * caller can stream its events (start / chunk / done / error). The coding

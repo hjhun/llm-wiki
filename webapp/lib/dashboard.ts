@@ -1,8 +1,12 @@
 import "server-only";
 
 import { listDir, readText, type WsKey } from "./files";
-import { readGraphState } from "./graph";
+import { readGraphStats } from "./graph";
 import { lintLockExists } from "./lint-lock";
+import { loadConfig } from "./config";
+import { readRuntimeState as readAutoIngestRuntime } from "./auto-ingest/runtime-state";
+import { readRuntimeState as readAutoLintRuntime } from "./auto-lint/runtime-state";
+import { readAutomationRuntime } from "./automation/runtime-state";
 
 export type LogEntry = {
   timestamp: string;
@@ -31,8 +35,45 @@ export type DashboardData = {
     locked: boolean;
     issues: LintCounts | null;
   };
+  autonomous: AutonomousStatus;
   recentLog: LogEntry[];
   generatedAt: string;
+};
+
+export type JobRunStatus = "idle" | "running" | "skipped" | "disabled";
+
+export type AutonomousStatus = {
+  autoIngest: {
+    enabled: boolean;
+    status: JobRunStatus;
+    mode: "watch" | "schedule" | null;
+    reason: string | null;
+    nextRunAt: string | null;
+    lastRunAt: string | null;
+    lastHalt: string | null;
+  };
+  autoLint: {
+    enabled: boolean;
+    status: JobRunStatus;
+    reason: string | null;
+    nextRunAt: string | null;
+    lastRunAt: string | null;
+    suggested: boolean;
+    counter: { value: number; threshold: number };
+  };
+  automation: {
+    enabled: boolean;
+    jobs: AutomationJobStatus[];
+  };
+};
+
+export type AutomationJobStatus = {
+  id: string;
+  name: string;
+  enabled: boolean;
+  status: JobRunStatus;
+  nextRunAt: string | null;
+  lastRunAt: string | null;
 };
 
 export type LintCounts = {
@@ -121,17 +162,21 @@ async function walkFiles(
   rel: string,
   shouldSkip: (path: string) => boolean,
 ): Promise<string[]> {
-  const out: string[] = [];
   const entries = await listDir(ws, rel);
+  const files: string[] = [];
+  const subdirs: string[] = [];
   for (const entry of entries) {
     if (shouldSkip(entry.path)) continue;
-    if (entry.kind === "dir") {
-      out.push(...(await walkFiles(ws, entry.path, shouldSkip)));
-    } else {
-      out.push(entry.path);
-    }
+    if (entry.kind === "dir") subdirs.push(entry.path);
+    else files.push(entry.path);
   }
-  return out;
+  // Recurse into sibling directories concurrently; on a network share the
+  // per-directory listDir latency dominates, so fanning out cuts wall time.
+  const nested = await Promise.all(
+    subdirs.map((dir) => walkFiles(ws, dir, shouldSkip)),
+  );
+  for (const group of nested) files.push(...group);
+  return files;
 }
 
 function stripPrefix(path: string, prefix: string): string {
@@ -156,15 +201,95 @@ async function latestLintReport(): Promise<string | null> {
   return reports.at(-1) ?? null;
 }
 
+/** 자율 작업(auto-ingest / auto-lint / automation)의 런타임 상태를 모은다. */
+async function collectAutonomous(): Promise<AutonomousStatus> {
+  const [cfg, ingest, lint, automation] = await Promise.all([
+    loadConfig().catch(() => null),
+    readAutoIngestRuntime().catch(() => null),
+    readAutoLintRuntime().catch(() => null),
+    readAutomationRuntime().catch(() => null),
+  ]);
+
+  const automationCfg = cfg?.automation;
+  const jobs: AutomationJobStatus[] = (automationCfg?.jobs ?? []).map((job) => {
+    const rt = automation?.jobs?.[job.id];
+    return {
+      id: job.id,
+      name: job.name,
+      enabled: job.enabled,
+      status: (rt?.status ?? (job.enabled ? "idle" : "disabled")) as JobRunStatus,
+      nextRunAt: rt?.nextRunAt ?? null,
+      lastRunAt: rt?.lastRunAt ?? null,
+    };
+  });
+
+  return {
+    autoIngest: {
+      enabled: cfg?.autoIngest.enabled ?? false,
+      status: (ingest?.status ?? "disabled") as JobRunStatus,
+      mode: ingest?.mode ?? null,
+      reason: ingest?.reason ?? null,
+      nextRunAt: ingest?.nextRunAt ?? null,
+      lastRunAt: ingest?.lastRunAt ?? null,
+      lastHalt: ingest?.lastResult?.halt ?? null,
+    },
+    autoLint: {
+      enabled: cfg?.autoLint.enabled ?? false,
+      status: (lint?.status ?? "disabled") as JobRunStatus,
+      reason: lint?.reason ?? null,
+      nextRunAt: lint?.nextRunAt ?? null,
+      lastRunAt: lint?.lastRunAt ?? null,
+      suggested: lint?.counter.suggested ?? false,
+      counter: {
+        value: lint?.counter.value ?? 0,
+        threshold: lint?.counter.threshold ?? 10,
+      },
+    },
+    automation: {
+      enabled: automationCfg?.enabled ?? false,
+      jobs,
+    },
+  };
+}
+
+/**
+ * Short in-process cache. The dashboard auto-refreshes every 30s and several
+ * clients may poll at once; the two recursive `raw/`+`wiki/` walks are the
+ * expensive part, so a brief shared cache collapses that to one scan without
+ * making the view feel stale.
+ */
+const DASHBOARD_CACHE_MS = 5_000;
+let dashboardCache: { expiresAt: number; value: Promise<DashboardData> } | null =
+  null;
+
 /** 대시보드 카드 한 화면에 필요한 현황을 한 객체로 집계한다. */
 export async function collectDashboard(): Promise<DashboardData> {
-  const rawFiles = await walkFiles("raw", "", (path) =>
-    path === ".trash" || path.startsWith(".trash/"),
-  ).catch(() => [] as string[]);
+  if (dashboardCache && dashboardCache.expiresAt > Date.now()) {
+    return dashboardCache.value;
+  }
+  const value = computeDashboard();
+  value.catch(() => {
+    if (dashboardCache?.value === value) dashboardCache = null;
+  });
+  dashboardCache = { expiresAt: Date.now() + DASHBOARD_CACHE_MS, value };
+  return value;
+}
 
-  const wikiFiles = await walkFiles("wiki", "", (path) =>
-    path === "archive" || path.startsWith("archive/"),
-  ).catch(() => [] as string[]);
+async function computeDashboard(): Promise<DashboardData> {
+  const [rawFiles, wikiFiles, graphStats, lintLocked, latestLint, logText, autonomous] =
+    await Promise.all([
+      walkFiles("raw", "", (p) => p === ".trash" || p.startsWith(".trash/")).catch(
+        () => [] as string[],
+      ),
+      walkFiles("wiki", "", (p) => p === "archive" || p.startsWith("archive/")).catch(
+        () => [] as string[],
+      ),
+      readGraphStats().catch(() => null),
+      lintLockExists().catch(() => false),
+      latestLintReport(),
+      readTextSafe("wiki", "log.md"),
+      collectAutonomous(),
+    ]);
 
   const sourceRels = wikiFiles
     .filter((path) => path.startsWith("sources/") && path.endsWith(".md"))
@@ -172,13 +297,6 @@ export async function collectDashboard(): Promise<DashboardData> {
     .filter((rel) => rel !== "index.md");
 
   const wikiPages = wikiFiles.filter((path) => path.endsWith(".md")).length;
-
-  const [graphState, lintLocked, latestLint, logText] = await Promise.all([
-    readGraphState().catch(() => null),
-    lintLockExists().catch(() => false),
-    latestLintReport(),
-    readTextSafe("wiki", "log.md"),
-  ]);
 
   const lintText = latestLint
     ? await readTextSafe("wiki", `lint/${latestLint}`)
@@ -197,17 +315,18 @@ export async function collectDashboard(): Promise<DashboardData> {
       pages: wikiPages,
     },
     graph: {
-      status: graphState?.status ?? "missing",
-      nodes: graphState?.graph?.nodes.length ?? 0,
-      edges: graphState?.graph?.edges.length ?? 0,
-      communities: graphState?.graph?.communities.length ?? 0,
-      updatedAt: graphState?.updatedAt ?? null,
+      status: graphStats?.status ?? "missing",
+      nodes: graphStats?.nodes ?? 0,
+      edges: graphStats?.edges ?? 0,
+      communities: graphStats?.communities ?? 0,
+      updatedAt: graphStats?.updatedAt ?? null,
     },
     lint: {
       latest: latestLint,
       locked: lintLocked,
       issues: lintText ? parseLintCounts(lintText) : null,
     },
+    autonomous,
     recentLog: logText ? parseRecentLog(logText, 6) : [],
     generatedAt: new Date().toISOString(),
   };
