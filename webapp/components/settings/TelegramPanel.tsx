@@ -470,7 +470,7 @@ function BotTokenSection(props: {
           </button>
           <button
             type="button"
-            className="rounded border border-line bg-accent px-2 py-1 text-[11px] font-semibold text-bg hover:opacity-90 disabled:opacity-50"
+            className="rounded border border-accent/40 bg-accent px-2 py-1 text-[11px] font-semibold text-bg transition-opacity hover:opacity-90 disabled:opacity-50"
             onClick={() => saveToken(tokenInput)}
             disabled={busy === "saveToken" || tokenInput.length === 0}
           >
@@ -563,7 +563,7 @@ function WebhookSection(props: {
         <div className="flex flex-wrap gap-2 text-[11px]">
           <button
             type="button"
-            className="rounded border border-line bg-accent px-2 py-1 font-semibold text-bg hover:opacity-90 disabled:opacity-50"
+            className="rounded border border-accent/40 bg-accent px-2 py-1 font-semibold text-bg transition-opacity hover:opacity-90 disabled:opacity-50"
             onClick={() => register(webhookUrl.trim())}
             disabled={
               busy === "register" ||
@@ -670,7 +670,7 @@ function PendingTable(props: {
                   <div className="inline-flex flex-wrap gap-1">
                     <button
                       type="button"
-                      className="rounded border border-line bg-accent px-2 py-0.5 text-bg disabled:opacity-50"
+                      className="rounded border border-accent/40 bg-accent px-2 py-0.5 text-bg transition-opacity hover:opacity-90 disabled:opacity-50"
                       onClick={() => approve(entry.chatId, "query")}
                       disabled={busy === "approve"}
                     >

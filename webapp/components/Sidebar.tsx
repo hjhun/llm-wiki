@@ -190,7 +190,7 @@ export default function Sidebar({
                 className={cx(
                   "h-7 rounded text-[11px] font-medium transition-colors disabled:opacity-50",
                   language === code
-                    ? "bg-accent text-slate-950"
+                    ? "bg-accent text-bg"
                     : "text-ink-dim hover:bg-bg-panel hover:text-ink",
                 )}
                 aria-pressed={language === code}

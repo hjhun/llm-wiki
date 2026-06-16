@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import dynamic from "next/dynamic";
 
 // Loaded lazily on the client only, so lottie-web never enters the SSR path
@@ -54,197 +54,69 @@ export default function AgentMascot({ running }: { running: boolean }) {
     );
   }
 
-  return <FallbackVoxelCatMascot running={running} />;
+  return <RingMascot running={running} />;
 }
 
 /**
- * Dependency-free fallback mascot: a blocky voxel-style cat drawn as inline
- * SVG and animated entirely through CSS keyframes in globals.css. Body parts
- * carry `agent-voxel-*` classes; the `data-running` attribute switches the
- * whole character between a calm idle pose and an energetic working pose.
+ * Concentric ring layout for the mascot. Each entry is one ring drawn as a
+ * single SVG circle whose stroke is intentionally left slightly open (a gap in
+ * the dash pattern), so the rings read as hand-drawn loops rather than closed
+ * outlines. `pathLength` normalizes every circumference to 100 units, so `gap`
+ * is just a percentage of the loop regardless of radius. `spin` is the
+ * clockwise rotation period (seconds) used while an agent is running — the
+ * values are deliberately non-harmonic so the rings never line up, mirroring
+ * how concurrently running agents each tick at their own pace.
  */
-function FallbackVoxelCatMascot({ running }: { running: boolean }) {
+const RINGS = [
+  { r: 52, width: 7, gap: 7, spin: 3.1 },
+  { r: 41, width: 5.5, gap: 8, spin: 4.7 },
+  { r: 30, width: 4.5, gap: 9, spin: 2.3 },
+  { r: 20, width: 3.5, gap: 11, spin: 5.9 },
+  { r: 11, width: 3, gap: 13, spin: 3.7 },
+] as const;
+
+/**
+ * Dependency-free mascot: several concentric, slightly open rings of differing
+ * thickness and color drawn as inline SVG. CSS keyframes in globals.css spin
+ * each ring clockwise while `data-running="true"`; because every ring carries
+ * its own period (via the `--spin` custom property) they rotate at different
+ * speeds and stay out of sync. Idle keeps them still with a soft breathing
+ * pulse so the panel still feels alive.
+ */
+function RingMascot({ running }: { running: boolean }) {
   return (
     <div className="agent-mascot-stage" aria-hidden>
       <svg
-        className="agent-voxel"
+        className="agent-rings"
         data-running={running ? "true" : "false"}
-        viewBox="0 0 136 140"
-        width="128"
+        viewBox="0 0 120 120"
+        width="150"
         height="150"
         role="img"
       >
-        <path
-          className="agent-voxel-spark"
-          d="M18 25 H26 V33 H18 Z M12 35 H18 V41 H12 Z"
-        />
-        <path
-          className="agent-voxel-spark agent-voxel-spark-late"
-          d="M96 21 H104 V29 H96 Z M105 31 H111 V37 H105 Z"
-        />
-        <ellipse
-          className="agent-voxel-shadow"
-          cx="60"
-          cy="132"
-          rx="33"
-          ry="5"
-        />
-        <g className="agent-voxel-bob">
-          <g className="agent-voxel-tail">
-            <g transform="translate(72 58) rotate(-3 12 42)">
-              <path
-                className="agent-voxel-tail-base"
-                d="M2 35 H15 V25 H31 V10 H48 V25 H37 V40 H21 V52 H2 Z"
-              />
-              <path
-                className="agent-voxel-tail-shade"
-                d="M15 25 H31 V10 H39 V19 H26 V34 H15 Z"
-              />
-              <path
-                className="agent-voxel-tail-tip"
-                d="M31 10 H48 V25 H37 V40 H29 V31 H39 V19 H31 Z"
-              />
-            </g>
-          </g>
-          <rect
-            className="agent-voxel-body"
-            x="37"
-            y="77"
-            width="42"
-            height="41"
-            rx="5"
+        {RINGS.map((ring, i) => (
+          <circle
+            key={ring.r}
+            className="agent-ring"
+            // Stroke color is set per ring in globals.css and switches with the
+            // theme (gold on dark, ink-navy on light to match the active tab).
+            data-ring={i}
+            cx="60"
+            cy="60"
+            r={ring.r}
+            pathLength={100}
+            // The ring is open: one dash covers the loop minus its gap.
+            strokeDasharray={`${100 - ring.gap} ${ring.gap}`}
+            // Offset each opening so the gaps fan around the figure.
+            strokeDashoffset={i * 7}
+            style={
+              {
+                strokeWidth: ring.width,
+                "--spin": `${ring.spin}s`,
+              } as CSSProperties
+            }
           />
-          <rect
-            className="agent-voxel-body-shade"
-            x="68"
-            y="77"
-            width="18"
-            height="41"
-            rx="5"
-          />
-          <rect
-            className="agent-voxel-belly"
-            x="47"
-            y="86"
-            width="18"
-            height="22"
-            rx="2"
-          />
-          <rect
-            className="agent-voxel-paw agent-voxel-paw-l"
-            x="36"
-            y="112"
-            width="22"
-            height="12"
-            rx="2"
-          />
-          <rect
-            className="agent-voxel-paw agent-voxel-paw-r agent-voxel-rear-paw"
-            x="66"
-            y="111"
-            width="20"
-            height="13"
-            rx="2"
-          />
-          <rect
-            className="agent-voxel-collar"
-            x="37"
-            y="74"
-            width="49"
-            height="7"
-            rx="1"
-          />
-          <rect
-            className="agent-voxel-tag"
-            x="56"
-            y="78"
-            width="8"
-            height="8"
-            rx="1"
-          />
-          <g className="agent-voxel-head">
-            <path
-              className="agent-voxel-ear agent-voxel-ear-l"
-              d="M33 28 L41 8 L49 28 Z"
-            />
-            <path
-              className="agent-voxel-ear agent-voxel-ear-r"
-              d="M63 28 L71 8 L79 28 Z"
-            />
-            <path
-              className="agent-voxel-inner-ear"
-              d="M36 26 L41 17 L46 26 Z M66 26 L71 17 L76 26 Z"
-            />
-            <path
-              className="agent-voxel-head-top"
-              d="M33 27 H79 L91 38 H27 Z"
-            />
-            <path
-              className="agent-voxel-head-side"
-              d="M79 38 L91 38 V76 L79 84 Z"
-            />
-            <rect
-              className="agent-voxel-face"
-              x="27"
-              y="38"
-              width="52"
-              height="46"
-              rx="4"
-            />
-            <rect
-              className="agent-voxel-face-patch"
-              x="30"
-              y="41"
-              width="15"
-              height="12"
-              rx="1"
-            />
-            <g className="agent-voxel-eyes">
-              <rect
-                className="agent-voxel-eye"
-                x="41"
-                y="54"
-                width="6"
-                height="7"
-              />
-              <rect
-                className="agent-voxel-eye"
-                x="62"
-                y="54"
-                width="6"
-                height="7"
-              />
-            </g>
-            <rect
-              className="agent-voxel-muzzle"
-              x="46"
-              y="63"
-              width="18"
-              height="10"
-              rx="2"
-            />
-            <rect
-              className="agent-voxel-nose"
-              x="53"
-              y="62"
-              width="5"
-              height="4"
-              rx="1"
-            />
-            <path
-              className="agent-voxel-whisker"
-              d="M45 67 H34 M45 71 H32 M65 67 H76 M65 71 H78"
-            />
-            <rect
-              className="agent-voxel-mouth"
-              x="53"
-              y="69"
-              width="5"
-              height="3"
-              rx="1"
-            />
-          </g>
-        </g>
+        ))}
       </svg>
     </div>
   );

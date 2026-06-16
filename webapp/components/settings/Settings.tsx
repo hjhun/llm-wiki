@@ -1254,7 +1254,7 @@ function SettingsTabButton({
         className={cx(
           "mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md border transition-colors",
           active
-            ? "border-accent/40 bg-accent text-white"
+            ? "border-accent/40 bg-accent text-bg"
             : "border-line bg-bg text-ink-faint group-hover:text-ink",
         )}
       >

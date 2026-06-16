@@ -12,7 +12,7 @@ type ButtonSize = "sm" | "md";
 
 const BUTTON_VARIANTS: Record<ButtonVariant, string> = {
   primary:
-    "border-transparent bg-[linear-gradient(135deg,rgb(var(--color-accent)),rgb(var(--color-success)))] text-slate-950 shadow-[0_12px_28px_rgb(var(--color-accent)_/_0.18)] hover:brightness-105",
+    "border-transparent bg-accent text-bg shadow-[0_10px_24px_rgb(var(--color-accent)_/_0.22)] hover:opacity-90",
   secondary:
     "border-line bg-bg-panel/78 text-ink-dim shadow-sm hover:border-accent/50 hover:bg-bg-panel hover:text-ink",
   ghost:
