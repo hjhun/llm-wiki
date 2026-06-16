@@ -51,3 +51,47 @@ export function friendlyToCron(f: FriendlySchedule): string {
       return (f.cron ?? "").trim();
   }
 }
+
+export function cronToFriendly(cron: string): FriendlySchedule {
+  const trimmed = cron.trim();
+  const advanced = (): FriendlySchedule => ({ kind: "advanced", cron: trimmed });
+  const parts = trimmed.split(/\s+/);
+  if (parts.length !== 5) return advanced();
+  const [min, hour, dom, mon, dow] = parts;
+  if (mon !== "*") return advanced();
+
+  const stepMin = /^\*\/(\d+)$/.exec(min);
+  if (stepMin && hour === "*" && dom === "*" && dow === "*") {
+    return { kind: "minutes", intervalMinutes: Number(stepMin[1]) };
+  }
+
+  const m = /^(\d+)$/.exec(min);
+  if (!m) return advanced();
+  const minute = Number(m[1]);
+
+  if (dom === "*" && dow === "*") {
+    if (hour === "*") return { kind: "hourly", intervalHours: 1, minute };
+    const stepHour = /^\*\/(\d+)$/.exec(hour);
+    if (stepHour) return { kind: "hourly", intervalHours: Number(stepHour[1]), minute };
+  }
+
+  const h = /^(\d+)$/.exec(hour);
+  if (!h) return advanced();
+  const hour24 = Number(h[1]);
+
+  if (dom === "*" && dow === "*") {
+    return { kind: "daily", minute, hour: hour24 };
+  }
+  if (dom === "*" && dow !== "*") {
+    const days = dow.split(",").map((x) => Number(x));
+    if (days.every((d) => Number.isInteger(d) && d >= 0 && d <= 6)) {
+      return { kind: "weekly", minute, hour: hour24, weekdays: days.sort((a, b) => a - b) };
+    }
+    return advanced();
+  }
+  if (dow === "*") {
+    const d = /^(\d+)$/.exec(dom);
+    if (d) return { kind: "monthly", minute, hour: hour24, dayOfMonth: Number(d[1]) };
+  }
+  return advanced();
+}
