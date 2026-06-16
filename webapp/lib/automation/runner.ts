@@ -7,6 +7,7 @@ import { runCli, type CliName } from "../cli";
 import { PROJECT_ROOT, RAW_ROOT } from "../paths";
 import { slugify } from "../sessions";
 import { automationPlanPrompt, automationRunPrompt } from "./templates";
+import { getAutomationEvents } from "./events";
 import type {
   AutomationAgentResult,
   AutomationJob,
@@ -109,6 +110,15 @@ async function runAgent(input: {
       safeMode: cfg.agent.safeMode,
       timeoutMs: automationTimeout ?? undefined,
       killOnAbort: true,
+      onStdout: (chunk) => {
+        getAutomationEvents().emitEvent({
+          type: "output",
+          jobId: input.job.id,
+          runId: input.runId,
+          agent: input.agent,
+          text: chunk,
+        });
+      },
     });
     const durationMs = result.durationMs || Date.now() - started;
     const body = result.stdout.trim() || result.stderr.trim() || "(empty result)";

@@ -4,6 +4,7 @@ import type { AutomationRuntime } from "./runtime-state";
 
 export type AutomationEvent =
   | { type: "start"; jobId: string; runId: string; source: string; mode: "plan" | "run"; startedAt: string }
+  | { type: "output"; jobId: string; runId: string; agent: string; text: string }
   | { type: "done"; result: AutomationRunResult }
   | { type: "skipped"; jobId: string; reason: string }
   | { type: "state"; state: AutomationRuntime };

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ChevronDown,
   ChevronRight,
@@ -213,6 +213,10 @@ export default function Automations() {
   const [analyzerAgent, setAnalyzerAgent] = useState<CliName | "none">("none");
   const [proposal, setProposal] = useState<BuilderProposal | null>(null);
   const [verifyResult, setVerifyResult] = useState<AutomationResult | null>(null);
+  // Live CLI stdout streamed during an in-flight run, keyed by `${jobId}::${agent}`.
+  // Ephemeral by design — the persisted artifact viewer takes over once the run
+  // completes (a fresh SSE connection does not replay missed chunks).
+  const [liveOutput, setLiveOutput] = useState<Record<string, string>>({});
 
   // Restore the last builder dry-run result once on mount so it stays visible
   // after navigating away and back. Set in an effect (not lazy useState init) to
@@ -269,8 +273,36 @@ export default function Automations() {
     const events = new EventSource("/api/automation/events");
     events.onmessage = (event) => {
       try {
-        const payload = JSON.parse(event.data) as { type: string; state?: AutomationRuntime };
+        const payload = JSON.parse(event.data) as {
+          type: string;
+          state?: AutomationRuntime;
+          jobId?: string;
+          agent?: string;
+          text?: string;
+        };
         if (payload.type === "state" && payload.state) setRuntime(payload.state);
+        if (payload.type === "start" && payload.jobId) {
+          const jid = payload.jobId;
+          // New run for this job: drop its previous live buffer.
+          setLiveOutput((prev) => {
+            const next: Record<string, string> = {};
+            for (const [k, v] of Object.entries(prev)) {
+              if (!k.startsWith(`${jid}::`)) next[k] = v;
+            }
+            return next;
+          });
+        }
+        if (payload.type === "output" && payload.jobId && payload.agent) {
+          const key = `${payload.jobId}::${payload.agent}`;
+          const chunk = payload.text ?? "";
+          setLiveOutput((prev) => {
+            const merged = (prev[key] ?? "") + chunk;
+            // Cap the buffer so a chatty run cannot grow it without bound.
+            const capped =
+              merged.length > 64_000 ? merged.slice(merged.length - 64_000) : merged;
+            return { ...prev, [key]: capped };
+          });
+        }
         if (payload.type === "done") void load().catch(() => undefined);
       } catch {
         // best effort
@@ -286,6 +318,16 @@ export default function Automations() {
 
   const selectedRuntime = selectedId && runtime ? runtime.jobs[selectedId] : null;
   const jobs = config?.jobs ?? [];
+
+  const liveForSelected = useMemo(
+    () =>
+      selectedId
+        ? Object.entries(liveOutput).filter(([k]) =>
+            k.startsWith(`${selectedId}::`),
+          )
+        : [],
+    [liveOutput, selectedId],
+  );
 
   const globalNextRun = useMemo(() => {
     if (!runtime?.nextRunAt) return "—";
@@ -1036,6 +1078,9 @@ export default function Automations() {
                       value={selectedRuntime?.lastResult?.artifactRoot ?? "—"}
                     />
                   </dl>
+                  {liveForSelected.length > 0 ? (
+                    <LiveConsole entries={liveForSelected} />
+                  ) : null}
                   {selectedRuntime?.lastResult ? (
                     <ArtifactLinks result={selectedRuntime.lastResult} />
                   ) : null}
@@ -1339,6 +1384,43 @@ function ArtifactPreview({
           ) : null}
         </div>
       ) : null}
+    </div>
+  );
+}
+
+/**
+ * Live CLI stdout streamed over SSE while an automation run is in flight. Auto
+ * scrolls to the tail as chunks arrive. One block per agent (runs fan out over
+ * the job's selected agents). Ephemeral: cleared on the next run's `start`.
+ */
+function LiveConsole({ entries }: { entries: Array<[string, string]> }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (ref.current) ref.current.scrollTop = ref.current.scrollHeight;
+  });
+  return (
+    <div className="mt-3 rounded border border-line bg-bg">
+      <div className="flex items-center gap-2 border-b border-line px-3 py-1.5">
+        <span className="relative flex h-2 w-2">
+          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+          <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-400" />
+        </span>
+        <span className="text-xs uppercase tracking-widest text-ink-faint">
+          live output
+        </span>
+      </div>
+      <div ref={ref} className="max-h-72 space-y-2 overflow-auto px-3 py-2">
+        {entries.map(([key, text]) => (
+          <div key={key}>
+            <div className="font-mono text-[10px] text-ink-faint">
+              {key.split("::")[1] ?? ""}
+            </div>
+            <pre className="whitespace-pre-wrap break-words font-mono text-[11px] text-ink-dim">
+              {text}
+            </pre>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
