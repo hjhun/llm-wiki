@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  ChevronDown,
+  ChevronRight,
   FileText,
   FlaskConical,
   Play,
@@ -12,6 +14,7 @@ import {
   Wand2,
 } from "lucide-react";
 import { Button, EmptyState, PageHeader, StatusBadge } from "../ui";
+import MarkdownPreview from "../explorer/MarkdownPreview";
 
 type CliName = "codex" | "claude" | "agy" | "cline";
 type Template = "youtube-summary" | "github-gerrit-review" | "email-sync" | "custom";
@@ -113,6 +116,11 @@ type AutomationResult = {
 };
 
 const CLI_NAMES: CliName[] = ["codex", "claude", "agy", "cline"];
+
+// Builder dry-run (verify) result is disk-backed but the React state holding it
+// is ephemeral; persist the last verification so it survives tab navigation and
+// reloads. The inline viewer re-fetches the actual artifact content from disk.
+const VERIFY_STORAGE_KEY = "clio.automation.verifyResult";
 const TEMPLATES: Array<{ value: Template; label: string }> = [
   { value: "youtube-summary", label: "YouTube summary" },
   { value: "github-gerrit-review", label: "GitHub/Gerrit review" },
@@ -205,6 +213,31 @@ export default function Automations() {
   const [analyzerAgent, setAnalyzerAgent] = useState<CliName | "none">("none");
   const [proposal, setProposal] = useState<BuilderProposal | null>(null);
   const [verifyResult, setVerifyResult] = useState<AutomationResult | null>(null);
+
+  // Restore the last builder dry-run result once on mount so it stays visible
+  // after navigating away and back. Set in an effect (not lazy useState init) to
+  // avoid an SSR/CSR hydration mismatch.
+  useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem(VERIFY_STORAGE_KEY);
+      if (saved) setVerifyResult(JSON.parse(saved) as AutomationResult);
+    } catch {
+      // ignore corrupt/unavailable storage
+    }
+  }, []);
+
+  const persistVerifyResult = useCallback((result: AutomationResult | null) => {
+    setVerifyResult(result);
+    try {
+      if (result) {
+        window.localStorage.setItem(VERIFY_STORAGE_KEY, JSON.stringify(result));
+      } else {
+        window.localStorage.removeItem(VERIFY_STORAGE_KEY);
+      }
+    } catch {
+      // ignore unavailable storage
+    }
+  }, []);
 
   const load = useCallback(async () => {
     setError(null);
@@ -356,7 +389,7 @@ export default function Automations() {
     setBusy("builder-analyze");
     setError(null);
     setNotice(null);
-    setVerifyResult(null);
+    persistVerifyResult(null);
     try {
       const res = await fetch("/api/automation/builder/analyze", {
         method: "POST",
@@ -392,7 +425,7 @@ export default function Automations() {
       });
       if (!res.ok) throw await asError(res);
       const json = (await res.json()) as { result: AutomationResult };
-      setVerifyResult(json.result);
+      persistVerifyResult(json.result);
       setNotice("Dry-run verification completed.");
       await load();
     } catch (err) {
@@ -1166,37 +1199,43 @@ function ArtifactLinks({ result }: { result: AutomationResult }) {
         />
       </div>
       <div className="mt-3 space-y-1">
-        {result.agents.map((agent) => (
-          <div
-            key={agent.agent}
-            className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded border border-line bg-bg-subtle px-2 py-1 text-[11px]"
-          >
-            <div className="min-w-0">
-              <div className="flex items-center gap-2">
-                <span className="font-mono text-ink-dim">{agent.agent}</span>
-                <span
-                  className={
-                    agent.status === "success"
-                      ? "text-emerald-300"
-                      : "text-red-300"
-                  }
-                >
-                  {agent.status} · {agent.durationMs}ms
-                </span>
-              </div>
-              {agent.error ? (
-                <div className="truncate text-[10px] text-red-300">
-                  {agent.error}
+        {result.agents.map((agent, idx) => {
+          const filePath = joinRawPath(agent.artifactPath, resultFile);
+          return (
+            <div
+              key={agent.agent}
+              className="rounded border border-line bg-bg-subtle px-2 py-1 text-[11px]"
+            >
+              <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono text-ink-dim">{agent.agent}</span>
+                    <span
+                      className={
+                        agent.status === "success"
+                          ? "text-emerald-300"
+                          : "text-red-300"
+                      }
+                    >
+                      {agent.status} · {agent.durationMs}ms
+                    </span>
+                  </div>
+                  {agent.error ? (
+                    <div className="truncate text-[10px] text-red-300">
+                      {agent.error}
+                    </div>
+                  ) : null}
                 </div>
-              ) : null}
+                <ArtifactLink label={resultFile} rawPath={filePath} compact />
+              </div>
+              <ArtifactPreview
+                key={filePath}
+                rawPath={filePath}
+                defaultOpen={idx === 0}
+              />
             </div>
-            <ArtifactLink
-              label={resultFile}
-              rawPath={joinRawPath(agent.artifactPath, resultFile)}
-              compact
-            />
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
@@ -1221,6 +1260,86 @@ function ArtifactLink({
     >
       {label}
     </a>
+  );
+}
+
+/**
+ * Collapsible inline viewer for an automation artifact (plan.md / result.md).
+ * Lazily fetches the markdown body from disk via /api/files/content the first
+ * time it is expanded, so dry-run and scheduled-run output is readable in the
+ * panel itself instead of only via a jump to the Explorer tab. Used by both the
+ * builder verify result and a job's lastResult.
+ */
+function ArtifactPreview({
+  rawPath,
+  defaultOpen = false,
+}: {
+  rawPath: string;
+  defaultOpen?: boolean;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  const [content, setContent] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!open || content !== null || loading) return;
+    let cancelled = false;
+    setLoading(true);
+    setErr(null);
+    const pathInRaw = rawPath.replace(/^raw\/?/, "");
+    fetch(`/api/files/content?ws=raw&path=${encodeURIComponent(pathInRaw)}`, {
+      cache: "no-store",
+    })
+      .then(async (res) => {
+        if (!res.ok) {
+          const body = (await res.json().catch(() => null)) as
+            | { error?: string }
+            | null;
+          throw new Error(body?.error ?? `HTTP ${res.status}`);
+        }
+        return (await res.json()) as { content: string };
+      })
+      .then((json) => {
+        if (!cancelled) setContent(json.content);
+      })
+      .catch((e) => {
+        if (!cancelled) setErr(e instanceof Error ? e.message : String(e));
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, rawPath, content, loading]);
+
+  return (
+    <div className="mt-1">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="flex items-center gap-1 text-[11px] text-ink-faint hover:text-ink"
+      >
+        {open ? (
+          <ChevronDown className="h-3 w-3" />
+        ) : (
+          <ChevronRight className="h-3 w-3" />
+        )}
+        preview
+      </button>
+      {open ? (
+        <div className="mt-1 max-h-80 overflow-auto rounded border border-line bg-bg px-3 py-2">
+          {loading ? (
+            <div className="text-[11px] text-ink-faint">loading…</div>
+          ) : err ? (
+            <div className="text-[11px] text-red-300">{err}</div>
+          ) : content !== null ? (
+            <MarkdownPreview content={content} className="text-xs" />
+          ) : null}
+        </div>
+      ) : null}
+    </div>
   );
 }
 
