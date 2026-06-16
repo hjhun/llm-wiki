@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
 import {
   cronToFriendly,
   describeCron,
@@ -52,6 +53,13 @@ function deriveFriendly(s: Schedule): FriendlySchedule {
   return s.mode === "cron" ? cronToFriendly(s.cron) : presetToFriendly(s);
 }
 
+// The cron string a schedule currently represents, used to detect whether an
+// incoming `schedule` prop is an external change (job switch) versus our own
+// last emit.
+function scheduleCron(s: Schedule): string {
+  return s.mode === "cron" ? s.cron : friendlyToCron(presetToFriendly(s));
+}
+
 function withKind(f: FriendlySchedule, kind: FriendlyKind): FriendlySchedule {
   switch (kind) {
     case "minutes":
@@ -79,6 +87,19 @@ function timeValue(f: FriendlySchedule): string {
   return `${String(f.hour ?? 9).padStart(2, "0")}:${String(f.minute ?? 0).padStart(2, "0")}`;
 }
 
+// Parse a freeform number input, allowing a transient empty/invalid value
+// (returned as undefined) so the user can clear the field while typing.
+function parseField(raw: string): number | undefined {
+  if (raw === "") return undefined;
+  const n = Number(raw);
+  return Number.isNaN(n) ? undefined : n;
+}
+
+function clampInt(n: number | undefined, lo: number, hi: number, fallback: number): number {
+  if (n === undefined || Number.isNaN(n)) return fallback;
+  return Math.min(hi, Math.max(lo, Math.round(n)));
+}
+
 export default function ScheduleBuilder({
   schedule,
   onChange,
@@ -86,15 +107,39 @@ export default function ScheduleBuilder({
   schedule: Schedule;
   onChange: (next: Schedule) => void;
 }) {
-  const friendly = deriveFriendly(schedule);
+  // Local UI state is the source of truth for the inputs. Deriving everything
+  // from the serialized cron each render (the previous approach) could neither
+  // hold the "advanced" mode (its cron re-parses to a concrete kind) nor let a
+  // freeform number field hold a transient empty/partial value.
+  const [friendly, setFriendly] = useState<FriendlySchedule>(() => deriveFriendly(schedule));
+  const lastCron = useRef<string>(scheduleCron(schedule));
 
-  function emit(next: FriendlySchedule) {
-    onChange({ ...schedule, mode: "cron", cron: friendlyToCron(next) });
+  // Re-sync local state only when the parent supplies a schedule we did not
+  // author (e.g. the user selected a different job). Our own emits set
+  // lastCron, so they do not trigger a resync that would clobber the active
+  // kind or an in-progress edit.
+  useEffect(() => {
+    const incoming = scheduleCron(schedule);
+    if (incoming !== lastCron.current) {
+      setFriendly(deriveFriendly(schedule));
+      lastCron.current = incoming;
+    }
+  }, [schedule]);
+
+  function update(next: FriendlySchedule) {
+    setFriendly(next);
+    const c = friendlyToCron(next);
+    lastCron.current = c;
+    onChange({ ...schedule, mode: "cron", cron: c });
   }
 
   function setTime(value: string) {
     const [h, m] = value.split(":").map(Number);
-    emit({ ...friendly, hour: Math.min(23, Math.max(0, h || 0)), minute: Math.min(59, Math.max(0, m || 0)) });
+    update({
+      ...friendly,
+      hour: Math.min(23, Math.max(0, h || 0)),
+      minute: Math.min(59, Math.max(0, m || 0)),
+    });
   }
 
   function toggleWeekday(day: number) {
@@ -102,11 +147,14 @@ export default function ScheduleBuilder({
     const on = cur.includes(day);
     if (on && cur.length === 1) return;
     const weekdays = on ? cur.filter((d) => d !== day) : [...cur, day].sort((a, b) => a - b);
-    emit({ ...friendly, weekdays });
+    update({ ...friendly, weekdays });
   }
 
-  const cron = schedule.mode === "cron" ? schedule.cron : friendlyToCron(friendly);
-  const v = validateFriendly(friendly);
+  // The effective cron is compiled from local state; summary, preview, and
+  // validation all read from it so they match exactly what will be saved (and
+  // what the parent's Save guard validates).
+  const cron = friendlyToCron(friendly);
+  const v = validateFriendly(cronToFriendly(cron));
   const fires = nextCronFires(cron, 3);
 
   return (
@@ -116,7 +164,7 @@ export default function ScheduleBuilder({
           <button
             key={kind}
             type="button"
-            onClick={() => emit(withKind(friendly, kind))}
+            onClick={() => update(withKind(friendly, kind))}
             className={[
               "rounded-full border px-3 py-1 text-xs",
               friendly.kind === kind
@@ -136,7 +184,7 @@ export default function ScheduleBuilder({
             <button
               key={n}
               type="button"
-              onClick={() => emit({ kind: "minutes", intervalMinutes: n })}
+              onClick={() => update({ kind: "minutes", intervalMinutes: n })}
               className={chip(friendly.intervalMinutes === n)}
             >
               {n}
@@ -146,9 +194,12 @@ export default function ScheduleBuilder({
             type="number"
             min={1}
             max={59}
-            value={friendly.intervalMinutes ?? 10}
+            value={friendly.intervalMinutes ?? ""}
             onChange={(e) =>
-              emit({ kind: "minutes", intervalMinutes: Math.min(59, Math.max(1, Number(e.target.value) || 1)) })
+              update({ kind: "minutes", intervalMinutes: parseField(e.target.value) })
+            }
+            onBlur={() =>
+              update({ kind: "minutes", intervalMinutes: clampInt(friendly.intervalMinutes, 1, 59, 10) })
             }
             className="w-16 rounded border border-line bg-bg px-2 py-1 font-mono text-sm text-ink"
           />
@@ -163,7 +214,7 @@ export default function ScheduleBuilder({
             <button
               key={n}
               type="button"
-              onClick={() => emit({ ...friendly, kind: "hourly", intervalHours: n })}
+              onClick={() => update({ ...friendly, kind: "hourly", intervalHours: n })}
               className={chip(friendly.intervalHours === n)}
             >
               {n}
@@ -174,9 +225,12 @@ export default function ScheduleBuilder({
             type="number"
             min={0}
             max={59}
-            value={friendly.minute ?? 0}
+            value={friendly.minute ?? ""}
             onChange={(e) =>
-              emit({ ...friendly, kind: "hourly", minute: Math.min(59, Math.max(0, Number(e.target.value) || 0)) })
+              update({ ...friendly, kind: "hourly", minute: parseField(e.target.value) })
+            }
+            onBlur={() =>
+              update({ ...friendly, kind: "hourly", minute: clampInt(friendly.minute, 0, 59, 0) })
             }
             className="w-16 rounded border border-line bg-bg px-2 py-1 font-mono text-sm text-ink"
           />
@@ -235,9 +289,12 @@ export default function ScheduleBuilder({
             type="number"
             min={1}
             max={28}
-            value={friendly.dayOfMonth ?? 1}
+            value={friendly.dayOfMonth ?? ""}
             onChange={(e) =>
-              emit({ ...friendly, dayOfMonth: Math.min(28, Math.max(1, Number(e.target.value) || 1)) })
+              update({ ...friendly, kind: "monthly", dayOfMonth: parseField(e.target.value) })
+            }
+            onBlur={() =>
+              update({ ...friendly, kind: "monthly", dayOfMonth: clampInt(friendly.dayOfMonth, 1, 28, 1) })
             }
             className="w-16 rounded border border-line bg-bg px-2 py-1 font-mono text-sm text-ink"
           />
@@ -254,8 +311,8 @@ export default function ScheduleBuilder({
 
       {friendly.kind === "advanced" ? (
         <input
-          value={schedule.mode === "cron" ? schedule.cron : friendlyToCron(friendly)}
-          onChange={(e) => onChange({ ...schedule, mode: "cron", cron: e.target.value })}
+          value={friendly.cron ?? ""}
+          onChange={(e) => update({ kind: "advanced", cron: e.target.value })}
           placeholder="0 9 * * 1-5"
           className="w-full rounded border border-line bg-bg px-2 py-1.5 font-mono text-sm text-ink"
         />
