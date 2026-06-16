@@ -70,24 +70,42 @@ function cancellationResult(input: {
   };
 }
 
+// CLIO's mascot is a set of slightly-open concentric rings (see
+// `RingMascot` in components/agent-panel/AgentMascot.tsx). Each agent card
+// renders that mascot in ASCII via `ringGlyph`: an outer and inner ring drawn
+// around a per-persona core mark, with a deliberate gap in the top arc so the
+// loop reads as a hand-drawn open ring rather than a closed circle. Personas
+// only carry the single core character that distinguishes them.
 const AGENT_PERSONAS = [
-  { name: "Nikola Tesla", glyph: [" /\\_/\\\\", "( o.o )", " > ^ <", " /___\\~"] },
-  { name: "Isaac Newton", glyph: [" /\\_/\\\\", "( -.- )", " > ^ <", " /___\\~"] },
-  { name: "Albert Einstein", glyph: [" /\\_/\\\\", "( @.@ )", " > ^ <", " /___\\~"] },
-  { name: "Ada Lovelace", glyph: [" /\\_/\\\\", "( ^.^ )", " > ^ <", " /___\\~"] },
-  { name: "Marie Curie", glyph: [" /\\_/\\\\", "( *.* )", " > ^ <", " /___\\~"] },
-  { name: "Alan Turing", glyph: [" /\\_/\\\\", "( 0.0 )", " > ^ <", " /___\\~"] },
-  { name: "Grace Hopper", glyph: [" /\\_/\\\\", "( +.+ )", " > ^ <", " /___\\~"] },
-  { name: "Galileo Galilei", glyph: [" /\\_/\\\\", "( =.= )", " > ^ <", " /___\\~"] },
-  { name: "Katherine Johnson", glyph: [" /\\_/\\\\", "( x.x )", " > ^ <", " /___\\~"] },
-  { name: "Leonardo da Vinci", glyph: [" /\\_/\\\\", "( v.v )", " > ^ <", " /___\\~"] },
-  { name: "Rosalind Franklin", glyph: [" /\\_/\\\\", "( u.u )", " > ^ <", " /___\\~"] },
-  { name: "Niels Bohr", glyph: [" /\\_/\\\\", "( n.n )", " > ^ <", " /___\\~"] },
-  { name: "Richard Feynman", glyph: [" /\\_/\\\\", "( f.f )", " > ^ <", " /___\\~"] },
-  { name: "Hypatia", glyph: [" /\\_/\\\\", "( h.h )", " > ^ <", " /___\\~"] },
-  { name: "Srinivasa Ramanujan", glyph: [" /\\_/\\\\", "( r.r )", " > ^ <", " /___\\~"] },
-  { name: "Emmy Noether", glyph: [" /\\_/\\\\", "( e.e )", " > ^ <", " /___\\~"] },
+  { name: "Nikola Tesla", core: "o" },
+  { name: "Isaac Newton", core: "-" },
+  { name: "Albert Einstein", core: "@" },
+  { name: "Ada Lovelace", core: "^" },
+  { name: "Marie Curie", core: "*" },
+  { name: "Alan Turing", core: "0" },
+  { name: "Grace Hopper", core: "+" },
+  { name: "Galileo Galilei", core: "=" },
+  { name: "Katherine Johnson", core: "x" },
+  { name: "Leonardo da Vinci", core: "v" },
+  { name: "Rosalind Franklin", core: "u" },
+  { name: "Niels Bohr", core: "n" },
+  { name: "Richard Feynman", core: "f" },
+  { name: "Hypatia", core: "h" },
+  { name: "Srinivasa Ramanujan", core: "r" },
+  { name: "Emmy Noether", core: "e" },
 ];
+
+/**
+ * Renders CLIO's ring mascot as a rounded Unicode box framing a bullseye
+ * (`◎`, itself a pair of concentric circles, echoing the web UI mascot) and a
+ * single per-persona `core` character. Drawn with box-drawing glyphs so it
+ * stays crisp in the monospace `<pre>` agent card; the border widths are kept
+ * in sync with the content row so the frame lines up.
+ */
+function ringGlyph(core: string): string[] {
+  const c = (core || "o").slice(0, 1);
+  return ["╭─────╮", `│ ◎ ${c} │`, "╰─────╯"];
+}
 
 const AGENT_ACCENTS = [
   "#0ea5e9",
@@ -104,14 +122,16 @@ function buildAsciiBrief(worker: Worker): string {
   const name = fitAsciiCell(worker.name, 22);
   const role = fitAsciiCell(worker.role, 22);
   const task = fitAsciiCell(worker.asciiTask, 22);
+  // Inner width is the 22-char cell plus the single padding space on each side.
+  const border = "─".repeat(24);
   const handoff =
     worker.id === "manager" ? "   -> Close run" : "   -> Coordinator";
   return [
-    "+------------------------+",
-    `| ${name} |`,
-    `| ${role} |`,
-    `| ${task} |`,
-    "+------------------------+",
+    `╭${border}╮`,
+    `│ ${name} │`,
+    `│ ${role} │`,
+    `│ ${task} │`,
+    `╰${border}╯`,
     ...worker.glyph,
     handoff,
   ].join("\n");
@@ -134,7 +154,7 @@ function buildWorkers(
       index,
       id: `worker-${index + 1}`,
       name: persona.name,
-      glyph: persona.glyph,
+      glyph: ringGlyph(persona.core),
       cli,
       role: profile.role,
       detail: profile.detail,
@@ -380,7 +400,7 @@ async function runManager(input: {
     index: input.runs.length,
     id: "manager",
     name: managerName,
-    glyph: [" /\\_/\\\\", "( c.c )", " > ^ <", " /___\\~"],
+    glyph: ringGlyph("c"),
     cli: input.agent,
     role: "Supervisor / Coordinator",
     detail: "Worker handoffs를 받아 최종 판단을 내리고 실행을 종료합니다.",
@@ -710,7 +730,7 @@ async function runLoopOperation(input: {
           index: workers.length,
           id: "qmd",
           name: "qmd",
-          glyph: [" /\\_/\\\\", "( q.q )", " > ^ <", " /___\\~"],
+          glyph: ringGlyph("q"),
           cli: orchestrationCli,
           role: "Search Index Refresh",
           detail: "qmd 검색 인덱스를 최신 wiki 상태로 갱신합니다.",
@@ -746,7 +766,7 @@ async function runLoopOperation(input: {
           index: workers.length,
           id: "auto-graph-final",
           name: "auto-graph-final",
-          glyph: [" /\\_/\\\\", "( g.g )", " > ^ <", " /___\\~"],
+          glyph: ringGlyph("g"),
           cli: orchestrationCli,
           role: "Graph Sync",
           detail: "최종 ingest 결과를 knowledge graph에 반영합니다.",
