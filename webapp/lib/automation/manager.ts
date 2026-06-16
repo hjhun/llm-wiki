@@ -103,23 +103,24 @@ export class AutomationManager {
         return;
       }
       void (async () => {
-        try {
-          await this.trigger(job.id, "cron", "scheduled run", "run");
-        } finally {
-          const fresh = (await loadConfig()).automation.jobs.find(
-            (candidate) => candidate.id === job.id,
-          );
-          if (fresh?.enabled && (await loadConfig()).automation.enabled) {
-            this.armJob(fresh);
-            await patchAutomationJobRuntime(fresh.id, {
-              nextRunAt: this.nextFireAt.get(fresh.id)?.toISOString() ?? null,
-            });
-            await writeAutomationRuntime({
-              nextRunAt: earliest(this.nextFireAt)?.toISOString() ?? null,
-            });
-            emitState();
-          }
+        // Schedule the next occurrence *before* running, so a long-running or
+        // hanging run never stalls the cadence. Re-read config so a job that
+        // was disabled meanwhile stops re-arming. Overlap is handled by
+        // `trigger`'s inFlight / maxConcurrentJobs guards, which skip the new
+        // occurrence while the previous run is still in flight.
+        const cfg = (await loadConfig()).automation;
+        const fresh = cfg.jobs.find((candidate) => candidate.id === job.id);
+        if (fresh?.enabled && cfg.enabled) {
+          this.armJob(fresh);
+          await patchAutomationJobRuntime(fresh.id, {
+            nextRunAt: this.nextFireAt.get(fresh.id)?.toISOString() ?? null,
+          });
+          await writeAutomationRuntime({
+            nextRunAt: earliest(this.nextFireAt)?.toISOString() ?? null,
+          });
+          emitState();
         }
+        await this.trigger(job.id, "cron", "scheduled run", "run");
       })();
     }, delay);
     this.timers.set(job.id, timer);
@@ -149,7 +150,12 @@ export class AutomationManager {
     }
     if ((!cfg.enabled || !job.enabled) && source === "cron") return;
     if (this.inFlight.has(jobId)) {
-      await recordSkip(jobId, "previous automation run still in flight");
+      // The job is still running from a previous occurrence. Record the skip
+      // as an event but keep the per-job "running" status intact so the UI
+      // does not flicker to skipped/idle while the run is ongoing.
+      await recordSkip(jobId, "previous automation run still in flight", {
+        preserveJobStatus: true,
+      });
       return;
     }
     if (this.inFlight.size >= cfg.maxConcurrentJobs) {
@@ -226,11 +232,17 @@ export class AutomationManager {
   }
 }
 
-async function recordSkip(jobId: string, reason: string): Promise<void> {
-  await patchAutomationJobRuntime(jobId, {
-    status: "skipped",
-    reason,
-  });
+async function recordSkip(
+  jobId: string,
+  reason: string,
+  opts: { preserveJobStatus?: boolean } = {},
+): Promise<void> {
+  if (!opts.preserveJobStatus) {
+    await patchAutomationJobRuntime(jobId, {
+      status: "skipped",
+      reason,
+    });
+  }
   await writeAutomationRuntime({
     status: "skipped",
     reason,
@@ -238,7 +250,12 @@ async function recordSkip(jobId: string, reason: string): Promise<void> {
   getAutomationEvents().emitEvent({ type: "skipped", jobId, reason });
   emitState();
   setTimeout(() => {
-    void patchAutomationJobRuntime(jobId, { status: "idle", reason })
+    const jobPatch = opts.preserveJobStatus
+      ? Promise.resolve()
+      : patchAutomationJobRuntime(jobId, { status: "idle", reason }).then(
+          () => undefined,
+        );
+    void jobPatch
       .then(() => writeAutomationRuntime({ status: "idle", reason }))
       .then(() => emitState())
       .catch(() => undefined);
