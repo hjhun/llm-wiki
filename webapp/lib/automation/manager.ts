@@ -55,6 +55,7 @@ export class AutomationManager {
           nextRunAt: null,
         });
       }
+      console.log("[automation] disabled; no jobs armed");
       emitState();
       return;
     }
@@ -68,12 +69,7 @@ export class AutomationManager {
         });
         continue;
       }
-      this.armJob(job);
-      await patchAutomationJobRuntime(job.id, {
-        status: "idle",
-        reason: "scheduled",
-        nextRunAt: this.nextFireAt.get(job.id)?.toISOString() ?? null,
-      });
+      await this.armWithCatchUp(job);
     }
 
     await writeAutomationRuntime({
@@ -81,17 +77,23 @@ export class AutomationManager {
       reason: "automation ready",
       nextRunAt: earliest(this.nextFireAt)?.toISOString() ?? null,
     });
+    console.log(
+      `[automation] armed ${this.timers.size} job(s); next fire ` +
+        `${earliest(this.nextFireAt)?.toISOString() ?? "—"}`,
+    );
     emitState();
   }
 
   private stop(): void {
-    for (const timer of this.timers.values()) clearTimeout(timer);
-    this.timers.clear();
-    this.nextFireAt.clear();
+    this.clearTimers();
     this.active = null;
   }
 
   private armJob(job: AutomationJob): void {
+    // Clear any timer already armed for this job so re-arming (boot, restart,
+    // tick, or catch-up) never leaks a stray timer that would double-fire.
+    const existing = this.timers.get(job.id);
+    if (existing) clearTimeout(existing);
     const next = computeNextAutomationFire(new Date(), job.schedule);
     this.nextFireAt.set(job.id, next);
     const delay = safeAutomationDelay(next.getTime() - Date.now());
@@ -102,6 +104,9 @@ export class AutomationManager {
         this.armJob(job);
         return;
       }
+      // The scheduled slot this firing represents; carried into `trigger` so
+      // the same slot is not also replayed by a concurrent tick/catch-up.
+      const slot = target?.toISOString() ?? new Date().toISOString();
       void (async () => {
         // Schedule the next occurrence *before* running, so a long-running or
         // hanging run never stalls the cadence. Re-read config so a job that
@@ -120,10 +125,105 @@ export class AutomationManager {
           });
           emitState();
         }
-        await this.trigger(job.id, "cron", "scheduled run", "run");
+        await this.trigger(job.id, "cron", "scheduled run", "run", slot);
       })();
     }, delay);
     this.timers.set(job.id, timer);
+  }
+
+  /**
+   * Arm a job for its next future fire and, if a previously scheduled fire
+   * elapsed while no timer was alive to service it (process was down, the
+   * in-memory timer was lost, or the server was suspended — common on
+   * WSL/desktop), replay that missed run exactly once. The persisted
+   * `nextRunAt` is the schedule clock that survives restarts; `lastFiredSlot`
+   * guards against replaying a slot that was already executed.
+   */
+  private async armWithCatchUp(job: AutomationJob): Promise<void> {
+    const now = Date.now();
+    const runtime = await readAutomationRuntime();
+    const jobState = runtime.jobs[job.id];
+    const prevNext = jobState?.nextRunAt ? new Date(jobState.nextRunAt) : null;
+    const lastSlot = jobState?.lastFiredSlot ?? null;
+
+    const missed =
+      prevNext !== null &&
+      prevNext.getTime() <= now &&
+      (lastSlot === null || new Date(lastSlot).getTime() < prevNext.getTime());
+
+    this.armJob(job);
+    await patchAutomationJobRuntime(job.id, {
+      status: jobState?.status === "running" ? "running" : "idle",
+      reason: missed ? "catch-up: replaying missed run" : "scheduled",
+      nextRunAt: this.nextFireAt.get(job.id)?.toISOString() ?? null,
+    });
+
+    if (missed && prevNext) {
+      // Fire-and-forget: the catch-up run must not block server startup
+      // (instrumentation awaits boot) or the `/tick` request, both of which
+      // would otherwise hang for the full duration of the agent run. The
+      // normal timer path is non-blocking for the same reason; `trigger`
+      // handles its own errors and concurrency guards.
+      console.log(
+        `[automation] catch-up: replaying missed run for ${job.id} ` +
+          `slot ${prevNext.toISOString()}`,
+      );
+      void this.trigger(
+        job.id,
+        "cron",
+        "catch-up for missed scheduled run",
+        "run",
+        prevNext.toISOString(),
+      ).catch(() => undefined);
+    }
+  }
+
+  /**
+   * Reconcile every job against the current config and the persisted schedule
+   * clock, arming missing timers and replaying any missed runs. Safe to call
+   * repeatedly — it is the entry point for the external watchdog/cron tick that
+   * keeps automation reliable even when the host process is not continuously
+   * alive. Idempotent: `armJob` clears existing timers and `lastFiredSlot`
+   * dedupes already-fired slots.
+   */
+  async tick(): Promise<AutomationRuntime> {
+    const cfg = (await loadConfig(true)).automation;
+    this.active = cfg;
+    if (!cfg.enabled) {
+      this.clearTimers();
+      await writeAutomationRuntime({
+        status: "disabled",
+        reason: "automation disabled",
+        nextRunAt: null,
+      });
+      emitState();
+      return readAutomationRuntime();
+    }
+
+    for (const job of cfg.jobs) {
+      if (!job.enabled) {
+        const timer = this.timers.get(job.id);
+        if (timer) clearTimeout(timer);
+        this.timers.delete(job.id);
+        this.nextFireAt.delete(job.id);
+        continue;
+      }
+      await this.armWithCatchUp(job);
+    }
+
+    await writeAutomationRuntime({
+      status: this.inFlight.size > 0 ? "running" : "idle",
+      reason: "automation tick",
+      nextRunAt: earliest(this.nextFireAt)?.toISOString() ?? null,
+    });
+    emitState();
+    return readAutomationRuntime();
+  }
+
+  private clearTimers(): void {
+    for (const timer of this.timers.values()) clearTimeout(timer);
+    this.timers.clear();
+    this.nextFireAt.clear();
   }
 
   async runNow(jobId: string): Promise<AutomationRuntime> {
@@ -141,6 +241,7 @@ export class AutomationManager {
     source: AutomationSource,
     reason: string,
     mode: "plan" | "run",
+    slot?: string,
   ): Promise<void> {
     const cfg = (await loadConfig()).automation;
     const job = cfg.jobs.find((candidate) => candidate.id === jobId);
@@ -149,6 +250,12 @@ export class AutomationManager {
       return;
     }
     if ((!cfg.enabled || !job.enabled) && source === "cron") return;
+    if (slot) {
+      // Another path (in-memory timer vs. catch-up/tick) may have already run
+      // this exact scheduled slot; never replay it.
+      const current = await readAutomationRuntime();
+      if (current.jobs[jobId]?.lastFiredSlot === slot) return;
+    }
     if (this.inFlight.has(jobId)) {
       // The job is still running from a previous occurrence. Record the skip
       // as an event but keep the per-job "running" status intact so the UI
@@ -170,6 +277,7 @@ export class AutomationManager {
         status: "running",
         reason,
         startedAt,
+        ...(slot ? { lastFiredSlot: slot } : {}),
       });
       await writeAutomationRuntime({
         status: "running",

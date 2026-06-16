@@ -674,6 +674,40 @@ YouTube 요약, GitHub/Gerrit 패치 리뷰, 이메일 sync, custom prompt 템�
 # 개별 설치: --with-agent-browser  --with-gh  --with-yt-dlp
 ```
 
+### 예약 신뢰성 — catch-up + 외부 워치독
+
+예약 스케줄러는 Next.js 서버 프로세스 안의 in-memory 타이머입니다. 무장한 시점부터
+발화 시점까지 그 단일 프로세스가 끊김 없이 살아 있어야만 발화합니다. WSL/데스크톱처럼
+프로세스가 항상 떠 있지 않은 환경(터미널 종료, WSL suspend, 크래시, 재시작)에서는
+예정 시각에 프로세스가 내려가 있으면 그 실행이 유실될 수 있습니다.
+
+이를 두 단계로 보완합니다.
+
+1. **Catch-up(놓친 실행 복구)**: 서버가 (재)시작될 때마다 boot 단계에서 각 job의
+   마지막으로 저장된 `nextRunAt`을 읽어, 프로세스가 죽어 있던 동안 지나간 예정 시각이
+   있으면 그 실행을 **정확히 한 번** 재생한 뒤 다음 회차를 무장합니다. 이미 실행한
+   슬롯은 `lastFiredSlot`로 중복 방지합니다. boot 시 `[automation] armed N job(s);
+   next fire …` 로그로 무장 상태를 확인할 수 있습니다.
+
+2. **외부 워치독(cron 트리거)**: 프로세스가 죽으면 HTTP 틱만으로는 되살릴 수 없으므로,
+   호스트의 cron이 1분마다 워치독 스크립트를 실행하도록 합니다. 스크립트는 서버가
+   내려가 있으면 다시 띄우고(→ boot가 catch-up 수행), 떠 있으면
+   `POST /api/automation/tick`을 호출해 무장 상태를 재조정합니다. 인증은 기존
+   `auth.cliToken`을 Bearer로 재사용합니다.
+
+```bash
+# 1분마다 자동 실행되도록 crontab에 등록(opt-in)
+./scripts/clio-automation-cron.sh install
+
+# 한 번만 직접 실행(서버 보장 + 틱) / 상태 확인 / 제거
+./scripts/clio-automation-cron.sh        # run
+./scripts/clio-automation-cron.sh status
+./scripts/clio-automation-cron.sh uninstall
+```
+
+서버가 항상 떠 있는 배포(systemd 서비스 등)라면 catch-up만으로 충분하며, 워치독은
+선택입니다. 그렇지 않은 환경에서는 워치독 등록을 권장합니다.
+
 ## 15. 텔레그램 봇
 
 CLIO의 **Chat → /query** 흐름을 텔레그램 봇으로 노출할 수 있습니다. 휴대폰이나

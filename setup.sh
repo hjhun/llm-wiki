@@ -1676,6 +1676,8 @@ main() {
     log "server not started; pass --start to run it from setup.sh"
   fi
   log "first visit will redirect to /setup for the admin password"
+  log "reliable Automations scheduling (catch-up + per-minute trigger), if the"
+  log "  server is not always-on: ./scripts/clio-automation-cron.sh install"
 
   start_server
 }

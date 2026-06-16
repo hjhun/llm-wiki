@@ -43,6 +43,11 @@ export const AutomationRuntimeSchema = z.object({
         startedAt: z.string().nullable().default(null),
         lastRunAt: z.string().nullable().default(null),
         nextRunAt: z.string().nullable().default(null),
+        // The scheduled fire time (an ISO timestamp matching a former
+        // `nextRunAt`) that was last actually executed. Used to dedupe a slot
+        // between the in-memory timer and the external catch-up/tick path so a
+        // missed run is replayed at most once.
+        lastFiredSlot: z.string().nullable().default(null),
         lastResult: LastResultSchema.nullable().default(null),
       }),
     )
@@ -93,6 +98,7 @@ export async function patchAutomationJobRuntime(
     startedAt: null,
     lastRunAt: null,
     nextRunAt: null,
+    lastFiredSlot: null,
     lastResult: null,
   };
   return writeAutomationRuntime({
