@@ -52,6 +52,77 @@ export function friendlyToCron(f: FriendlySchedule): string {
   }
 }
 
+function hhmm(hour?: number, minute?: number): string {
+  return `${String(hour ?? 0).padStart(2, "0")}:${String(minute ?? 0).padStart(2, "0")}`;
+}
+
+export function describeCron(cron: string): string {
+  const f = cronToFriendly(cron);
+  switch (f.kind) {
+    case "minutes":
+      return `${f.intervalMinutes}분마다`;
+    case "hourly":
+      return f.intervalHours === 1
+        ? `매시간 ${String(f.minute ?? 0).padStart(2, "0")}분`
+        : `${f.intervalHours}시간마다 ${String(f.minute ?? 0).padStart(2, "0")}분`;
+    case "daily":
+      return `매일 ${hhmm(f.hour, f.minute)}`;
+    case "weekly":
+      return `매주 ${(f.weekdays ?? []).map((d) => KOR_DAYS[d]).join("·")} ${hhmm(f.hour, f.minute)}`;
+    case "monthly":
+      return `매월 ${f.dayOfMonth}일 ${hhmm(f.hour, f.minute)}`;
+    case "advanced":
+    default:
+      return `사용자 지정 (${cron.trim()})`;
+  }
+}
+
+const HOURLY_INTERVALS = [1, 2, 3, 4, 6, 8, 12];
+
+export function validateFriendly(f: FriendlySchedule): FriendlyValidation {
+  const ok: FriendlyValidation = { error: null, warning: null };
+  switch (f.kind) {
+    case "minutes": {
+      const n = f.intervalMinutes ?? 0;
+      if (!Number.isInteger(n) || n < 1 || n > 59) {
+        return { error: "분 간격은 1–59 사이여야 합니다", warning: null };
+      }
+      if (!isDivisorOf(n, 60)) {
+        return { error: null, warning: `${n}은 60의 약수가 아니라 매시 경계에서 간격이 일정하지 않습니다` };
+      }
+      return ok;
+    }
+    case "hourly": {
+      if (!HOURLY_INTERVALS.includes(f.intervalHours ?? 0)) {
+        return { error: "시간 간격은 1·2·3·4·6·8·12 중 하나여야 합니다", warning: null };
+      }
+      const m = f.minute ?? 0;
+      if (m < 0 || m > 59) return { error: "분은 0–59 사이여야 합니다", warning: null };
+      return ok;
+    }
+    case "daily":
+    case "weekly":
+    case "monthly": {
+      const m = f.minute ?? 0;
+      const h = f.hour ?? 0;
+      if (m < 0 || m > 59 || h < 0 || h > 23) {
+        return { error: "시각이 올바르지 않습니다", warning: null };
+      }
+      if (f.kind === "weekly" && (!f.weekdays || f.weekdays.length < 1)) {
+        return { error: "요일을 최소 1개 선택하세요", warning: null };
+      }
+      if (f.kind === "monthly") {
+        const d = f.dayOfMonth ?? 0;
+        if (d < 1 || d > 28) return { error: "일자는 1–28 사이여야 합니다", warning: null };
+      }
+      return ok;
+    }
+    case "advanced":
+    default:
+      return { error: validateCronExpression((f.cron ?? "").trim()), warning: null };
+  }
+}
+
 export function cronToFriendly(cron: string): FriendlySchedule {
   const trimmed = cron.trim();
   const advanced = (): FriendlySchedule => ({ kind: "advanced", cron: trimmed });
