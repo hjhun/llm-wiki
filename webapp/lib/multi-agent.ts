@@ -37,6 +37,8 @@ import type {
   Worker,
   WorkerRun,
 } from "./multi-agent/types";
+import { delay, retryDelayMs } from "./ingest/cli-retry";
+import { runPostMergeMiniLint } from "./post-merge-lint";
 import {
   clampAgentCount,
   displayManagerName,
@@ -221,8 +223,11 @@ function wrapWorkerPrompt(input: {
     "The host webapp already created the active chat session. Do not create, rename, delete, or allocate any sessions/*.md file; use the Active session log supplied in the manager task.",
     operationPolicy(input.kind),
   ];
-  // Round 1 only: continuation rounds already carry the registry in basePrompt.
-  if (input.round === 1 && input.entityRegistryRef) {
+  // Inject on every round for fresh (non-resumed) workers. The loop's
+  // continuation basePrompt no longer carries these refs (they were duplicated
+  // there and dead weight for resumed workers), so wrapWorkerPrompt is now the
+  // single source of the registry/status refs for the workers that need them.
+  if (input.entityRegistryRef) {
     lines.push(input.entityRegistryRef);
   }
   if (input.sourcePageStatusRef) {
@@ -266,18 +271,6 @@ async function runWorkerBatch(input: {
    */
   sessions?: Map<string, string | null>;
 }): Promise<WorkerRun[]> {
-  const entityRegistryRef =
-    input.kind === "ingest" || input.kind === "ingest-loop"
-      ? await buildEntityRegistryReference()
-      : null;
-  const codeWikiStatusRef =
-    input.kind === "ingest" || input.kind === "ingest-loop"
-      ? await buildCodeWikiStatusReference({ rawScope: input.rawScope })
-      : null;
-  const sourcePageStatusRef =
-    input.kind === "ingest" || input.kind === "ingest-loop"
-      ? await buildSourcePageStatusReference({ rawScope: input.rawScope })
-      : null;
   const isIngest = input.kind === "ingest" || input.kind === "ingest-loop";
   const actionableLeaves = isIngest
     ? await readActionableLeafPaths(input.rawScope ?? null)
@@ -302,6 +295,15 @@ async function runWorkerBatch(input: {
         ? partition.assignments[worker.index]
         : []
       : null;
+  // Whether this worker will resume its own CLI conversation (compact delta
+  // prompt) rather than receive the full wrapped prompt this round.
+  const resumingFor = (worker: Worker): boolean =>
+    shouldResumeWorker({
+      hasSessionTracking: input.sessions != null,
+      cliSupportsResume: cliSupportsResume(worker.cli),
+      round: input.round,
+      priorSessionId: input.sessions?.get(worker.id) ?? null,
+    });
   const activeWorkers: Worker[] = [];
   for (const worker of input.workers) {
     if (!workerHasWorkThisRound(assignmentFor(worker))) {
@@ -320,6 +322,18 @@ async function runWorkerBatch(input: {
     });
     activeWorkers.push(worker);
   }
+  // Only fresh (non-resumed) workers consume the registry/status refs via
+  // wrapWorkerPrompt; resumed workers get a compact delta prompt that omits
+  // them. When every active worker resumes (the steady state of a healthy
+  // loop), skip building these refs entirely — they would just be discarded.
+  const needRefs = isIngest && activeWorkers.some((w) => !resumingFor(w));
+  const entityRegistryRef = needRefs ? await buildEntityRegistryReference() : null;
+  const codeWikiStatusRef = needRefs
+    ? await buildCodeWikiStatusReference({ rawScope: input.rawScope })
+    : null;
+  const sourcePageStatusRef = needRefs
+    ? await buildSourcePageStatusReference({ rawScope: input.rawScope })
+    : null;
   return Promise.all(
     activeWorkers.map(async (worker): Promise<WorkerRun> => {
       const leafScopeRef = partition
@@ -404,6 +418,63 @@ async function runWorkerBatch(input: {
       }
     }),
   );
+}
+
+/**
+ * Run one loop round's worker batch with whole-batch retries. A round is
+ * considered failed only when **every** active worker exits non-zero (the same
+ * `lastExitCode` rule the loop already used); a partial success advances the
+ * loop and lets the next round repartition the failed leaves. On total failure
+ * the batch is re-run after a backoff, up to `maxAttempts`, so a transient
+ * outage (rate limit, brief OOM) no longer kills the whole `/ingest-loop` the
+ * way it did before — matching the resilience the single-agent `runIngestLoop`
+ * already had via `runCliWithIngestLoopRetries`. Stop requests and aborts cut
+ * the retries short. Only the final attempt's runs are returned so the manager
+ * summary is not polluted with discarded failed attempts.
+ */
+async function runWorkerBatchWithRetries(
+  batchInput: Parameters<typeof runWorkerBatch>[0],
+  retry: {
+    maxAttempts: number;
+    backoffs: number[];
+    sessionPath: string;
+    signal?: AbortSignal;
+    onChunk?: (text: string) => void;
+  },
+): Promise<{ runs: WorkerRun[]; durationMs: number; exitCode: number }> {
+  const maxAttempts = Math.max(1, retry.maxAttempts);
+  let runs: WorkerRun[] = [];
+  let durationMs = 0;
+  let attempt = 0;
+  while (true) {
+    attempt += 1;
+    runs = await runWorkerBatch(batchInput);
+    durationMs += runs.reduce((sum, run) => sum + (run.result?.durationMs ?? 0), 0);
+    const exitCode = runs.some((run) => run.result?.exitCode === 0) ? 0 : 1;
+    if (exitCode === 0 || attempt >= maxAttempts) {
+      return { runs, durationMs, exitCode };
+    }
+    if (
+      signalAborted(retry.signal) ||
+      (await stopFlagExists(retry.sessionPath))
+    ) {
+      return { runs, durationMs, exitCode };
+    }
+    const waitMs = retryDelayMs(retry.backoffs, attempt);
+    const note =
+      `\n\n---\n[ingest-loop] round ${batchInput.round} worker batch 전원 실패 ` +
+      `(시도 ${attempt}/${maxAttempts}). ${Math.round(waitMs / 1000)}초 후 같은 라운드를 재시도합니다.\n`;
+    retry.onChunk?.(note);
+    await appendMessage(retry.sessionPath, "system", note.trim()).catch(
+      () => undefined,
+    );
+    try {
+      await delay(waitMs, retry.signal);
+    } catch {
+      // Aborted while waiting — surface the failed exit and let the caller halt.
+      return { runs, durationMs, exitCode };
+    }
+  }
 }
 
 function buildManagerPrompt(input: {
@@ -709,33 +780,43 @@ async function runLoopOperation(input: {
             iteration: round,
             progressRef:
               initialProgressRef ?? (await buildProgressReference()),
-            entityRegistryRef: await buildEntityRegistryReference(),
-            sourcePageStatusRef: await buildSourcePageStatusReference({
-              rawScope,
-            }),
-            codeWikiStatusRef: await buildCodeWikiStatusReference({ rawScope }),
+            // Entity/source/code refs are injected per worker by
+            // wrapWorkerPrompt (fresh workers) or deliberately omitted (resumed
+            // workers' delta prompt). Embedding them in the shared continuation
+            // basePrompt duplicated them in fresh round>1 prompts and was dead
+            // weight for resumed workers, who ignore basePrompt entirely.
+            entityRegistryRef: null,
+            sourcePageStatusRef: null,
+            codeWikiStatusRef: null,
             rawScope,
           });
     const activityBefore = await ingestActivitySignature();
-    const runs = await runWorkerBatch({
-      cfg: input.cfg,
-      kind: "ingest-loop",
-      workers,
-      basePrompt,
-      round,
-      timeoutMs,
-      signal: input.signal,
-      onChunk: input.onChunk,
-      onAgentProgress: input.onAgentProgress,
-      rawScope,
-      sessions,
-    });
-    allRuns = allRuns.concat(runs);
-    totalDurationMs += runs.reduce(
-      (sum, run) => sum + (run.result?.durationMs ?? 0),
-      0,
+    const batch = await runWorkerBatchWithRetries(
+      {
+        cfg: input.cfg,
+        kind: "ingest-loop",
+        workers,
+        basePrompt,
+        round,
+        timeoutMs,
+        signal: input.signal,
+        onChunk: input.onChunk,
+        onAgentProgress: input.onAgentProgress,
+        rawScope,
+        sessions,
+      },
+      {
+        maxAttempts: input.cfg.cli.ingestLoop.maxRetryAttempts,
+        backoffs: input.cfg.cli.ingestLoop.retryBackoffMs,
+        sessionPath: input.sessionPath,
+        signal: input.signal,
+        onChunk: input.onChunk,
+      },
     );
-    lastExitCode = runs.some((run) => run.result?.exitCode === 0) ? 0 : 1;
+    const runs = batch.runs;
+    allRuns = allRuns.concat(runs);
+    totalDurationMs += batch.durationMs;
+    lastExitCode = batch.exitCode;
     if (signalAborted(input.signal)) {
       haltKind = "stopped";
       haltReason = "사용자 Stop 요청";
@@ -753,6 +834,14 @@ async function runLoopOperation(input: {
     })
       ? 0
       : idleRounds + 1;
+    // Deterministic post-merge mini-lint on the merge-just-done transition.
+    // Parallel workers are more prone to the duplicate concept/entity titles,
+    // broken wikilinks, and orphan synthesis pages this catches than the
+    // single-agent path, yet only that path ran it before — close the gap.
+    if (snap.mergeDone && !prevSnap.mergeDone && lastExitCode === 0) {
+      const lint = await runPostMergeMiniLint({ signal: input.signal });
+      if (lint.note) input.onChunk?.(lint.note);
+    }
     prevSnap = snap;
 
     const decision = decideLoopHalt({
@@ -859,6 +948,13 @@ async function runLoopOperation(input: {
         },
         error: null,
       });
+    }
+    // Closing mini-lint for runs that completed without ever flipping
+    // mergeDone (single-leaf scopes, already-merged state), which the
+    // per-round transition check above never fires for.
+    if (haltKind === "normal" && ingestMadeProgress(loopBefore, loopAfter)) {
+      const lint = await runPostMergeMiniLint({ signal: input.signal });
+      if (lint.note) input.onChunk?.(lint.note);
     }
   }
 
