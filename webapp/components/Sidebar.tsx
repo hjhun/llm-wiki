@@ -89,22 +89,23 @@ export default function Sidebar({
       <div className={collapsed ? "px-2 pb-3 pt-6" : "px-5 pb-3 pt-6"}>
         <div className="flex items-start justify-between gap-2">
           <div className={cx("min-w-0", collapsed ? "sr-only" : "")}>
-            <div className="font-mono text-xs uppercase tracking-widest text-accent">
-              {BRAND_NAME}
+            <div className="flex items-end gap-3">
+              <span className="inline-flex rounded-md border border-line/70 bg-[#f7f3e8] px-2.5 py-2 shadow-[inset_0_1px_0_rgb(255_255_255_/_0.7)]">
+                <img
+                  src="/clio-logo.svg"
+                  alt={BRAND_NAME}
+                  className="h-16 w-auto"
+                />
+              </span>
+              <span className="pb-1 font-mono text-[10px] uppercase tracking-widest text-ink-dim">
+                v{packageJson.version}
+              </span>
             </div>
             {appSubtitle ? (
-              <div className="mt-1 truncate text-xs font-medium text-ink-dim">
+              <div className="mt-2 truncate text-xs font-medium text-ink-dim">
                 {appSubtitle}
               </div>
             ) : null}
-            <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-ink-faint">
-              <span className="rounded border border-accent/30 bg-accent/10 px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-widest text-accent">
-                {t.sidebar.local}
-              </span>
-              <span className="font-mono text-[10px] uppercase tracking-widest text-ink-dim">
-                {t.sidebar.version} v{packageJson.version}
-              </span>
-            </div>
           </div>
           <IconButton
             onClick={toggleCollapsed}
