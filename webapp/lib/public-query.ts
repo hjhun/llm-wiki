@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { loadConfig } from "./config";
 import { runCli, type CliName } from "./cli";
+import { resolveAgentForRole } from "./agent-roles";
 import { CONFIG_ROOT, PROJECT_ROOT, WIKI_ROOT } from "./paths";
 
 export type PublicQuerySource = {
@@ -422,7 +423,7 @@ export async function runPublicQuery(
     ? []
     : selectSources(buildRetrievalText(question, safeHistory), docs);
   const cfg = await loadConfig();
-  const agent = cfg.agent.default as CliName | null;
+  const agent = resolveAgentForRole(cfg, "query");
   const allowExternalLookup = cfg.publicQuery.allowExternalLookup;
 
   if (!agent) {

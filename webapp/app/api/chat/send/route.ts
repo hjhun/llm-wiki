@@ -5,6 +5,7 @@ import type { ChatSendEvent } from "@/lib/chat-events";
 import { displayChunk } from "@/lib/cli-output";
 import { loadConfig } from "@/lib/config";
 import { CLI_NAMES, runCli, type CliName } from "@/lib/cli";
+import { resolveAgentForKind } from "@/lib/agent-roles";
 import {
   appendMessage,
   buildSessionPromptContext,
@@ -63,9 +64,14 @@ export async function POST(req: Request) {
   if (!parsed.success) return jsonError("invalid body", 400);
 
   const cfg = await loadConfig();
+  const kind = normalizeKind(parsed.data.message, parsed.data.kind);
+  // When the client does not pin an explicit agent, pick the CLI by operation
+  // role: maintenance (ingest/ingest-loop/lint/preprocess/graph) vs query each
+  // may override agent.default via config.agent.roles. An explicit client agent
+  // always wins.
   const agent: CliName | null =
     parsed.data.agent === undefined
-      ? (cfg.agent.default as CliName | null)
+      ? resolveAgentForKind(cfg, kind)
       : (parsed.data.agent as CliName | null);
   if (!agent) {
     return jsonError(
@@ -76,7 +82,6 @@ export async function POST(req: Request) {
   if (!CLI_NAMES.includes(agent)) {
     return jsonError(`unknown agent: ${agent}`, 400);
   }
-  const kind = normalizeKind(parsed.data.message, parsed.data.kind);
 
   // 세션이 없으면 첫 메시지를 기준으로 새 세션 생성.
   let sessionPath = parsed.data.sessionPath;

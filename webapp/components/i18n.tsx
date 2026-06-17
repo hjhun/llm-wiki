@@ -452,6 +452,10 @@ export const TEXT = {
       maxConcurrentAgents: "최대 동시 에이전트",
       agentNamePrefix: "페르소나 시드",
       managerName: "코디네이터 이름",
+      roleMaintenanceCli: "유지보수 CLI (ingest·lint·graph)",
+      roleQueryCli: "Query CLI (/query·/clio)",
+      agentRolesDesc:
+        "작업 종류별로 코딩 에이전트를 분리합니다. 유지보수(ingest, ingest-loop, lint, preprocess, graph)와 query(/query 및 공개 /clio)에 서로 다른 CLI를 지정할 수 있습니다. 비워두면 위의 기본 CLI를 따릅니다. 채팅에서 에이전트를 직접 고른 경우에는 그 선택이 우선합니다.",
       agentOrchestrationDesc:
         "/ingest, /ingest-loop, /lint는 과학자 이름을 빌린 에이전트와 ASCII 임무 카드로 진행을 보여주고, Coordinator가 handoff를 받아 종료합니다. /query는 단일 에이전트로 실행됩니다.",
       runtimeDefaults: "Runtime Defaults",
@@ -1073,6 +1077,10 @@ export const TEXT = {
       maxConcurrentAgents: "Max concurrent agents",
       agentNamePrefix: "Persona seed",
       managerName: "Coordinator name",
+      roleMaintenanceCli: "Maintenance CLI (ingest·lint·graph)",
+      roleQueryCli: "Query CLI (/query·/clio)",
+      agentRolesDesc:
+        "Split the coding agent by operation. Maintenance (ingest, ingest-loop, lint, preprocess, graph) and query (/query and the public /clio) can each use a different CLI. Leave a role empty to follow the default CLI above. An agent explicitly chosen in chat always takes precedence.",
       agentOrchestrationDesc:
         "/ingest, /ingest-loop, and /lint show scientist-named agents with ASCII mission cards, then a Coordinator receives handoffs and closes the run. /query runs as a single agent.",
       runtimeDefaults: "Runtime Defaults",

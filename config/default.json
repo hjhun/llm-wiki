@@ -7,6 +7,10 @@
     "default": null,
     "safeMode": false,
     "paths": {},
+    "roles": {
+      "maintenance": null,
+      "query": null
+    },
     "orchestration": {
       "cli": null,
       "maxConcurrentAgents": 2,

@@ -60,6 +60,7 @@ function cloneConfig(config: SettingsConfig): SettingsConfig {
     agent: {
       ...config.agent,
       paths: { ...config.agent.paths },
+      roles: { ...config.agent.roles },
       orchestration: { ...config.agent.orchestration },
     },
     cli: {
@@ -526,6 +527,59 @@ export default function Settings() {
                       className="w-24 rounded border border-line bg-bg px-2 py-1.5 text-right font-mono text-sm text-ink outline-none focus:border-accent"
                     />
                   </label>
+                  <div className="mt-3 grid gap-3 md:grid-cols-2">
+                    <label className="rounded border border-line bg-bg px-3 py-2">
+                      <span className="text-xs text-ink-faint">
+                        {t.settings.roleMaintenanceCli}
+                      </span>
+                      <select
+                        value={draft.agent.roles.maintenance ?? ""}
+                        onChange={(e) =>
+                          updateDraft((next) => {
+                            next.agent.roles.maintenance =
+                              e.target.value === ""
+                                ? null
+                                : (e.target.value as CliName);
+                          })
+                        }
+                        className="mt-1 block w-full rounded border border-line bg-bg-panel px-2 py-1.5 text-sm text-ink outline-none focus:border-accent"
+                      >
+                        <option value="">{t.settings.followDefaultCli}</option>
+                        {CLI_NAMES.map((name) => (
+                          <option key={name} value={name}>
+                            {name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="rounded border border-line bg-bg px-3 py-2">
+                      <span className="text-xs text-ink-faint">
+                        {t.settings.roleQueryCli}
+                      </span>
+                      <select
+                        value={draft.agent.roles.query ?? ""}
+                        onChange={(e) =>
+                          updateDraft((next) => {
+                            next.agent.roles.query =
+                              e.target.value === ""
+                                ? null
+                                : (e.target.value as CliName);
+                          })
+                        }
+                        className="mt-1 block w-full rounded border border-line bg-bg-panel px-2 py-1.5 text-sm text-ink outline-none focus:border-accent"
+                      >
+                        <option value="">{t.settings.followDefaultCli}</option>
+                        {CLI_NAMES.map((name) => (
+                          <option key={name} value={name}>
+                            {name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+                  <p className="mt-2 text-xs leading-relaxed text-ink-faint">
+                    {t.settings.agentRolesDesc}
+                  </p>
                   <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
                     <label className="rounded border border-line bg-bg px-3 py-2">
                       <span className="text-xs text-ink-faint">

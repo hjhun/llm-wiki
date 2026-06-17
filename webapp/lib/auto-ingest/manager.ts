@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import chokidar, { type FSWatcher } from "chokidar";
 import { loadConfig, type Config } from "../config";
-import type { CliName } from "../cli";
+import { resolveAgentForRole } from "../agent-roles";
 import { PROJECT_ROOT, RAW_ROOT, WIKI_LOG_PATH } from "../paths";
 import { newSession } from "../sessions";
 import {
@@ -199,7 +199,7 @@ export class AutoIngestManager {
       await recordSkip(source, "lint lock 존재 — auto-lint 실행 중");
       return;
     }
-    const agent = (await loadConfig()).agent.default as CliName | null;
+    const agent = resolveAgentForRole(await loadConfig(), "maintenance");
     if (!agent) {
       await recordSkip(source, "기본 코딩 에이전트 미설정");
       return;

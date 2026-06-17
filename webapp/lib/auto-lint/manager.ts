@@ -1,7 +1,8 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { loadConfig, type Config } from "../config";
-import { runCli, type CliName } from "../cli";
+import { runCli } from "../cli";
+import { resolveAgentForRole } from "../agent-roles";
 import { PROJECT_ROOT, WIKI_LOG_PATH } from "../paths";
 import { newSession } from "../sessions";
 import { lockFileExists } from "../ingest-loop";
@@ -222,7 +223,7 @@ export class AutoLintManager {
       await recordSkip(source, "lint lock 존재 — 다른 lint 실행 중");
       return;
     }
-    const agent = (await loadConfig()).agent.default as CliName | null;
+    const agent = resolveAgentForRole(await loadConfig(), "maintenance");
     if (!agent) {
       await recordSkip(source, "기본 코딩 에이전트 미설정");
       return;

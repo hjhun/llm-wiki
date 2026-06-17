@@ -4,7 +4,8 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { errorMessage } from "./api";
 import { loadConfig } from "./config";
-import { runCli, type CliName } from "./cli";
+import { runCli } from "./cli";
+import { resolveAgentForRole } from "./agent-roles";
 import { createChatJob, type ChatJob } from "./chat-jobs";
 import { displayChunk } from "./cli-output";
 import {
@@ -605,7 +606,7 @@ export async function startGraphifyJob(
   action: GraphRunAction,
 ): Promise<ChatJob> {
   const cfg = await loadConfig();
-  const agent = cfg.agent.default as CliName | null;
+  const agent = resolveAgentForRole(cfg, "maintenance");
   if (!agent) {
     throw new Error(
       "기본 코딩 에이전트가 지정되지 않았습니다. Settings에서 골라주세요.",

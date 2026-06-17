@@ -78,6 +78,10 @@ export type SettingsConfig = {
     default: CliName | null;
     safeMode: boolean;
     paths: Partial<Record<CliName, string>>;
+    roles: {
+      maintenance: CliName | null;
+      query: CliName | null;
+    };
     orchestration: {
       cli: CliName | null;
       maxConcurrentAgents: number;

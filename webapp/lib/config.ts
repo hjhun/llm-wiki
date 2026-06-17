@@ -29,6 +29,28 @@ export const ConfigSchema = z.object({
         cline: z.string().optional(),
       })
       .default({}),
+    /**
+     * Per-role CLI overrides. They let the wiki run maintenance operations
+     * (ingest, ingest-loop, lint, preprocess, graph) on a different coding
+     * agent than read-only query operations (chat /query and the public
+     * /clio query). Each role is null by default and falls back to
+     * `agent.default`, so leaving them empty preserves the single-agent
+     * behavior. Resolution lives in `lib/agent-roles.ts`.
+     */
+    roles: z
+      .object({
+        /** ingest, ingest-loop, lint, preprocess, graph */
+        maintenance: z
+          .enum(["codex", "claude", "agy", "cline"])
+          .nullable()
+          .default(null),
+        /** /query and public /clio query */
+        query: z
+          .enum(["codex", "claude", "agy", "cline"])
+          .nullable()
+          .default(null),
+      })
+      .default({ maintenance: null, query: null }),
     orchestration: z
       .object({
         /**
@@ -808,6 +830,15 @@ function normalizeLegacyGeminiCli(value: unknown): unknown {
       };
       if (nextOrchestration.cli === "gemini") nextOrchestration.cli = "agy";
       nextAgent.orchestration = nextOrchestration;
+    }
+    const roles = nextAgent.roles;
+    if (roles && typeof roles === "object" && !Array.isArray(roles)) {
+      const nextRoles: Record<string, unknown> = {
+        ...(roles as Record<string, unknown>),
+      };
+      if (nextRoles.maintenance === "gemini") nextRoles.maintenance = "agy";
+      if (nextRoles.query === "gemini") nextRoles.query = "agy";
+      nextAgent.roles = nextRoles;
     }
     out.agent = nextAgent;
   }

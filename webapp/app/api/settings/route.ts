@@ -27,6 +27,10 @@ const Body = z.object({
       default: z.enum(["codex", "claude", "agy", "cline"]).nullable(),
       safeMode: z.boolean(),
       paths: AgentPaths,
+      roles: z.object({
+        maintenance: z.enum(["codex", "claude", "agy", "cline"]).nullable(),
+        query: z.enum(["codex", "claude", "agy", "cline"]).nullable(),
+      }),
       orchestration: z.object({
         cli: z.enum(["codex", "claude", "agy", "cline"]).nullable(),
         maxConcurrentAgents: z.number().int().min(1).max(16),
