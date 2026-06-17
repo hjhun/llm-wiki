@@ -286,6 +286,7 @@ export async function readSettingsState() {
         streamTokens: cfg.cli.streamTokens,
         ingestLoop: {
           maxStagnantRounds: cfg.cli.ingestLoop.maxStagnantRounds,
+          resumeSessions: cfg.cli.ingestLoop.resumeSessions,
         },
       },
       chunking: cfg.chunking,

@@ -93,6 +93,7 @@ export type SettingsConfig = {
     streamTokens: boolean;
     ingestLoop: {
       maxStagnantRounds: number;
+      resumeSessions: boolean;
     };
   };
   chunking: {

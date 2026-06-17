@@ -45,6 +45,7 @@ const Body = z.object({
       ingestLoop: z
         .object({
           maxStagnantRounds: z.number().int().min(1).max(1000),
+          resumeSessions: z.boolean().optional(),
         })
         .optional(),
     })

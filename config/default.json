@@ -86,7 +86,8 @@
       "maxIterations": 1000,
       "maxStagnantRounds": 10,
       "maxRetryAttempts": 3,
-      "retryBackoffMs": [5000, 30000]
+      "retryBackoffMs": [5000, 30000],
+      "resumeSessions": true
     }
   },
   "ui": {
