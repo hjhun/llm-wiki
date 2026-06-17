@@ -39,6 +39,10 @@ import type {
   WorkerRun,
 } from "./multi-agent/types";
 import { delay, retryDelayMs } from "./ingest/cli-retry";
+import {
+  finalMaintenanceSkippedNote,
+  ingestFinalMaintenanceDecision,
+} from "./ingest/graphify-decision";
 import { runPostMergeMiniLint } from "./post-merge-lint";
 import {
   clampAgentCount,
@@ -653,24 +657,34 @@ async function runSingleRoundOperation(input: {
     progressNote = `ingest progress advanced=${progressAdvanced}`;
     const bestExit = runs.some((run) => run.result?.exitCode === 0) ? 0 : 1;
     if (progressAdvanced && ingestWorkComplete(ingestAfter)) {
-      const qmd = await maybeRefreshQmdIndex({
-        cfg: input.cfg,
-        signal: input.signal,
-        onChunk: input.onChunk,
-      });
-      if (qmd.note) progressNote += `\n${qmd.note}`;
-      const finalGraph = await maybeAutoRunGraphify({
-        cfg: input.cfg,
-        agent: orchestrationCli,
-        sessionPath: input.sessionPath,
-        signal: input.signal,
-        lastExitCode: bestExit,
-        before: ingestBefore,
-        after: ingestAfter,
-        mode: "final",
-        onChunk: input.onChunk,
-      });
-      if (finalGraph.note) progressNote += `\n${finalGraph.note}`;
+      const finalMaintenance = ingestFinalMaintenanceDecision(
+        input.cfg,
+        ingestAfter,
+      );
+      if (finalMaintenance.enabled) {
+        const qmd = await maybeRefreshQmdIndex({
+          cfg: input.cfg,
+          signal: input.signal,
+          onChunk: input.onChunk,
+        });
+        if (qmd.note) progressNote += `\n${qmd.note}`;
+        const finalGraph = await maybeAutoRunGraphify({
+          cfg: input.cfg,
+          agent: orchestrationCli,
+          sessionPath: input.sessionPath,
+          signal: input.signal,
+          lastExitCode: bestExit,
+          before: ingestBefore,
+          after: ingestAfter,
+          mode: "final",
+          onChunk: input.onChunk,
+        });
+        if (finalGraph.note) progressNote += `\n${finalGraph.note}`;
+      } else {
+        const note = finalMaintenanceSkippedNote(finalMaintenance.reason);
+        input.onChunk?.(note);
+        progressNote += `\n${note}`;
+      }
     } else if (progressAdvanced) {
       progressNote +=
         "\n[auto graph] multi-agent ingest still has pending work; " +
@@ -895,6 +909,7 @@ async function runLoopOperation(input: {
   await clearStopFlag(input.sessionPath);
 
   const loopAfter = await readProgressSnapshot({ rawScope });
+  const finalMaintenance = ingestFinalMaintenanceDecision(input.cfg, loopAfter);
   // Shared loop-exit finalization gating (see decideIngestLoopFinalize). The
   // multi-agent driver never runs graphify incrementally, so the whole block
   // is gated on full completion; the single-agent driver uses the same helper
@@ -906,7 +921,16 @@ async function runLoopOperation(input: {
     progressed: ingestMadeProgress(loopBefore, loopAfter),
     workComplete: ingestWorkComplete(loopAfter),
     graphAlreadyCoversLatest: false,
+    finalMaintenanceEnabled: finalMaintenance.enabled,
   });
+  if (
+    !finalMaintenance.enabled &&
+    haltKind !== "error" &&
+    ingestWorkComplete(loopAfter) &&
+    ingestMadeProgress(loopBefore, loopAfter)
+  ) {
+    input.onChunk?.(finalMaintenanceSkippedNote(finalMaintenance.reason));
+  }
   if (finalize.runQmd) {
     const qmd = await maybeRefreshQmdIndex({
       cfg: input.cfg,

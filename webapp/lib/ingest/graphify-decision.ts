@@ -10,20 +10,12 @@
 import type { Config } from "../config";
 import type { ProgressSnapshot } from "./types";
 
-export function graphIncrementalDecision(
+function workloadThresholdHits(
   cfg: Config,
   snapshot: ProgressSnapshot,
-): { enabled: boolean; reason: string } {
-  const strategy = cfg.graph.autoUpdateStrategy;
-  if (strategy === "partialAndFinal") {
-    return { enabled: true, reason: "strategy=partialAndFinal" };
-  }
-  if (strategy === "finalOnly") {
-    return { enabled: false, reason: "strategy=finalOnly" };
-  }
-
+): string[] {
   const thresholds = cfg.graph.partialThresholds;
-  const hits = [
+  return [
     snapshot.leavesTotal >= thresholds.minLeaves
       ? `leaves ${snapshot.leavesTotal} >= ${thresholds.minLeaves}`
       : null,
@@ -37,7 +29,28 @@ export function graphIncrementalDecision(
       ? `sub-chunks ${snapshot.subChunksTotal} >= ${thresholds.minSubChunks}`
       : null,
   ].filter((hit): hit is string => hit !== null);
+}
 
+function workloadSummary(snapshot: ProgressSnapshot): string {
+  return (
+    `leaves=${snapshot.leavesTotal}, files=${snapshot.filesTotal}, ` +
+    `bytes=${snapshot.bytesTotal}, subChunks=${snapshot.subChunksTotal}`
+  );
+}
+
+export function graphIncrementalDecision(
+  cfg: Config,
+  snapshot: ProgressSnapshot,
+): { enabled: boolean; reason: string } {
+  const strategy = cfg.graph.autoUpdateStrategy;
+  if (strategy === "partialAndFinal") {
+    return { enabled: true, reason: "strategy=partialAndFinal" };
+  }
+  if (strategy === "finalOnly") {
+    return { enabled: false, reason: "strategy=finalOnly" };
+  }
+
+  const hits = workloadThresholdHits(cfg, snapshot);
   if (hits.length > 0) {
     return { enabled: true, reason: `strategy=auto; ${hits.join(", ")}` };
   }
@@ -45,7 +58,39 @@ export function graphIncrementalDecision(
     enabled: false,
     reason:
       `strategy=auto; workload below thresholds ` +
-      `(leaves=${snapshot.leavesTotal}, files=${snapshot.filesTotal}, ` +
-      `bytes=${snapshot.bytesTotal}, subChunks=${snapshot.subChunksTotal})`,
+      `(${workloadSummary(snapshot)})`,
   };
+}
+
+export function ingestFinalMaintenanceDecision(
+  cfg: Config,
+  snapshot: ProgressSnapshot,
+): { enabled: boolean; reason: string } {
+  const strategy = cfg.graph.autoUpdateStrategy;
+  if (strategy === "finalOnly") {
+    return { enabled: true, reason: "strategy=finalOnly" };
+  }
+  if (strategy === "partialAndFinal") {
+    return { enabled: true, reason: "strategy=partialAndFinal" };
+  }
+
+  const hits = workloadThresholdHits(cfg, snapshot);
+  if (hits.length > 0) {
+    return { enabled: true, reason: `strategy=auto; ${hits.join(", ")}` };
+  }
+  return {
+    enabled: false,
+    reason:
+      `strategy=auto; final maintenance below thresholds ` +
+      `(${workloadSummary(snapshot)})`,
+  };
+}
+
+export function finalMaintenanceSkippedNote(reason: string): string {
+  return (
+    "\n\n---\n\n" +
+    `[auto final skipped] qmd, final graph update, and mini-lint were ` +
+    `skipped: ${reason}. Set graph.autoUpdateStrategy to finalOnly or ` +
+    `partialAndFinal to force full final maintenance after every ingest.\n`
+  );
 }

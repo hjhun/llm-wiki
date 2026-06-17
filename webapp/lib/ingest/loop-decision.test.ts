@@ -465,4 +465,34 @@ describe("decideIngestLoopFinalize", () => {
     expect(plan.graphSkipped).toBe(false);
     expect(plan.runGraph).toBe(true);
   });
+
+  it("single: final maintenance gate suppresses qmd/graph/lint", () => {
+    expect(
+      decideIngestLoopFinalize({
+        ...base,
+        driver: "single",
+        finalMaintenanceEnabled: false,
+      }),
+    ).toEqual({
+      runQmd: false,
+      runGraph: false,
+      graphSkipped: false,
+      runLint: false,
+    });
+  });
+
+  it("multi: final maintenance gate suppresses qmd/graph/lint", () => {
+    expect(
+      decideIngestLoopFinalize({
+        ...base,
+        driver: "multi",
+        finalMaintenanceEnabled: false,
+      }),
+    ).toEqual({
+      runQmd: false,
+      runGraph: false,
+      graphSkipped: false,
+      runLint: false,
+    });
+  });
 });

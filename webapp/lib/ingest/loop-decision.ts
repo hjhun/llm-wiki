@@ -257,23 +257,34 @@ export function decideIngestLoopFinalize(input: {
   progressed: boolean;
   workComplete: boolean;
   graphAlreadyCoversLatest: boolean;
+  finalMaintenanceEnabled?: boolean;
 }): IngestLoopFinalizePlan {
+  const finalMaintenanceEnabled = input.finalMaintenanceEnabled ?? true;
   if (input.driver === "single") {
     const active = input.haltKind !== "error";
     return {
-      runQmd: active && input.progressed,
-      runGraph: active && !input.graphAlreadyCoversLatest,
+      runQmd: active && input.progressed && finalMaintenanceEnabled,
+      runGraph:
+        active && !input.graphAlreadyCoversLatest && finalMaintenanceEnabled,
       graphSkipped: active && input.graphAlreadyCoversLatest,
-      runLint: active && input.haltKind === "normal" && input.progressed,
+      runLint:
+        active &&
+        input.haltKind === "normal" &&
+        input.progressed &&
+        finalMaintenanceEnabled,
     };
   }
   const block =
     !input.aborted && input.haltKind !== "error" && input.workComplete;
   return {
-    runQmd: block,
-    runGraph: block,
+    runQmd: block && finalMaintenanceEnabled,
+    runGraph: block && finalMaintenanceEnabled,
     graphSkipped: false,
-    runLint: block && input.haltKind === "normal" && input.progressed,
+    runLint:
+      block &&
+      input.haltKind === "normal" &&
+      input.progressed &&
+      finalMaintenanceEnabled,
   };
 }
 

@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { graphIncrementalDecision } from "./graphify-decision";
+import {
+  finalMaintenanceSkippedNote,
+  graphIncrementalDecision,
+  ingestFinalMaintenanceDecision,
+} from "./graphify-decision";
 import { EMPTY_SNAPSHOT } from "./types";
 import type { ProgressSnapshot } from "./types";
 import type { Config } from "../config";
@@ -53,5 +57,41 @@ describe("graphIncrementalDecision", () => {
     expect(d.enabled).toBe(true);
     expect(d.reason).toContain("files 20 >= 16");
     expect(d.reason).toContain("sub-chunks 10 >= 4");
+  });
+});
+
+describe("ingestFinalMaintenanceDecision", () => {
+  it("auto: skips final maintenance for small scoped workloads", () => {
+    const d = ingestFinalMaintenanceDecision(
+      cfg("auto"),
+      snap({ leavesTotal: 1, filesTotal: 1, bytesTotal: 1, subChunksTotal: 1 }),
+    );
+    expect(d.enabled).toBe(false);
+    expect(d.reason).toContain("final maintenance below thresholds");
+  });
+
+  it("auto: enables final maintenance once any workload threshold is hit", () => {
+    const d = ingestFinalMaintenanceDecision(
+      cfg("auto"),
+      snap({ filesTotal: 16 }),
+    );
+    expect(d.enabled).toBe(true);
+    expect(d.reason).toContain("files 16 >= 16");
+  });
+
+  it("finalOnly and partialAndFinal force final maintenance", () => {
+    expect(ingestFinalMaintenanceDecision(cfg("finalOnly"), snap()).enabled).toBe(
+      true,
+    );
+    expect(
+      ingestFinalMaintenanceDecision(cfg("partialAndFinal"), snap()).enabled,
+    ).toBe(true);
+  });
+
+  it("formats a skip note with the forcing strategies", () => {
+    const note = finalMaintenanceSkippedNote("reason");
+    expect(note).toContain("qmd, final graph update, and mini-lint");
+    expect(note).toContain("finalOnly");
+    expect(note).toContain("partialAndFinal");
   });
 });
