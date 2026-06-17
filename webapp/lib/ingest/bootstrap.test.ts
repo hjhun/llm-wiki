@@ -70,6 +70,38 @@ describe("bootstrapIngestProgress", () => {
     ).resolves.toContain("raw/project/src/");
   });
 
+  it("excludes dot-prefixed files and directories from ingest leaves", async () => {
+    await fs.mkdir(path.join(root, "raw/project/.obsidian"), { recursive: true });
+    await fs.mkdir(path.join(root, "raw/project/src/.generated"), {
+      recursive: true,
+    });
+    await fs.writeFile(
+      path.join(root, "raw/project/.obsidian/workspace.json"),
+      "{}\n",
+    );
+    await fs.writeFile(path.join(root, "raw/project/.env"), "TOKEN=redacted\n");
+    await fs.writeFile(
+      path.join(root, "raw/project/src/.generated/schema.ts"),
+      "export {}\n",
+    );
+
+    const result = await bootstrapIngestProgress({
+      cfg,
+      projectRoot: root,
+      rawScope: "raw/project",
+    });
+
+    expect(result).toMatchObject({ changed: true, leaves: 2, files: 3 });
+    const state = await readState();
+    expect(Object.keys(state.leaves).sort()).toEqual([
+      "raw/project/",
+      "raw/project/src/",
+    ]);
+    expect(JSON.stringify(state.leaves)).not.toContain(".obsidian");
+    expect(JSON.stringify(state.leaves)).not.toContain(".env");
+    expect(JSON.stringify(state.leaves)).not.toContain(".generated");
+  });
+
   it("is idempotent and rewrites only when source metadata changes", async () => {
     await bootstrapIngestProgress({ cfg, projectRoot: root, rawScope: "raw/project" });
     const first = await readState();

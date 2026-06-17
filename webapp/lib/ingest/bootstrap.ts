@@ -5,7 +5,7 @@ import type { Config } from "../config";
 import { PROJECT_ROOT } from "../paths";
 import {
   classifyLeafFromFiles,
-  IGNORE_CODE_DIRS,
+  isIgnoredCodePath,
   type LeafKind,
 } from "./leaf-classify";
 import {
@@ -93,8 +93,7 @@ function parentLeafPath(filePath: string): string {
 }
 
 function shouldSkipPath(relPath: string): boolean {
-  const parts = normalizePosixPath(relPath).split("/").filter(Boolean);
-  return parts.some((part) => IGNORE_CODE_DIRS.has(part));
+  return isIgnoredCodePath(relPath);
 }
 
 async function statOrNull(abs: string): Promise<{
@@ -470,4 +469,3 @@ export async function bootstrapIngestProgress(input: {
       .catch(() => undefined);
   }
 }
-

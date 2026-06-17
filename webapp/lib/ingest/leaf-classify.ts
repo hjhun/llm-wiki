@@ -63,8 +63,15 @@ export const IGNORE_CODE_DIRS = new Set([
 
 export type LeafKind = "prose" | "code" | "mixed" | "ignore";
 
+export function isHiddenPath(relPath: string): boolean {
+  return pathSegments(relPath).some((part) => part.startsWith("."));
+}
+
 export function isIgnoredCodePath(relPath: string): boolean {
-  return pathSegments(relPath).some((part) => IGNORE_CODE_DIRS.has(part));
+  return (
+    isHiddenPath(relPath) ||
+    pathSegments(relPath).some((part) => IGNORE_CODE_DIRS.has(part))
+  );
 }
 
 export function fileLooksLikeCode(relPath: string): boolean {

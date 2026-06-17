@@ -5,14 +5,32 @@ import {
   fileLooksLikeCode,
   fileLooksLikeRuntimeEvidence,
   inferLeafKind,
+  isHiddenPath,
   isIgnoredCodePath,
 } from "./leaf-classify";
+
+describe("isHiddenPath", () => {
+  it("flags any path segment that starts with a dot", () => {
+    expect(isHiddenPath("raw/.obsidian/workspace.json")).toBe(true);
+    expect(isHiddenPath("raw/project/.env")).toBe(true);
+    expect(isHiddenPath("raw/project/src/.generated/file.ts")).toBe(true);
+  });
+
+  it("leaves ordinary paths alone", () => {
+    expect(isHiddenPath("raw/project/src/main.ts")).toBe(false);
+  });
+});
 
 describe("isIgnoredCodePath", () => {
   it("flags vendor/build/git directories anywhere in the path", () => {
     expect(isIgnoredCodePath("raw/app/node_modules/x.js")).toBe(true);
     expect(isIgnoredCodePath("raw/.git/config")).toBe(true);
     expect(isIgnoredCodePath("raw/target/debug/bin")).toBe(true);
+  });
+  it("flags dot-prefixed directories and files anywhere in the path", () => {
+    expect(isIgnoredCodePath("raw/.obsidian/workspace.json")).toBe(true);
+    expect(isIgnoredCodePath("raw/app/.env")).toBe(true);
+    expect(isIgnoredCodePath("raw/app/src/.generated/types.ts")).toBe(true);
   });
   it("leaves ordinary source paths alone", () => {
     expect(isIgnoredCodePath("raw/app/src/main.ts")).toBe(false);
@@ -48,6 +66,11 @@ describe("fileLooksLikeRuntimeEvidence", () => {
 describe("classifyLeafFromFiles", () => {
   it("returns ignore when every file is in an ignored dir", () => {
     expect(classifyLeafFromFiles(["raw/app/node_modules/a.js"])).toBe("ignore");
+  });
+  it("returns ignore when every file is under a dot-prefixed path", () => {
+    expect(classifyLeafFromFiles(["raw/.obsidian/workspace.json"])).toBe(
+      "ignore",
+    );
   });
   it("returns prose when no file looks like code", () => {
     expect(classifyLeafFromFiles(["raw/a.md", "raw/b.md"])).toBe("prose");
