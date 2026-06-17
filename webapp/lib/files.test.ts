@@ -15,6 +15,11 @@ describe("resolveEntry", () => {
     expect(out.startsWith(WORKSPACE_ROOTS.wiki)).toBe(true);
   });
 
+  it("resolves progress artifacts inside the progress workspace", () => {
+    const out = resolveEntry("progress", "automation/artifacts/job/run/summary.md");
+    expect(out.startsWith(WORKSPACE_ROOTS.progress)).toBe(true);
+  });
+
   it("strips a leading slash before resolving", () => {
     expect(resolveEntry("wiki", "/index.md")).toBe(
       resolveEntry("wiki", "index.md"),
@@ -37,6 +42,7 @@ describe("resolveEntry", () => {
     expect(() => resolveEntry("wiki", "credentials.json")).toThrow(
       /sensitive/,
     );
+    expect(() => resolveEntry("progress", "automation/.env")).toThrow(/sensitive/);
   });
 
   it("rejects directory traversal escapes", () => {

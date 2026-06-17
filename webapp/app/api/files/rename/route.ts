@@ -4,7 +4,7 @@ import { requireSession, errorMessage, jsonError } from "@/lib/api";
 import { renameEntry } from "@/lib/files";
 
 const Body = z.object({
-  ws: z.enum(["wiki", "raw", "sessions"]),
+  ws: z.enum(["wiki", "raw", "progress", "sessions"]),
   from: z.string().min(1),
   to: z.string().min(1),
 });

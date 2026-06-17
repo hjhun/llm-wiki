@@ -1,4 +1,4 @@
-export type WsKey = "wiki" | "raw" | "sessions";
+export type WsKey = "wiki" | "raw" | "progress" | "sessions";
 
 export type Entry = {
   name: string;

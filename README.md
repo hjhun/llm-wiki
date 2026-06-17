@@ -99,7 +99,8 @@ The contract is ownership. You own `raw/`; the agent owns `wiki/`:
 | Path | Owner | Purpose |
 |---|---|---|
 | `raw/` | You | Original sources. Immutable to agents except through explicit preprocess. |
-| `raw/chat/`, `raw/automation/` | You / Automations | Append-only capture and draft job records, ready for later ingest. |
+| `raw/chat/` | You | Append-only source captures, ready for later ingest. |
+| `progress/automation/artifacts/` | Automations | Draft job records and per-agent plan/result logs. |
 | `wiki/sources/<raw-path>.md` | Agent | One source summary per original, mirroring the `raw/` path. |
 | `wiki/` (concepts, answers, lint, graph) | Agent | The generated, maintained knowledge base. |
 | `.agents/skills/` | Project | The skills that define every CLIO operation. |
@@ -217,7 +218,7 @@ project via `$CLIO_HOME`, then by walking up from the current directory, then
 | **Chat** | Run `/ingest`, `/query`, `/lint`, `/preprocess`, or natural-language requests. |
 | **Explorer** | Browse `raw/`, `wiki/`, and generated reports. |
 | **Graph** | Build, update, and inspect the Cytoscape knowledge graph. |
-| **Automations** | Schedule draft-only multi-CLI jobs; inspect runs under `raw/automation/`. |
+| **Automations** | Schedule draft-only multi-CLI jobs; inspect runs under `progress/automation/artifacts/`. |
 | **Settings** | Agent CLI, host/port, graph behavior, Auto Ingest/Lint, language, theme, password. |
 
 CLIO ships a bilingual Korean/English UI. The `/query` flow is also available

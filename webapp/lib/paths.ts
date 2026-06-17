@@ -30,6 +30,7 @@ export const PROJECT_ROOT = detectProjectRoot();
 export const RAW_ROOT = path.join(PROJECT_ROOT, "raw");
 export const RAW_CHAT_ROOT = path.join(RAW_ROOT, "chat");
 export const WIKI_ROOT = path.join(PROJECT_ROOT, "wiki");
+export const PROGRESS_ROOT = path.join(PROJECT_ROOT, "progress");
 export const SESSIONS_ROOT = path.join(PROJECT_ROOT, "sessions");
 export const TOOLS_ROOT = path.join(PROJECT_ROOT, "tools");
 export const CONFIG_ROOT = path.join(PROJECT_ROOT, "config");
@@ -59,6 +60,7 @@ export const WIKI_GRAPH_REPORT_PATH = path.join(
 export const WORKSPACE_ROOTS = {
   wiki: WIKI_ROOT,
   raw: RAW_ROOT,
+  progress: PROGRESS_ROOT,
   sessions: SESSIONS_ROOT,
 } as const;
 

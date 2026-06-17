@@ -14,6 +14,13 @@ describe("resolveWikilink", () => {
     expect(r?.href).toBe("/explorer?ws=raw&path=notes%2Flog.txt");
   });
 
+  it("links progress paths into the progress workspace", () => {
+    const r = resolveWikilink("progress/automation/artifacts/job/run/summary.md");
+    expect(r?.href).toBe(
+      "/explorer?ws=progress&path=automation%2Fartifacts%2Fjob%2Frun%2Fsummary.md",
+    );
+  });
+
   it("defaults to the wiki workspace when no known prefix is present", () => {
     const r = resolveWikilink("concepts/pattern");
     expect(r?.href).toBe("/explorer?ws=wiki&path=concepts%2Fpattern.md");

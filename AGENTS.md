@@ -107,7 +107,7 @@ Each operation maps to one or more project skills. If these rules conflict with 
 
 ### 3.6 Browser Capture (`browser-capture`, [`.agents/skills/browser-capture/SKILL.md`](.agents/skills/browser-capture/SKILL.md))
 - Input: user-approved web pages, CLIO web UI QA observations, browser screenshots, or extracted text.
-- Output: source candidates under `raw/chat/<YYYY-MM-DD>/` or `raw/automation/<slug>/` for later `/ingest`.
+- Output: source candidates under `raw/chat/<YYYY-MM-DD>/` for later `/ingest`; autonomous job progress and QA run records live under `progress/automation/artifacts/<slug>/`.
 - Do not capture credentials, cookies, API keys, or private account data unless explicitly required and safely redacted.
 
 ## 4. Page Conventions

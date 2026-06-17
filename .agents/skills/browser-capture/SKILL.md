@@ -1,6 +1,6 @@
 ---
 name: browser-capture
-description: Capture website or webapp evidence into CLIO raw/chat or raw/automation for later wiki/code ingest. Use when the user asks to open a website, scrape a page, take screenshots, test the CLIO web UI, QA a webapp, or collect browser/search findings as source material.
+description: Capture website or webapp evidence into CLIO raw/chat for later wiki/code ingest, and store automation QA run records under progress/automation/artifacts. Use when the user asks to open a website, scrape a page, take screenshots, test the CLIO web UI, QA a webapp, or collect browser/search findings as source material.
 allowed-cli: [codex, claude, gemini, cline]
 ---
 
@@ -10,15 +10,16 @@ allowed-cli: [codex, claude, gemini, cline]
 
 This skill feeds the raw-source layer described by
 [`llm-wiki.md`](../../../llm-wiki.md). Browser captures are source candidates,
-not finished synthesis: save the evidence under `raw/chat/` or
-`raw/automation/`, then let `/ingest` integrate it into the persistent wiki.
+not finished synthesis: save source evidence under `raw/chat/`, then let
+`/ingest` integrate it into the persistent wiki. Automation QA run records and
+per-agent logs belong under `progress/automation/artifacts/`.
 
 ## Purpose
 
 Use browser automation as a source-capture step for the LLM Wiki and Code Wiki.
-The captured artifact belongs in `raw/chat/<YYYY-MM-DD>/` or
-`raw/automation/<slug>/`, then `/ingest` turns it into wiki
-pages.
+The captured source artifact belongs in `raw/chat/<YYYY-MM-DD>/`, then
+`/ingest` turns it into wiki pages. Autonomous tab progress belongs under
+`progress/automation/artifacts/<slug>/`.
 
 This skill adapts the global `agent-browser` workflow to CLIO's path rules.
 
@@ -62,7 +63,7 @@ raw/chat/YYYY-MM-DD/<slug>-screenshot.png
 Preferred automation capture:
 
 ```text
-raw/automation/<job-slug>/
+progress/automation/artifacts/<job-slug>/
   capture.md
   screenshots/
 ```

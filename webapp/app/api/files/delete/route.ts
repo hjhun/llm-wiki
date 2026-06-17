@@ -5,7 +5,7 @@ import { deleteEntries } from "@/lib/files";
 
 const Body = z
   .object({
-    ws: z.enum(["wiki", "raw", "sessions"]),
+    ws: z.enum(["wiki", "raw", "progress", "sessions"]),
     path: z.string().min(1).optional(),
     paths: z.array(z.string().min(1)).optional(),
   })

@@ -13,11 +13,17 @@ import type { Entry, ExplorerAction, WsKey } from "./types";
 const WS_LIST: { key: WsKey; label: string }[] = [
   { key: "wiki", label: "wiki/" },
   { key: "raw", label: "raw/" },
+  { key: "progress", label: "progress/" },
   { key: "sessions", label: "sessions/" },
 ];
 
 function parseWs(value: string | null): WsKey | null {
-  if (value === "wiki" || value === "raw" || value === "sessions") {
+  if (
+    value === "wiki" ||
+    value === "raw" ||
+    value === "progress" ||
+    value === "sessions"
+  ) {
     return value;
   }
   return null;
@@ -44,7 +50,7 @@ export default function Explorer() {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const dirInputRef = useRef<HTMLInputElement | null>(null);
 
-  const isReadOnly = ws === "sessions";
+  const isReadOnly = ws === "sessions" || ws === "progress";
   const focusPath = linkedWs === ws ? linkedPath : null;
 
   const refresh = useCallback(() => {
@@ -266,7 +272,7 @@ export default function Explorer() {
             label: w.label,
             title: t.explorer.workspaces[w.key],
           }))}
-          className="grid-cols-3"
+          className="grid-cols-4"
         />
         <div className="flex items-center gap-2 text-[11px] text-ink-faint">
           <input

@@ -9,7 +9,7 @@ const { runAutomationJob } = vi.hoisted(() => ({
     runId: "run-1",
     mode: "run" as const,
     source: "cron" as const,
-    artifactRoot: "raw/automation/test/run-1",
+    artifactRoot: "progress/automation/artifacts/test/run-1",
     startedAt: new Date().toISOString(),
     endedAt: new Date().toISOString(),
     durationMs: 1,

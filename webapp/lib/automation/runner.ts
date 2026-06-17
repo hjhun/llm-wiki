@@ -4,8 +4,13 @@ import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { loadConfig } from "../config";
 import { runCli, type CliName } from "../cli";
-import { PROJECT_ROOT, RAW_ROOT } from "../paths";
+import { PROJECT_ROOT } from "../paths";
 import { slugify } from "../sessions";
+import {
+  AUTOMATION_ARTIFACTS_ROOT,
+  automationArtifactRel,
+  ensureAutomationArtifactsMigrated,
+} from "./artifacts";
 import { automationPlanPrompt, automationRunPrompt } from "./templates";
 import { getAutomationEvents } from "./events";
 import type {
@@ -24,8 +29,9 @@ export async function runAutomationJob(input: {
   const started = new Date();
   const runId = `${formatRunStamp(started)}-${randomUUID().slice(0, 8)}`;
   const jobSlug = slugify(input.job.name) || input.job.id;
-  const artifactAbs = path.join(RAW_ROOT, "automation", jobSlug, runId);
-  const artifactRel = path.posix.join("raw", "automation", jobSlug, runId);
+  await ensureAutomationArtifactsMigrated();
+  const artifactAbs = path.join(AUTOMATION_ARTIFACTS_ROOT, jobSlug, runId);
+  const artifactRel = automationArtifactRel(jobSlug, runId);
   await fs.mkdir(artifactAbs, { recursive: true });
   await writeJobArtifacts(input.job, input.mode, input.source, artifactAbs);
 

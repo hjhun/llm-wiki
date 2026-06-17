@@ -9,7 +9,7 @@ export type ResolvedWikilink = {
   href: string | null;
 };
 
-const WS_PREFIXES = ["wiki", "raw", "sessions"] as const;
+const WS_PREFIXES = ["wiki", "raw", "progress", "sessions"] as const;
 
 /**
  * Resolve the inner text of a `[[...]]` wikilink. Supports an optional

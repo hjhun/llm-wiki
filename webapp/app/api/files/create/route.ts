@@ -4,7 +4,7 @@ import { requireSession, errorMessage, jsonError } from "@/lib/api";
 import { createEntry } from "@/lib/files";
 
 const Body = z.object({
-  ws: z.enum(["wiki", "raw", "sessions"]),
+  ws: z.enum(["wiki", "raw", "progress", "sessions"]),
   path: z.string().min(1),
   kind: z.enum(["dir", "file"]),
 });

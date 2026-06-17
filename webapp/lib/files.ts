@@ -10,7 +10,7 @@ import {
 } from "./paths";
 
 export type WsKey = WorkspaceKey;
-export const WS_KEYS: WsKey[] = ["wiki", "raw", "sessions"];
+export const WS_KEYS: WsKey[] = ["wiki", "raw", "progress", "sessions"];
 
 /**
  * 어떤 워크스페이스에서든 절대 노출/수정해서는 안 되는 경로 패턴.
@@ -30,8 +30,9 @@ function isSensitive(rel: string): boolean {
 
 function isReadOnlyWorkspace(ws: WsKey): boolean {
   // CLAUDE.md 규약: sessions/는 시스템이 append-only로 관리. UI에서는 수정 금지.
+  // progress/도 런타임 산출물 저장소라 UI에서 직접 수정하지 않는다.
   // raw/는 사용자가 자료를 떨구는 곳이라 추가/삭제 허용. wiki/도 동일.
-  return ws === "sessions";
+  return ws === "sessions" || ws === "progress";
 }
 
 export type EntryKind = "dir" | "file";

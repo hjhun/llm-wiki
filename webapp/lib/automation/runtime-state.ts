@@ -2,6 +2,10 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { z } from "zod";
 import { PROJECT_ROOT } from "../paths";
+import {
+  ensureAutomationArtifactsMigrated,
+  normalizeAutomationArtifactPath,
+} from "./artifacts";
 
 const STATE_REL = "progress/automation/state.json";
 
@@ -63,9 +67,10 @@ function statePath(): string {
 }
 
 export async function readAutomationRuntime(): Promise<AutomationRuntime> {
+  await ensureAutomationArtifactsMigrated();
   try {
     const raw = await fs.readFile(statePath(), "utf8");
-    return AutomationRuntimeSchema.parse(JSON.parse(raw));
+    return normalizeRuntime(AutomationRuntimeSchema.parse(JSON.parse(raw)));
   } catch {
     return { ...EMPTY_RUNTIME, jobs: {} };
   }
@@ -110,4 +115,31 @@ export async function patchAutomationJobRuntime(
       },
     },
   });
+}
+
+function normalizeRuntime(runtime: AutomationRuntime): AutomationRuntime {
+  return {
+    ...runtime,
+    lastResult: normalizeResult(runtime.lastResult),
+    jobs: Object.fromEntries(
+      Object.entries(runtime.jobs).map(([jobId, job]) => [
+        jobId,
+        { ...job, lastResult: normalizeResult(job.lastResult) },
+      ]),
+    ),
+  };
+}
+
+function normalizeResult(
+  result: AutomationRuntime["lastResult"],
+): AutomationRuntime["lastResult"] {
+  if (!result) return result;
+  return {
+    ...result,
+    artifactRoot: normalizeAutomationArtifactPath(result.artifactRoot),
+    agents: result.agents.map((agent) => ({
+      ...agent,
+      artifactPath: normalizeAutomationArtifactPath(agent.artifactPath),
+    })),
+  };
 }

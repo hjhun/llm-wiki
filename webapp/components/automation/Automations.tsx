@@ -942,10 +942,10 @@ export default function Automations() {
                   <label className="mt-3 flex items-center justify-between gap-3 rounded border border-line bg-bg px-3 py-2">
                     <span>
                       <span className="block text-sm font-medium text-ink">
-                        Auto-ingest after run
+                        Auto-ingest raw changes after run
                       </span>
                       <span className="block text-xs text-ink-faint">
-                        record under raw/automation
+                        artifacts stay under progress/automation/artifacts
                       </span>
                     </span>
                     <input
@@ -1126,23 +1126,23 @@ function ArtifactLinks({ result }: { result: AutomationResult }) {
         {result.artifactRoot}
       </div>
       <div className="mt-3 grid grid-cols-2 gap-2">
-        <ArtifactLink label="Folder" rawPath={result.artifactRoot} />
+        <ArtifactLink label="Folder" artifactPath={result.artifactRoot} />
         <ArtifactLink
           label="Summary"
-          rawPath={joinRawPath(result.artifactRoot, "summary.md")}
+          artifactPath={joinArtifactPath(result.artifactRoot, "summary.md")}
         />
         <ArtifactLink
           label="Job"
-          rawPath={joinRawPath(result.artifactRoot, "job.md")}
+          artifactPath={joinArtifactPath(result.artifactRoot, "job.md")}
         />
         <ArtifactLink
           label="Schedule"
-          rawPath={joinRawPath(result.artifactRoot, "schedule.md")}
+          artifactPath={joinArtifactPath(result.artifactRoot, "schedule.md")}
         />
       </div>
       <div className="mt-3 space-y-1">
         {result.agents.map((agent, idx) => {
-          const filePath = joinRawPath(agent.artifactPath, resultFile);
+          const filePath = joinArtifactPath(agent.artifactPath, resultFile);
           return (
             <div
               key={agent.agent}
@@ -1168,11 +1168,11 @@ function ArtifactLinks({ result }: { result: AutomationResult }) {
                     </div>
                   ) : null}
                 </div>
-                <ArtifactLink label={resultFile} rawPath={filePath} compact />
+                <ArtifactLink label={resultFile} artifactPath={filePath} compact />
               </div>
               <ArtifactPreview
                 key={filePath}
-                rawPath={filePath}
+                artifactPath={filePath}
                 defaultOpen={idx === 0}
               />
             </div>
@@ -1185,16 +1185,16 @@ function ArtifactLinks({ result }: { result: AutomationResult }) {
 
 function ArtifactLink({
   label,
-  rawPath,
+  artifactPath,
   compact = false,
 }: {
   label: string;
-  rawPath: string;
+  artifactPath: string;
   compact?: boolean;
 }) {
   return (
     <a
-      href={explorerHref(rawPath)}
+      href={explorerHref(artifactPath)}
       className={[
         "rounded border border-line text-center text-xs font-medium text-ink-dim hover:bg-bg-panel hover:text-ink",
         compact ? "px-2 py-1 text-[11px]" : "px-2 py-1.5",
@@ -1213,10 +1213,10 @@ function ArtifactLink({
  * builder verify result and a job's lastResult.
  */
 function ArtifactPreview({
-  rawPath,
+  artifactPath,
   defaultOpen = false,
 }: {
-  rawPath: string;
+  artifactPath: string;
   defaultOpen?: boolean;
 }) {
   const [open, setOpen] = useState(defaultOpen);
@@ -1229,8 +1229,8 @@ function ArtifactPreview({
     let cancelled = false;
     setLoading(true);
     setErr(null);
-    const pathInRaw = rawPath.replace(/^raw\/?/, "");
-    fetch(`/api/files/content?ws=raw&path=${encodeURIComponent(pathInRaw)}`, {
+    const { ws, path } = splitWorkspacePath(artifactPath);
+    fetch(`/api/files/content?ws=${encodeURIComponent(ws)}&path=${encodeURIComponent(path)}`, {
       cache: "no-store",
     })
       .then(async (res) => {
@@ -1254,7 +1254,7 @@ function ArtifactPreview({
     return () => {
       cancelled = true;
     };
-  }, [open, rawPath, content, loading]);
+  }, [open, artifactPath, content, loading]);
 
   return (
     <div className="mt-1">
@@ -1322,14 +1322,23 @@ function LiveConsole({ entries }: { entries: Array<[string, string]> }) {
   );
 }
 
-function joinRawPath(root: string, child: string): string {
+function joinArtifactPath(root: string, child: string): string {
   return `${root.replace(/\/+$/, "")}/${child.replace(/^\/+/, "")}`;
 }
 
-function explorerHref(rawPath: string): string {
-  const pathInRaw = rawPath.replace(/^raw\/?/, "");
-  const params = new URLSearchParams({ ws: "raw", path: pathInRaw });
+function explorerHref(artifactPath: string): string {
+  const parsed = splitWorkspacePath(artifactPath);
+  const params = new URLSearchParams({ ws: parsed.ws, path: parsed.path });
   return `/explorer?${params.toString()}`;
+}
+
+function splitWorkspacePath(workspacePath: string): { ws: string; path: string } {
+  const normalized = workspacePath.replace(/^\/+/, "");
+  const [head, ...rest] = normalized.split("/");
+  if (head === "raw" || head === "wiki" || head === "progress" || head === "sessions") {
+    return { ws: head, path: rest.join("/") };
+  }
+  return { ws: "raw", path: normalized.replace(/^raw\/?/, "") };
 }
 
 function RequirementList({
