@@ -208,6 +208,75 @@ export function decideLoopHalt(input: {
   return { halt: false };
 }
 
+/** Note appended when the final graphify merge is skipped as redundant. */
+export const FINAL_GRAPH_SKIPPED_NOTE =
+  "\n\n---\n\n[auto graph] 루프 중에 full merge가 이미 실행되어 final merge는 생략합니다.";
+
+export type IngestLoopHaltKind =
+  | "normal"
+  | "error"
+  | "stopped"
+  | "capped"
+  | "stalled"
+  | "empty";
+
+export type IngestLoopFinalizePlan = {
+  /** Refresh the qmd search index. */
+  runQmd: boolean;
+  /** Run the final `wiki-graphify update` merge. */
+  runGraph: boolean;
+  /** The final graph merge was skipped because the loop already merged it. */
+  graphSkipped: boolean;
+  /** Run the closing deterministic post-merge mini-lint. */
+  runLint: boolean;
+};
+
+/**
+ * Decide which loop-exit finalization steps run (qmd refresh, final graphify
+ * merge, closing mini-lint). This sequence was previously inlined and copy
+ * pasted in both the single-agent (`runIngestLoop`) and multi-agent
+ * (`runLoopOperation`) drivers, and it drifted — the multi-agent path silently
+ * dropped the post-merge mini-lint. Centralizing the gating here keeps the two
+ * drivers honest and makes the *intended* divergence explicit via `driver`:
+ *
+ * - `single` ran graphify incrementally between rounds, so it gates qmd/lint on
+ *   "did anything change" (`progressed`) and skips the final merge when the last
+ *   incremental merge already covers the latest state (`graphAlreadyCoversLatest`).
+ * - `multi` never runs incremental graphify, so it gates the whole block on
+ *   full completion (`workComplete`) plus not-aborted, and always runs the final
+ *   merge.
+ *
+ * Output sinks still differ (string reply vs synthetic worker runs), so each
+ * driver consumes this plan and performs its own side effects; only the
+ * what-runs-when decision is shared.
+ */
+export function decideIngestLoopFinalize(input: {
+  driver: "single" | "multi";
+  haltKind: IngestLoopHaltKind;
+  aborted: boolean;
+  progressed: boolean;
+  workComplete: boolean;
+  graphAlreadyCoversLatest: boolean;
+}): IngestLoopFinalizePlan {
+  if (input.driver === "single") {
+    const active = input.haltKind !== "error";
+    return {
+      runQmd: active && input.progressed,
+      runGraph: active && !input.graphAlreadyCoversLatest,
+      graphSkipped: active && input.graphAlreadyCoversLatest,
+      runLint: active && input.haltKind === "normal" && input.progressed,
+    };
+  }
+  const block =
+    !input.aborted && input.haltKind !== "error" && input.workComplete;
+  return {
+    runQmd: block,
+    runGraph: block,
+    graphSkipped: false,
+    runLint: block && input.haltKind === "normal" && input.progressed,
+  };
+}
+
 export function buildLoopContinuationPrompt(input: {
   sessionPath: string;
   iteration: number;

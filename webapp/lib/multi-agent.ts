@@ -18,6 +18,7 @@ import {
   buildLoopContinuationPrompt,
   buildProgressReference,
   clearStopFlag,
+  decideIngestLoopFinalize,
   decideLoopHalt,
   ingestActivitySignature,
   ingestMadeProgress,
@@ -876,11 +877,19 @@ async function runLoopOperation(input: {
   await clearStopFlag(input.sessionPath);
 
   const loopAfter = await readProgressSnapshot({ rawScope });
-  if (
-    !signalAborted(input.signal) &&
-    haltKind !== "error" &&
-    ingestWorkComplete(loopAfter)
-  ) {
+  // Shared loop-exit finalization gating (see decideIngestLoopFinalize). The
+  // multi-agent driver never runs graphify incrementally, so the whole block
+  // is gated on full completion; the single-agent driver uses the same helper
+  // with driver:"single".
+  const finalize = decideIngestLoopFinalize({
+    driver: "multi",
+    haltKind,
+    aborted: signalAborted(input.signal),
+    progressed: ingestMadeProgress(loopBefore, loopAfter),
+    workComplete: ingestWorkComplete(loopAfter),
+    graphAlreadyCoversLatest: false,
+  });
+  if (finalize.runQmd) {
     const qmd = await maybeRefreshQmdIndex({
       cfg: input.cfg,
       signal: input.signal,
@@ -912,6 +921,8 @@ async function runLoopOperation(input: {
         error: null,
       });
     }
+  }
+  if (finalize.runGraph) {
     const finalGraph = await maybeAutoRunGraphify({
       cfg: input.cfg,
       agent: orchestrationCli,
@@ -949,13 +960,13 @@ async function runLoopOperation(input: {
         error: null,
       });
     }
-    // Closing mini-lint for runs that completed without ever flipping
-    // mergeDone (single-leaf scopes, already-merged state), which the
-    // per-round transition check above never fires for.
-    if (haltKind === "normal" && ingestMadeProgress(loopBefore, loopAfter)) {
-      const lint = await runPostMergeMiniLint({ signal: input.signal });
-      if (lint.note) input.onChunk?.(lint.note);
-    }
+  }
+  // Closing mini-lint for runs that completed without ever flipping mergeDone
+  // (single-leaf scopes, already-merged state), which the per-round transition
+  // check above never fires for.
+  if (finalize.runLint) {
+    const lint = await runPostMergeMiniLint({ signal: input.signal });
+    if (lint.note) input.onChunk?.(lint.note);
   }
 
   if (signalAborted(input.signal)) {

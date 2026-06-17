@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildLoopContinuationPrompt,
+  decideIngestLoopFinalize,
   decideLoopHalt,
   formatStateSummary,
   ingestMadeProgress,
@@ -349,5 +350,119 @@ describe("formatStateSummary", () => {
     );
     expect(text).toContain("raw/x");
     expect(text).toContain("sub-chunk c1 in_progress");
+  });
+});
+
+describe("decideIngestLoopFinalize", () => {
+  const base = {
+    haltKind: "normal" as const,
+    aborted: false,
+    progressed: true,
+    workComplete: true,
+    graphAlreadyCoversLatest: false,
+  };
+
+  it("single: runs qmd/graph/lint on a normal run that progressed", () => {
+    expect(decideIngestLoopFinalize({ ...base, driver: "single" })).toEqual({
+      runQmd: true,
+      runGraph: true,
+      graphSkipped: false,
+      runLint: true,
+    });
+  });
+
+  it("single: skips the final graph merge when it is already covered", () => {
+    const plan = decideIngestLoopFinalize({
+      ...base,
+      driver: "single",
+      graphAlreadyCoversLatest: true,
+    });
+    expect(plan.runGraph).toBe(false);
+    expect(plan.graphSkipped).toBe(true);
+  });
+
+  it("single: no qmd/lint when nothing progressed", () => {
+    const plan = decideIngestLoopFinalize({
+      ...base,
+      driver: "single",
+      progressed: false,
+    });
+    expect(plan.runQmd).toBe(false);
+    expect(plan.runLint).toBe(false);
+    // The final graph merge still runs (it does not gate on progress).
+    expect(plan.runGraph).toBe(true);
+  });
+
+  it("single: error halt suppresses every step", () => {
+    expect(
+      decideIngestLoopFinalize({ ...base, driver: "single", haltKind: "error" }),
+    ).toEqual({
+      runQmd: false,
+      runGraph: false,
+      graphSkipped: false,
+      runLint: false,
+    });
+  });
+
+  it("single: ignores workComplete (finalizes on progress, not completeness)", () => {
+    const plan = decideIngestLoopFinalize({
+      ...base,
+      driver: "single",
+      workComplete: false,
+    });
+    expect(plan.runQmd).toBe(true);
+    expect(plan.runLint).toBe(true);
+  });
+
+  it("multi: runs qmd/graph/lint when complete, not aborted, normal", () => {
+    expect(decideIngestLoopFinalize({ ...base, driver: "multi" })).toEqual({
+      runQmd: true,
+      runGraph: true,
+      graphSkipped: false,
+      runLint: true,
+    });
+  });
+
+  it("multi: gates the whole block on full completion", () => {
+    expect(
+      decideIngestLoopFinalize({ ...base, driver: "multi", workComplete: false }),
+    ).toEqual({
+      runQmd: false,
+      runGraph: false,
+      graphSkipped: false,
+      runLint: false,
+    });
+  });
+
+  it("multi: abort suppresses every step", () => {
+    expect(
+      decideIngestLoopFinalize({ ...base, driver: "multi", aborted: true }),
+    ).toEqual({
+      runQmd: false,
+      runGraph: false,
+      graphSkipped: false,
+      runLint: false,
+    });
+  });
+
+  it("multi: complete but non-normal halt still refreshes qmd/graph, not lint", () => {
+    const plan = decideIngestLoopFinalize({
+      ...base,
+      driver: "multi",
+      haltKind: "capped",
+    });
+    expect(plan.runQmd).toBe(true);
+    expect(plan.runGraph).toBe(true);
+    expect(plan.runLint).toBe(false);
+  });
+
+  it("multi: never reports graphSkipped (no incremental merges)", () => {
+    const plan = decideIngestLoopFinalize({
+      ...base,
+      driver: "multi",
+      graphAlreadyCoversLatest: true,
+    });
+    expect(plan.graphSkipped).toBe(false);
+    expect(plan.runGraph).toBe(true);
   });
 });
