@@ -105,10 +105,10 @@ CLIO는 단순히 문서에 채팅하는 도구가 아닙니다. 중요한 결�
 
 ### 선택 도구
 
-- 필요 시 `clio` CLI를 소스에서 빌드하기 위한 Rust 툴체인(`cargo`).
-  릴리스 설치는 먼저 Ubuntu, Windows, macOS용 prebuilt `clio` asset을
-  내려받고, 현재 환경에 맞는 asset이 없을 때만 `cargo` 빌드로
-  넘어갑니다. 웹앱은 CLI 없이도 동작합니다.
+- 네이티브 `clio` CLI는 선택 사항입니다. 릴리즈된 바이너리는
+  `./setup.sh --with-clio-cli`로 설치하고, Rust 툴체인(`cargo`)이 있을 때
+  소스에서 빌드하려면 `./setup.sh --build-clio-cli`를 사용합니다. 웹앱은
+  CLI 없이도 동작합니다.
 - 공식 `graphifyy` Python 패키지의 `graphify` 명령
 - 검색/재랭킹 보조용 `qmd`
 - 슬라이드 답변 생성을 위한 Marp CLI
@@ -132,8 +132,8 @@ cd ~/.clio
 
 1. 최신 GitHub 릴리스 태그를 확인하고 해당 소스 아카이브를 내려받습니다.
 2. 기본 설치 디렉터리인 `~/.clio`에 압축을 풉니다.
-3. `setup.sh`를 실행해 웹앱을 빌드하고, 가능하면 릴리스 asset에서
-   `clio` CLI를 설치합니다.
+3. `setup.sh`를 실행해 웹앱을 빌드합니다. 릴리즈된 네이티브 CLI asset도
+   내려받으려면 `--with-clio-cli`를 함께 전달합니다.
 4. 웹앱을 백그라운드로 시작합니다.
 
 `~/.clio`가 이미 CLIO 설치본이면 설치 스크립트를 다시 실행해도 `raw/`, `wiki/`, `sessions/`, `progress/`, 로컬 설정, 런타임 파일, 웹앱 빌드/의존성 산출물은 보존하고 프로젝트 파일만 새 릴리스/ref로 갱신합니다. 별도 설치본을 만들고 싶으면 다른 경로를 지정하세요.
@@ -273,9 +273,11 @@ sudo systemctl disable --now clio-web.service
 
 ### `clio` 명령줄 인터페이스 사용하기
 
-`setup.sh`는 네이티브 Rust CLI를 빌드해 `<설치 디렉터리>/bin/clio`에
-설치합니다. 이 CLI는 Chat 탭과 동일한 작업을 수행하므로 브라우저 없이도
-터미널에서 위키를 관리할 수 있습니다.
+선택 사항인 네이티브 CLI는 `<설치 디렉터리>/bin/clio`에 설치됩니다. 이
+CLI는 Chat 탭과 동일한 작업을 수행하므로 브라우저 없이도 터미널에서
+위키를 관리할 수 있습니다. 릴리즈된 바이너리는
+`./setup.sh --with-clio-cli`로 설치하고, 소스에서 빌드하려면
+`./setup.sh --build-clio-cli`를 사용합니다.
 
 바이너리를 `PATH`에 추가합니다(필요할 때 설치 스크립트가 이 줄을 출력합니다).
 

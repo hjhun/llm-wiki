@@ -78,6 +78,7 @@ Examples:
   bash scripts/install.sh update --ref main --skip-build
   curl -fsSL https://raw.githubusercontent.com/hjhun/llm-wiki/main/scripts/install.sh | bash -s -- --version v1.0.1
   bash scripts/install.sh --dir ./my-clio --skip-graphify --skip-qmd --skip-build
+  bash scripts/install.sh --with-clio-cli --start
   bash scripts/install.sh --ref main --no-setup
   bash scripts/install.sh --clio-skill both --skip-build
 EOF

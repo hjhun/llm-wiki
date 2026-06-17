@@ -130,8 +130,9 @@ in, then open **Settings** and choose your default coding agent CLI.
 
 **Prerequisites:** `bash`, `tar`, and `curl`/`wget` for the installer; then
 Node.js `>=20`, npm, Python 3, and at least one supported agent CLI (`codex`,
-`claude`, `agy`, or `cline`). A Rust toolchain is optional — releases ship a
-prebuilt `clio` binary and fall back to `cargo build` only when needed.
+`claude`, `agy`, or `cline`). The native `clio` CLI is optional; install a
+released binary with `--with-clio-cli`, or build it locally with
+`--build-clio-cli` when a Rust toolchain is available.
 `graphify` and `qmd` install by default; Marp and `agent-browser` are optional.
 
 ## Your first wiki in five minutes
@@ -190,9 +191,10 @@ runs the global `graphify` command (or `python3 -m graphify`).
 
 ## Command-line interface
 
-`setup.sh` installs a native Rust CLI at `<install-dir>/bin/clio` that runs the
-same operations as the Chat tab, so you can drive a wiki from a terminal or
-script:
+The optional native CLI at `<install-dir>/bin/clio` runs the same operations as
+the Chat tab, so you can drive a wiki from a terminal or script. Install the
+released binary with `./setup.sh --with-clio-cli`, or build from source with
+`./setup.sh --build-clio-cli`:
 
 ```bash
 export PATH="$HOME/.clio/bin:$PATH"
@@ -297,8 +299,9 @@ curl -fsSL .../install.sh | bash -s -- --version v1.0.1
 
 **`setup.sh` options** (`./setup.sh --help` for all): `--start` · `--shutdown` ·
 `--port <n>` · `--host <addr>` · `--dev` · `--skip-graphify` ·
-`--skip-bubblewrap` · `--skip-npm-install` · `--skip-build` · `--skip-cli` ·
-`--skip-qmd` · `--with-marp` · `--with-agent-browser` · `--with-gh` ·
+`--skip-bubblewrap` · `--skip-npm-install` · `--skip-build` ·
+`--with-clio-cli` · `--build-clio-cli` · `--skip-cli` · `--skip-qmd` ·
+`--with-marp` · `--with-agent-browser` · `--with-gh` ·
 `--with-yt-dlp` · `--with-automation-tools` ·
 `--install-cli=<codex|claude|agy|cline>`.
 
@@ -379,8 +382,9 @@ cd webapp && npm run typecheck && npm run build
 ```
 
 **Releases:** use **Actions → Release → Run workflow** with a tag like
-`v1.0.2`. The workflow validates scripts, bumps `webapp/package.json` to the
-release version, tags, and publishes the GitHub Release.
+`v1.0.2` to publish the web app/source release. When a native CLI binary is
+needed for that tag, run **Actions → CLI Release → Run workflow** with the same
+tag to build and attach the platform CLI assets.
 
 ```text
 .

@@ -22,7 +22,7 @@ SKIP_GRAPHIFY=0
 SKIP_BUBBLEWRAP=0
 SKIP_NPM_INSTALL=0
 SKIP_BUILD=0
-SKIP_CLI=0
+CLIO_CLI_MODE="${CLIO_CLI_MODE:-skip}"
 START_SERVER=0
 SHUTDOWN_SERVER=0
 RESTART_EXISTING=1
@@ -65,7 +65,10 @@ Options:
   --skip-bubblewrap             Do not install bubblewrap/bwrap for public CLI sandboxing
   --skip-npm-install            Do not run npm install in webapp/ (default skips when dependencies are present)
   --skip-build                  Do not run npm run build
-  --skip-cli                    Do not build the Rust `clio` CLI (cli-rs/)
+  --with-clio-cli               Download and install the released `clio` CLI asset
+  --build-clio-cli              Build and install the Rust `clio` CLI from cli-rs/
+  --build-cli                   Alias for --build-clio-cli
+  --skip-cli                    Do not install the `clio` CLI (default)
   --skip-qmd                    Do not install qmd; use existing qmd if available
   --with-qmd                    Deprecated no-op; qmd is installed by default
   --with-marp                   Best-effort optional Marp CLI install
@@ -87,6 +90,8 @@ Options:
 
 Examples:
   ./setup.sh
+  ./setup.sh --with-clio-cli
+  ./setup.sh --build-clio-cli
   ./setup.sh --port 7788 --skip-graphify
   ./setup.sh --install-cli=claude,agy --with-marp
   ./setup.sh --with-automation-tools
@@ -138,8 +143,16 @@ while [[ $# -gt 0 ]]; do
       SKIP_BUILD=1
       shift
       ;;
+    --with-clio-cli)
+      CLIO_CLI_MODE="download"
+      shift
+      ;;
+    --build-clio-cli|--build-cli)
+      CLIO_CLI_MODE="build"
+      shift
+      ;;
     --skip-cli)
-      SKIP_CLI=1
+      CLIO_CLI_MODE="skip"
       shift
       ;;
     --skip-qmd)
@@ -206,6 +219,14 @@ while [[ $# -gt 0 ]]; do
       ;;
   esac
 done
+
+case "${CLIO_CLI_MODE}" in
+  skip|download|build)
+    ;;
+  *)
+    fail "CLIO_CLI_MODE must be one of: skip, download, build"
+    ;;
+esac
 
 require_command() {
   local name="$1"
@@ -1208,21 +1229,37 @@ EOF
   write_if_missing "${SESSIONS_DIR}/.gitkeep" ""
 }
 
-build_clio_cli() {
-  if [[ "${SKIP_CLI}" -eq 1 ]]; then
-    log "skipping Rust clio CLI build (--skip-cli)"
-    return
-  fi
-  if install_prebuilt_clio_cli; then
-    return
-  fi
+install_clio_cli() {
+  case "${CLIO_CLI_MODE}" in
+    skip)
+      log "skipping clio CLI install (pass --with-clio-cli to download a release asset, or --build-clio-cli to build locally)"
+      return
+      ;;
+    download)
+      if install_prebuilt_clio_cli; then
+        return
+      fi
+      warn "could not install a released clio CLI asset; rerun with --build-clio-cli to build from source"
+      return
+      ;;
+    build)
+      build_clio_cli_from_source
+      return
+      ;;
+    *)
+      fail "CLIO_CLI_MODE must be one of: skip, download, build"
+      ;;
+  esac
+}
+
+build_clio_cli_from_source() {
   if [[ ! -d "${CLI_RS_DIR}" ]]; then
     warn "cli-rs/ not found; skipping clio CLI build"
     return
   fi
   if ! command -v cargo >/dev/null 2>&1; then
     warn "cargo not found on PATH; skipping clio CLI build"
-    warn "install the Rust toolchain (https://rustup.rs) and re-run setup, or pass --skip-cli"
+    warn "install the Rust toolchain (https://rustup.rs) and re-run setup with --build-clio-cli"
     return
   fi
 
@@ -1329,13 +1366,13 @@ install_prebuilt_clio_cli() {
   log "trying prebuilt clio CLI asset: ${asset}"
   if ! download_file "${url}" "${archive_file}"; then
     rm -rf "${tmp_dir}"
-    warn "prebuilt clio CLI asset unavailable; falling back to local cargo build"
+    warn "prebuilt clio CLI asset unavailable: ${asset}"
     return 1
   fi
 
   if ! tar -xzf "${archive_file}" -C "${extract_dir}"; then
     rm -rf "${tmp_dir}"
-    warn "could not unpack prebuilt clio CLI asset; falling back to local cargo build"
+    warn "could not unpack prebuilt clio CLI asset"
     return 1
   fi
 
@@ -1343,7 +1380,7 @@ install_prebuilt_clio_cli() {
   built="${extract_dir}/${bin_name}"
   if [[ ! -f "${built}" ]]; then
     rm -rf "${tmp_dir}"
-    warn "prebuilt clio CLI asset did not contain ${bin_name}; falling back to local cargo build"
+    warn "prebuilt clio CLI asset did not contain ${bin_name}"
     return 1
   fi
 
@@ -1663,7 +1700,7 @@ main() {
 
   install_webapp
   ensure_cli_token
-  build_clio_cli
+  install_clio_cli
   install_clio_skill
 
   log "setup complete"

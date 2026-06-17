@@ -108,10 +108,10 @@ The repository includes local instructions in `.agents/skills/`. These tell the 
 
 ### Optional Helpers
 
-- A Rust toolchain (`cargo`) to build the `clio` CLI. `setup.sh` builds it
-  from source when needed. Release installs first try the prebuilt `clio` asset
-  for Ubuntu, Windows, or macOS, then fall back to `cargo` when no matching
-  asset exists. The web app works without it.
+- The native `clio` CLI is optional. Install a released binary with
+  `./setup.sh --with-clio-cli`, or build it from source with
+  `./setup.sh --build-clio-cli` when a Rust toolchain (`cargo`) is available.
+  The web app works without it.
 - `graphify` from the official `graphifyy` Python package
 - `qmd` for search/reranking
 - Marp CLI for slide-style answers
@@ -135,8 +135,8 @@ What this does:
 
 1. Resolves the latest GitHub release and downloads its source archive.
 2. Installs it into `~/.clio` (the default install directory).
-3. Runs `setup.sh`, which builds the web app and installs the `clio` CLI
-   from a release asset when available.
+3. Runs `setup.sh`, which builds the web app. Pass `--with-clio-cli` if you
+   also want to download the released native CLI asset.
 4. Starts the web app in the background.
 
 If `~/.clio` already contains CLIO, running the installer again refreshes project files while preserving `raw/`, `wiki/`, `sessions/`, `progress/`, local config, runtime files, and webapp build/dependency outputs. To create a separate install instead, choose another path:
@@ -276,9 +276,10 @@ sudo systemctl disable --now clio-web.service
 
 ### Use the `clio` Command-Line Interface
 
-`setup.sh` builds a native Rust CLI and installs it to
-`<install-dir>/bin/clio`. It runs the same operations as the Chat tab, so
-you can manage a wiki without opening the browser.
+The optional native CLI is installed to `<install-dir>/bin/clio`. It runs the
+same operations as the Chat tab, so you can manage a wiki without opening the
+browser. Install the released binary with `./setup.sh --with-clio-cli`, or build
+from source with `./setup.sh --build-clio-cli`.
 
 Add the binary to your `PATH` (the installer prints this line when needed):
 

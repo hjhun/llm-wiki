@@ -43,37 +43,7 @@ jobs:
             exit 2
           fi
 
-  build-cli-assets:
-    name: Build CLI (${{ matrix.asset_suffix }})
-    needs: validate
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: ubuntu-latest
-            target: x86_64-unknown-linux-gnu
-            asset_suffix: ubuntu-x86_64
-            bin_name: clio
-          - os: windows-latest
-            target: x86_64-pc-windows-msvc
-            asset_suffix: windows-x86_64
-            bin_name: clio.exe
-          - os: macos-15-intel
-            target: x86_64-apple-darwin
-            asset_suffix: macos-x86_64
-            bin_name: clio
-          - os: macos-latest
-            target: aarch64-apple-darwin
-            asset_suffix: macos-aarch64
-            bin_name: clio
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
       - name: Verify release-critical scripts
-        if: runner.os == 'Linux'
         run: |
           set -euo pipefail
 
@@ -82,55 +52,9 @@ jobs:
           bash -n systemd/install-clio-web-service.sh
           scripts/install.sh --help >/dev/null
 
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.target }}
-
-      - name: Cache cargo
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            cli-rs/target
-          key: ${{ runner.os }}-${{ matrix.target }}-cargo-${{ hashFiles('cli-rs/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-${{ matrix.target }}-cargo-
-            ${{ runner.os }}-cargo-
-
-      - name: Build CLI
-        working-directory: cli-rs
-        run: cargo build --release --locked --target "${{ matrix.target }}"
-
-      - name: Package CLI
-        shell: bash
-        env:
-          VERSION: ${{ inputs.version }}
-          TARGET: ${{ matrix.target }}
-          ASSET_SUFFIX: ${{ matrix.asset_suffix }}
-          BIN_NAME: ${{ matrix.bin_name }}
-        run: |
-          set -euo pipefail
-
-          asset_stem="clio-${VERSION}-${ASSET_SUFFIX}"
-          mkdir -p dist/package
-          cp "cli-rs/target/${TARGET}/release/${BIN_NAME}" "dist/package/${BIN_NAME}"
-          if [[ "${BIN_NAME}" != *.exe ]]; then
-            chmod 0755 "dist/package/${BIN_NAME}"
-          fi
-          tar -czf "dist/${asset_stem}.tar.gz" -C dist/package "${BIN_NAME}"
-
-      - name: Upload CLI asset
-        uses: actions/upload-artifact@v4
-        with:
-          name: clio-${{ inputs.version }}-${{ matrix.asset_suffix }}
-          path: dist/*.tar.gz
-          if-no-files-found: error
-
   release:
     name: Create GitHub Release
-    needs: build-cli-assets
+    needs: validate
     runs-on: ubuntu-latest
 
     steps:
@@ -177,13 +101,6 @@ jobs:
           printf 'CLIO %s\n\nSee the generated changelog for commit details.\n' "${VERSION}" > .release-notes.md
           printf '%s\n' ".release-notes.md" > .release-notes-path
 
-      - name: Download CLI assets
-        uses: actions/download-artifact@v4
-        with:
-          pattern: clio-${{ inputs.version }}-*
-          path: dist
-          merge-multiple: true
-
       - name: Create GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -195,7 +112,6 @@ jobs:
           notes_file="$(cat .release-notes-path)"
           args=(
             "${VERSION}"
-            dist/*.tar.gz
             --title "CLIO ${VERSION}"
             --notes-file "${notes_file}"
             --generate-notes
