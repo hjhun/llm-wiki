@@ -382,11 +382,11 @@ export const ConfigSchema = z.object({
         /**
          * When true, each multi-agent /ingest-loop worker resumes its OWN host
          * CLI conversation across rounds (claude `--session-id`/`--resume`,
-         * codex `exec resume`) and receives a compact delta prompt instead of a
-         * full context re-injection each round. Workers on CLIs without
-         * resume-by-id support (agy, cline) transparently fall back to the
-         * legacy fresh-process + full-prompt behavior. Set false to force the
-         * legacy behavior for every worker.
+         * codex `exec resume`, cline `-T <task id>`) and receives a compact
+         * delta prompt instead of a full context re-injection each round.
+         * Workers on CLIs without resume-by-id support (agy) transparently fall
+         * back to the legacy fresh-process + full-prompt behavior. Set false to
+         * force the legacy behavior for every worker.
          */
         resumeSessions: z.boolean().default(true),
       })

@@ -5,13 +5,13 @@ const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 describe("cliSupportsResume", () => {
-  it("reports claude and codex as resume-capable", () => {
+  it("reports claude, codex and cline as resume-capable", () => {
     expect(cliSupportsResume("claude")).toBe(true);
     expect(cliSupportsResume("codex")).toBe(true);
+    expect(cliSupportsResume("cline")).toBe(true);
   });
-  it("reports agy/cline as not resume-capable", () => {
+  it("reports agy as not resume-capable", () => {
     expect(cliSupportsResume("agy")).toBe(false);
-    expect(cliSupportsResume("cline")).toBe(false);
   });
 });
 
@@ -76,8 +76,27 @@ describe("planSession", () => {
     });
   });
 
+  it("requests capture for a fresh cline run", () => {
+    expect(planSession("cline", {})).toEqual({
+      args: [],
+      resumeId: null,
+      sessionId: null,
+      capture: true,
+    });
+  });
+
+  it("resumes cline by task id with -T and no capture", () => {
+    const id = "task-12345";
+    expect(planSession("cline", { id, resume: true })).toEqual({
+      args: ["-T", id],
+      resumeId: null,
+      sessionId: id,
+      capture: false,
+    });
+  });
+
   it("returns a no-op plan for CLIs without resume-by-id support", () => {
-    for (const cli of ["agy", "cline"] as const) {
+    for (const cli of ["agy"] as const) {
       expect(planSession(cli, { id: "x", resume: true })).toEqual(NOOP);
     }
   });
