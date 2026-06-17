@@ -447,9 +447,9 @@ export const TEXT = {
       ingestLoopMaxStagnant: "/ingest-loop 무진행 허용 라운드",
       ingestLoopMaxStagnantDesc:
         "랄프 루프 budget입니다. 진행이 있는 라운드는 무제한으로 계속하고, 진행이 없는(실패) 라운드가 연속으로 이 횟수에 도달하면 루프를 중단합니다. 진행이 감지되면 카운트는 0으로 리셋됩니다.",
-      resumeSessions: "워커 세션 이어가기 (claude·codex)",
+      resumeSessions: "워커 세션 이어가기 (claude·codex·cline)",
       resumeSessionsDesc:
-        "멀티 에이전트 /ingest-loop에서 각 워커가 자신의 CLI 대화를 라운드마다 resume하고(claude --session-id/--resume, codex exec resume), 전체 컨텍스트 재주입 대신 짧은 델타 프롬프트만 받습니다. resume를 지원하지 않는 CLI(agy·cline)는 기존 방식으로 자동 폴백합니다. 끄면 모든 워커가 기존(매 라운드 새 프로세스+전체 프롬프트) 방식으로 동작합니다.",
+        "멀티 에이전트 /ingest-loop에서 각 워커가 자신의 CLI 대화를 라운드마다 resume하고(claude --session-id/--resume, codex exec resume, cline -T <task id>), 전체 컨텍스트 재주입 대신 짧은 델타 프롬프트만 받습니다. resume를 지원하지 않는 CLI(agy)는 기존 방식으로 자동 폴백합니다. 끄면 모든 워커가 기존(매 라운드 새 프로세스+전체 프롬프트) 방식으로 동작합니다.",
       multiAgentCli: "멀티 에이전트 CLI",
       followDefaultCli: "기본 CLI 따름",
       maxConcurrentAgents: "최대 동시 에이전트",
@@ -1075,9 +1075,9 @@ export const TEXT = {
       ingestLoopMaxStagnant: "/ingest-loop stall budget",
       ingestLoopMaxStagnantDesc:
         "Ralph-loop budget. Productive rounds run unbounded; the loop halts only after this many consecutive no-progress (failed) rounds. The counter resets to zero whenever a round makes progress.",
-      resumeSessions: "Resume worker sessions (claude·codex)",
+      resumeSessions: "Resume worker sessions (claude·codex·cline)",
       resumeSessionsDesc:
-        "In multi-agent /ingest-loop, each worker resumes its own CLI conversation across rounds (claude --session-id/--resume, codex exec resume) and receives a compact delta prompt instead of a full context re-injection. CLIs without resume-by-id support (agy·cline) fall back to the legacy behavior automatically. Turn off to force every worker into the legacy fresh-process + full-prompt path.",
+        "In multi-agent /ingest-loop, each worker resumes its own CLI conversation across rounds (claude --session-id/--resume, codex exec resume, cline -T <task id>) and receives a compact delta prompt instead of a full context re-injection. CLIs without resume-by-id support (agy) fall back to the legacy behavior automatically. Turn off to force every worker into the legacy fresh-process + full-prompt path.",
       multiAgentCli: "Multi-agent CLI",
       followDefaultCli: "Follow default CLI",
       maxConcurrentAgents: "Max concurrent agents",
