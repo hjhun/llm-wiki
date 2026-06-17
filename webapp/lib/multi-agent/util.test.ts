@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildWorkerDeltaPrompt,
   clampAgentCount,
   displayManagerName,
   fitAsciiCell,
@@ -9,6 +10,7 @@ import {
   operationPolicy,
   rawScopeFromMessage,
   seedOffset,
+  shouldResumeWorker,
 } from "./util";
 import { EMPTY_SNAPSHOT } from "../ingest/types";
 import type { ProgressSnapshot } from "../ingest/types";
@@ -139,5 +141,52 @@ describe("operationPolicy", () => {
     expect(operationPolicy("ingest")).toContain(
       "exactly one sub-chunk",
     );
+  });
+});
+
+describe("shouldResumeWorker", () => {
+  const base = {
+    hasSessionTracking: true,
+    cliSupportsResume: true,
+    round: 2,
+    priorSessionId: "sess-1",
+  };
+  it("resumes when tracking, support, round>1, and a prior id all hold", () => {
+    expect(shouldResumeWorker(base)).toBe(true);
+  });
+  it("does not resume on the first round", () => {
+    expect(shouldResumeWorker({ ...base, round: 1 })).toBe(false);
+  });
+  it("does not resume without a prior session id", () => {
+    expect(shouldResumeWorker({ ...base, priorSessionId: null })).toBe(false);
+  });
+  it("does not resume when the CLI cannot resume by id", () => {
+    expect(shouldResumeWorker({ ...base, cliSupportsResume: false })).toBe(false);
+  });
+  it("does not resume when session tracking is disabled", () => {
+    expect(shouldResumeWorker({ ...base, hasSessionTracking: false })).toBe(false);
+  });
+});
+
+describe("buildWorkerDeltaPrompt", () => {
+  it("names the worker and round and omits a missing leaf scope", () => {
+    const out = buildWorkerDeltaPrompt({ workerName: "Ada Lovelace", round: 3 });
+    expect(out).toContain("Ada Lovelace");
+    expect(out).toContain("round 3");
+    expect(out).not.toContain("ASSIGNED LEAF SCOPE");
+  });
+  it("instructs re-reading on-disk state instead of reloading instructions", () => {
+    const out = buildWorkerDeltaPrompt({ workerName: "W", round: 2 });
+    expect(out).toContain("Do not reload");
+    expect(out).toContain(".state.json");
+  });
+  it("includes the leaf scope block when provided", () => {
+    const out = buildWorkerDeltaPrompt({
+      workerName: "W",
+      round: 2,
+      leafScopeRef: "===== ASSIGNED LEAF SCOPE =====\n- raw/a",
+    });
+    expect(out).toContain("ASSIGNED LEAF SCOPE");
+    expect(out).toContain("raw/a");
   });
 });

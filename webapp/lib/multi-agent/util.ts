@@ -141,3 +141,50 @@ export function operationPolicy(kind: OrchestratedKind): string {
     "Do NOT run wiki-graphify and do NOT write anything under wiki/graph/. The backend triggers graph updates as separate invocations only after all ingest work and merge passes are complete.",
   ].join("\n");
 }
+
+/**
+ * Whether a loop worker should resume its own CLI conversation this round
+ * instead of starting fresh with the full prompt. True only when session
+ * tracking is active, the CLI can resume by id, this is not the first round,
+ * and a prior session id was captured.
+ */
+export function shouldResumeWorker(input: {
+  hasSessionTracking: boolean;
+  cliSupportsResume: boolean;
+  round: number;
+  priorSessionId: string | null;
+}): boolean {
+  return (
+    input.hasSessionTracking &&
+    input.cliSupportsResume &&
+    input.round > 1 &&
+    input.priorSessionId != null
+  );
+}
+
+/**
+ * Compact continuation prompt for a worker resuming its OWN host CLI
+ * conversation. Operating instructions, skills, policy, persona, and the
+ * session log were established earlier in the same conversation and are
+ * deliberately not repeated — that is the point of resume. Only per-round
+ * dynamics are sent: the freshly partitioned leaf scope and an instruction to
+ * re-read the latest on-disk state (which other workers may have advanced)
+ * before acting. The durable source of truth stays on disk (wiki +
+ * wiki/.progress files).
+ */
+export function buildWorkerDeltaPrompt(input: {
+  workerName: string;
+  round: number;
+  leafScopeRef?: string | null;
+}): string {
+  const lines = [
+    `You are continuing as worker ${input.workerName} in this resumed session — /ingest-loop round ${input.round}.`,
+    "Your earlier operating instructions, the wiki-ingest skill, the operation policy, your persona, and the active session log from THIS same conversation still apply. Do not reload or restate them.",
+    "Other workers may have advanced shared state since your last turn, so before writing, re-read the latest on disk yourself: wiki/.progress/ingest/.state.json plus the entity registry and any source pages you would touch. Act on that current state, not on what you remember.",
+  ];
+  if (input.leafScopeRef) lines.push(input.leafScopeRef);
+  lines.push(
+    "Process at most one pending sub-chunk from your assigned leaves this round per the wiki-ingest one-sub-chunk rule, then exit. If every assigned leaf is already done or locked by another worker, exit successfully without writing. The Coordinator consolidates after the loop — do not loop yourself.",
+  );
+  return lines.join("\n");
+}

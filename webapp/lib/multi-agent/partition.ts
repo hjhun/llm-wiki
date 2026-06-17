@@ -49,6 +49,19 @@ export function partitionActionableLeaves(
   return { assignments, hasState: true };
 }
 
+/**
+ * Whether a worker holding this partition bucket should actually run this
+ * round. A `null` bucket is the unrestricted / bootstrap enumerator and always
+ * runs; a non-empty array has assigned leaves and runs; an empty array means no
+ * leaves were partitioned to this worker (more workers than actionable leaves,
+ * or a bootstrap round where only the enumerator works), so it is skipped
+ * rather than spawning a CLI that would immediately no-op exit. This is the
+ * per-round dynamic worker count: parallelism is right-sized to the work.
+ */
+export function workerHasWorkThisRound(assignment: string[] | null): boolean {
+  return assignment === null || assignment.length > 0;
+}
+
 export function buildLeafScopeReference(
   assignedLeaves: string[] | null,
   hasState: boolean,

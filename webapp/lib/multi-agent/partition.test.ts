@@ -3,7 +3,38 @@ import {
   MAX_LEAVES_PER_WORKER,
   buildLeafScopeReference,
   partitionActionableLeaves,
+  workerHasWorkThisRound,
 } from "./partition";
+
+describe("workerHasWorkThisRound", () => {
+  it("runs the null (unrestricted/bootstrap enumerator) bucket", () => {
+    expect(workerHasWorkThisRound(null)).toBe(true);
+  });
+  it("runs a worker with assigned leaves", () => {
+    expect(workerHasWorkThisRound(["raw/a"])).toBe(true);
+  });
+  it("skips a worker with an empty bucket", () => {
+    expect(workerHasWorkThisRound([])).toBe(false);
+  });
+  it("agrees with the bootstrap partition: only worker 0 runs", () => {
+    const { assignments } = partitionActionableLeaves(4, null);
+    expect(assignments.map(workerHasWorkThisRound)).toEqual([
+      true,
+      false,
+      false,
+      false,
+    ]);
+  });
+  it("agrees with a partition that has fewer leaves than workers", () => {
+    const { assignments } = partitionActionableLeaves(4, ["raw/a", "raw/b"]);
+    expect(assignments.map(workerHasWorkThisRound)).toEqual([
+      true,
+      true,
+      false,
+      false,
+    ]);
+  });
+});
 
 describe("partitionActionableLeaves", () => {
   it("bootstrap (null leaves): only worker 0 is unrestricted, others empty", () => {

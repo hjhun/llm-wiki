@@ -1,6 +1,12 @@
 import "server-only";
 
-import { runCli, type CliName, type RunResult } from "./cli";
+import {
+  cliSupportsResume,
+  runCli,
+  type CliName,
+  type RunResult,
+  type SessionOption,
+} from "./cli";
 import type { Config } from "./config";
 import { appendMessage } from "./sessions";
 import { errorMessage } from "./api";
@@ -35,16 +41,19 @@ import {
   clampAgentCount,
   displayManagerName,
   fitAsciiCell,
+  buildWorkerDeltaPrompt,
   ingestWorkComplete,
   isOrchestratedKind,
   missionProfiles,
   operationPolicy,
   rawScopeFromMessage,
   seedOffset,
+  shouldResumeWorker,
 } from "./multi-agent/util";
 import {
   buildLeafScopeReference,
   partitionActionableLeaves,
+  workerHasWorkThisRound,
 } from "./multi-agent/partition";
 
 // Re-export the public surface that moved into ./multi-agent/* so existing
@@ -250,6 +259,12 @@ async function runWorkerBatch(input: {
   onChunk?: (text: string) => void;
   onAgentProgress?: (event: AgentProgressEvent) => void;
   rawScope?: string | null;
+  /**
+   * Per-worker resumed CLI session ids, keyed by worker id, persisted across
+   * rounds by the loop driver. Present only when session resume is enabled;
+   * absent for single-round operations. Mutated in place as runs report ids.
+   */
+  sessions?: Map<string, string | null>;
 }): Promise<WorkerRun[]> {
   const entityRegistryRef =
     input.kind === "ingest" || input.kind === "ingest-loop"
@@ -274,36 +289,81 @@ async function runWorkerBatch(input: {
   // this tells the bootstrap worker whether a `.state.json` is already on disk,
   // so its prompt never falsely claims the file is missing.
   const stateFileExists = isIngest ? await ingestStateFileExists() : false;
+  // Per-round dynamic worker count. A worker whose partition bucket is an empty
+  // array has no leaves to process this round (more workers than actionable
+  // leaves, or the bootstrap round where only the enumerator runs); skip it
+  // instead of spawning a CLI that would immediately no-op exit. A null bucket
+  // (unrestricted / bootstrap enumerator) still runs, and worker 0 is never
+  // empty, so the active set is never empty. Non-ingest kinds have no partition
+  // and never skip.
+  const assignmentFor = (worker: Worker): string[] | null =>
+    partition
+      ? worker.index in partition.assignments
+        ? partition.assignments[worker.index]
+        : []
+      : null;
+  const activeWorkers: Worker[] = [];
   for (const worker of input.workers) {
+    if (!workerHasWorkThisRound(assignmentFor(worker))) {
+      emitAgentProgress(input.onAgentProgress, worker, {
+        status: "done",
+        round: input.round,
+        detail:
+          "이번 라운드에 배정된 leaf가 없어 idle 처리했습니다 (CLI 미실행).",
+        durationMs: 0,
+      });
+      continue;
+    }
     emitAgentProgress(input.onAgentProgress, worker, {
       status: "assigned",
       round: input.round,
     });
+    activeWorkers.push(worker);
   }
   return Promise.all(
-    input.workers.map(async (worker): Promise<WorkerRun> => {
+    activeWorkers.map(async (worker): Promise<WorkerRun> => {
       const leafScopeRef = partition
         ? buildLeafScopeReference(
-            // Preserve null (bootstrap / unrestricted) — `??` would coerce
-            // it to `[]` which is the "Empty assignment" no-op signal.
-            worker.index in partition.assignments
-              ? partition.assignments[worker.index]
-              : [],
+            assignmentFor(worker),
             partition.hasState,
             stateFileExists,
           )
         : null;
-      const prompt = wrapWorkerPrompt({
-        basePrompt: input.basePrompt,
-        kind: input.kind,
-        worker,
+      // Resume this worker's own CLI conversation when the loop tracks
+      // sessions, the CLI supports resume-by-id, and a prior id exists. The
+      // first round (or a failed earlier capture) starts/assigns a session and
+      // uses the full prompt; later rounds resume with a compact delta.
+      const canResume =
+        input.sessions != null && cliSupportsResume(worker.cli);
+      const priorId = input.sessions?.get(worker.id) ?? null;
+      const resuming = shouldResumeWorker({
+        hasSessionTracking: input.sessions != null,
+        cliSupportsResume: cliSupportsResume(worker.cli),
         round: input.round,
-        totalWorkers: input.workers.length,
-        entityRegistryRef,
-        sourcePageStatusRef,
-        codeWikiStatusRef,
-        leafScopeRef,
+        priorSessionId: priorId,
       });
+      const prompt = resuming
+        ? buildWorkerDeltaPrompt({
+            workerName: worker.name,
+            round: input.round,
+            leafScopeRef,
+          })
+        : wrapWorkerPrompt({
+            basePrompt: input.basePrompt,
+            kind: input.kind,
+            worker,
+            round: input.round,
+            totalWorkers: input.workers.length,
+            entityRegistryRef,
+            sourcePageStatusRef,
+            codeWikiStatusRef,
+            leafScopeRef,
+          });
+      const session: SessionOption | undefined = canResume
+        ? resuming
+          ? { id: priorId as string, resume: true }
+          : {}
+        : undefined;
       const started = Date.now();
       emitAgentProgress(input.onAgentProgress, worker, {
         status: "running",
@@ -315,7 +375,13 @@ async function runWorkerBatch(input: {
           timeoutMs: input.timeoutMs,
           signal: input.signal,
           killOnAbort: input.signal ? true : input.timeoutMs != null,
+          session,
         });
+        // Thread the resolved id forward. Keep the prior id if this run
+        // reported none (e.g. codex capture failed) so a later round can retry.
+        if (canResume) {
+          input.sessions?.set(worker.id, result.sessionId ?? priorId);
+        }
         emitAgentProgress(input.onAgentProgress, worker, {
           status: result.exitCode === 0 ? "done" : "error",
           round: input.round,
@@ -589,6 +655,12 @@ async function runLoopOperation(input: {
   const workers = buildWorkers(input.cfg, orchestrationCli, {
     kind: "ingest-loop",
   });
+  // Per-worker resumed CLI session ids, persisted across loop rounds. Undefined
+  // disables resume entirely (config off) so every worker uses the legacy
+  // fresh-process + full-prompt path.
+  const sessions = input.cfg.cli.ingestLoop.resumeSessions
+    ? new Map<string, string | null>()
+    : undefined;
   const maxRounds = input.cfg.cli.ingestLoop.maxIterations;
   const stagnationLimit = input.cfg.cli.ingestLoop.maxStagnantRounds;
   const timeoutMs = input.cfg.cli.timeouts["ingest-loop"] ?? undefined;
@@ -656,6 +728,7 @@ async function runLoopOperation(input: {
       onChunk: input.onChunk,
       onAgentProgress: input.onAgentProgress,
       rawScope,
+      sessions,
     });
     allRuns = allRuns.concat(runs);
     totalDurationMs += runs.reduce(
@@ -745,6 +818,7 @@ async function runLoopOperation(input: {
           durationMs: 0,
           stdoutTruncated: null,
           stderrTruncated: null,
+          sessionId: null,
         },
         error: null,
       });
@@ -781,6 +855,7 @@ async function runLoopOperation(input: {
           durationMs: 0,
           stdoutTruncated: null,
           stderrTruncated: null,
+          sessionId: null,
         },
         error: null,
       });
