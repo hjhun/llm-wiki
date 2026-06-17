@@ -49,8 +49,9 @@ Commands:
                     If the directory already contains CLIO, refresh project files
                     while preserving user data. This is the default command.
   update, upgrade   Update an existing CLIO directory from the selected release/ref.
-                    Preserves raw/, wiki/, sessions/, config/local.json, .run/,
-                    webapp/node_modules/, webapp/.next/, and webapp/.env*.
+                    Preserves raw/, wiki/, sessions/, progress/,
+                    config/local.json, .run/, webapp/node_modules/,
+                    webapp/.next/, and webapp/.env*.
 
 Installer options:
   --dir <path>       Install directory (default: ~/.clio).
@@ -75,7 +76,7 @@ Examples:
   curl -fsSL https://raw.githubusercontent.com/hjhun/llm-wiki/main/scripts/install.sh | bash -s -- --start
   curl -fsSL https://raw.githubusercontent.com/hjhun/llm-wiki/main/scripts/install.sh | bash -s -- update --dir ./clio --start
   bash scripts/install.sh update --ref main --skip-build
-  curl -fsSL https://raw.githubusercontent.com/hjhun/llm-wiki/main/scripts/install.sh | bash -s -- --version v0.1.0
+  curl -fsSL https://raw.githubusercontent.com/hjhun/llm-wiki/main/scripts/install.sh | bash -s -- --version v1.0.1
   bash scripts/install.sh --dir ./my-clio --skip-graphify --skip-qmd --skip-build
   bash scripts/install.sh --ref main --no-setup
   bash scripts/install.sh --clio-skill both --skip-build
@@ -390,7 +391,7 @@ run_install() {
       fail "${not_clio_message}"
     fi
     log "install directory already exists; refreshing project files"
-    log "preserving raw/, wiki/, sessions/, local config, and runtime data"
+    log "preserving raw/, wiki/, sessions/, progress/, local config, and runtime data"
     run_update "${repo_slug}" "${ref}" "${target_dir}" "${tmp_dir}"
     return
   fi
@@ -443,7 +444,7 @@ run_update() {
   run_project_setup "${target_dir}" "${repo_slug}" "${ref}"
 
   log "update complete"
-  log "preserved data directories: raw/, wiki/, sessions/"
+  log "preserved data directories: raw/, wiki/, sessions/, progress/"
   log "project directory: ${target_dir}"
 }
 

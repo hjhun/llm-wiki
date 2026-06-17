@@ -174,13 +174,8 @@ jobs:
         run: |
           set -euo pipefail
 
-          notes_path="docs/releases/${VERSION}.md"
-          if [[ -f "${notes_path}" ]]; then
-            printf '%s\n' "${notes_path}" > .release-notes-path
-          else
-            printf 'CLIO %s\n\nSee the generated changelog for commit details.\n' "${VERSION}" > .release-notes.md
-            printf '%s\n' ".release-notes.md" > .release-notes-path
-          fi
+          printf 'CLIO %s\n\nSee the generated changelog for commit details.\n' "${VERSION}" > .release-notes.md
+          printf '%s\n' ".release-notes.md" > .release-notes-path
 
       - name: Download CLI assets
         uses: actions/download-artifact@v4

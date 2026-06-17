@@ -15,7 +15,7 @@ You collect source material in `raw/`. A coding agent reads that material and ma
 | Chat | Run `/ingest-loop`, `/query`, `/lint`, and other agent requests. |
 | Explorer | Browse and inspect source files, wiki pages, logs, and reports. |
 | Graph | Build or update the knowledge graph. |
-| Automations | Create scheduled multi-CLI jobs that write draft-only records under `raw/automation/`. |
+| Automations | Create scheduled multi-CLI jobs and inspect draft records under `progress/automation/artifacts/`. |
 | Settings | Choose the default agent CLI, configure host/port, Auto Ingest, Auto Lint, language/theme, graph options, and password. |
 
 The core idea is simple:
@@ -139,7 +139,7 @@ What this does:
    from a release asset when available.
 4. Starts the web app in the background.
 
-If `~/.clio` already contains CLIO, running the installer again refreshes project files while preserving `raw/`, `wiki/`, `sessions/`, local config, runtime files, and webapp build/dependency outputs. To create a separate install instead, choose another path:
+If `~/.clio` already contains CLIO, running the installer again refreshes project files while preserving `raw/`, `wiki/`, `sessions/`, `progress/`, local config, runtime files, and webapp build/dependency outputs. To create a separate install instead, choose another path:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/hjhun/llm-wiki/main/scripts/install.sh | bash -s -- --dir ./my-clio --start
@@ -178,7 +178,7 @@ curl -fsSL https://raw.githubusercontent.com/hjhun/llm-wiki/main/scripts/install
 | Option | Description |
 |---|---|
 | `install` | Default command. Create a new install directory, or refresh project files when the target already contains CLIO. |
-| `update`, `upgrade` | Update an existing install from the selected release/ref while preserving `raw/`, `wiki/`, `sessions/`, local config, runtime files, and webapp build/dependency outputs. |
+| `update`, `upgrade` | Update an existing install from the selected release/ref while preserving `raw/`, `wiki/`, `sessions/`, `progress/`, local config, runtime files, and webapp build/dependency outputs. |
 | `--dir <path>` | Install directory. Default: `~/.clio`. |
 | `--version <ver>` | GitHub release tag to install, or `latest`. Default: `latest`. |
 | `--ref <ref>` | GitHub tag, branch, or commit to install exactly. Overrides `--version`. |
@@ -190,7 +190,7 @@ Any other arguments are passed through to `setup.sh`.
 To install a specific release:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/hjhun/llm-wiki/main/scripts/install.sh | bash -s -- --version v0.1.0
+curl -fsSL https://raw.githubusercontent.com/hjhun/llm-wiki/main/scripts/install.sh | bash -s -- --version v1.0.1
 ```
 
 ## 5. Run and Stop the Web App
@@ -417,7 +417,7 @@ Use preprocess when a `raw/` folder contains obvious noise such as ads, navigati
 /preprocess raw/<path> remove navigation/footer boilerplate and empty snapshots
 ```
 
-The dry-run writes a plan under `wiki/.progress/preprocess/` and summarizes what would change. Only after reviewing that plan should you apply it:
+The dry-run writes a plan under `progress/preprocess/` and summarizes what would change. Only after reviewing that plan should you apply it:
 
 ```text
 /preprocess --apply
@@ -463,8 +463,8 @@ wiki/concepts/<concept>.md
 wiki/entities/<entity>.md
 wiki/index.md
 wiki/log.md
-wiki/.progress/ingest/.state.json
-wiki/.progress/ingest/DASHBOARD.md
+progress/ingest/.state.json
+progress/ingest/DASHBOARD.md
 sessions/YYYY-MM-DD/<time>_ingest*.md
 ```
 
@@ -487,7 +487,7 @@ flowchart TD
     H --> I["Optional graph update"]
 ```
 
-This makes ingest resumable. If the agent stops midway, the next run reads `wiki/.progress/ingest/.state.json` and continues from unfinished chunks.
+This makes ingest resumable. If the agent stops midway, the next run reads `progress/ingest/.state.json` and continues from unfinished chunks.
 
 ## 10. Query the Wiki
 
@@ -652,7 +652,7 @@ Important settings:
 | Enabled | Turns Auto Ingest on or off. |
 | Debounce | Wait time after file changes before a watch-triggered ingest. |
 | Interval | Minutes between scheduled runs. |
-| Skip if busy | If `wiki/.progress/ingest/.lock` exists, skip this trigger and try later. |
+| Skip if busy | If `progress/ingest/.lock` exists, skip this trigger and try later. |
 
 Auto Ingest uses the same ingest-loop driver as manual ingest. It does not bypass the project skills.
 
@@ -663,11 +663,13 @@ The **Automations** tab creates scheduled jobs that run one or more coding agent
 Each job stores its run record under:
 
 ```text
-raw/automation/<job>/<run>/
+progress/automation/artifacts/<job>/<run>/
 ```
 
 This path is only for scheduled automation artifacts. External findings saved
 from an interactive Chat session are stored separately under `raw/chat/`.
+Older installs may still contain legacy `raw/automation/` records; new runs use
+`progress/automation/artifacts/`.
 
 Use templates for YouTube summaries, GitHub/Gerrit patch review, email sync, or a custom prompt. External writes are draft-only by default: jobs may create review or email drafts, but they should not post comments, send mail, or mutate remote systems automatically.
 
@@ -971,8 +973,8 @@ Fix:
 Check:
 
 ```text
-wiki/.progress/ingest/DASHBOARD.md
-wiki/.progress/ingest/.state.json
+progress/ingest/DASHBOARD.md
+progress/ingest/.state.json
 wiki/log.md
 .run/webapp.log
 ```
@@ -980,7 +982,7 @@ wiki/log.md
 If a lock exists and no ingest process is running, inspect:
 
 ```text
-wiki/.progress/ingest/.lock
+progress/ingest/.lock
 ```
 
 Only remove a stale lock when you are sure no ingest is active.
@@ -1046,5 +1048,4 @@ Agents should not modify `raw/`. If anything under `raw/` changed unexpectedly:
 | [README.md](../README.md) | Project overview and quick start. |
 | [AGENTS.md](../AGENTS.md) | Operating rules for coding agents. |
 | [CLAUDE.md](../CLAUDE.md) | Claude-side mirror of the agent rules. |
-| [IDEATION.md](./IDEATION.md) | Product and architecture background. |
 | [tools/README.md](../tools/README.md) | graphify, qmd, and Marp notes. |

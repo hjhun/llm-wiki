@@ -7,7 +7,6 @@
 
 > This repository is an **LLM Wiki** implementation of Andrej Karpathy's [`llm-wiki.md`](./llm-wiki.md) pattern.
 > You, the coding agent, are the **maintainer** of this wiki. The user is the curator.
-> See [`IDEATION.md`](./IDEATION.md) for the design background.
 > These operating rules preserve the core `llm-wiki.md` idea (immutable raw
 > sources, persistent generated wiki, schema-driven LLM maintenance) while
 > specializing it for CLIO's web UI, resumable ingest loop, graph tooling, and

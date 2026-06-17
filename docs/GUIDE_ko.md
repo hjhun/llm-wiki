@@ -15,7 +15,7 @@ CLIO는 로컬 우선(local-first) LLM Wiki 워크벤치입니다.
 | Chat | `/ingest-loop`, `/query`, `/lint` 같은 에이전트 작업 실행 |
 | Explorer | 원본 파일, 위키 페이지, 로그, 리포트 탐색 |
 | Graph | 지식 그래프 빌드 및 업데이트 |
-| Automations | 여러 CLI로 주기 작업을 실행하고 `raw/automation/`에 draft-only 기록 저장 |
+| Automations | 여러 CLI로 주기 작업을 실행하고 `progress/automation/artifacts/`에서 draft-only 기록 확인 |
 | Settings | 기본 에이전트 CLI, 서버, 자동 인제스트, 자동 Lint, 언어/테마, 그래프, 비밀번호 설정 |
 
 핵심 흐름은 다음과 같습니다.
@@ -136,7 +136,7 @@ cd ~/.clio
    `clio` CLI를 설치합니다.
 4. 웹앱을 백그라운드로 시작합니다.
 
-`~/.clio`가 이미 CLIO 설치본이면 설치 스크립트를 다시 실행해도 `raw/`, `wiki/`, `sessions/`, 로컬 설정, 런타임 파일, 웹앱 빌드/의존성 산출물은 보존하고 프로젝트 파일만 새 릴리스/ref로 갱신합니다. 별도 설치본을 만들고 싶으면 다른 경로를 지정하세요.
+`~/.clio`가 이미 CLIO 설치본이면 설치 스크립트를 다시 실행해도 `raw/`, `wiki/`, `sessions/`, `progress/`, 로컬 설정, 런타임 파일, 웹앱 빌드/의존성 산출물은 보존하고 프로젝트 파일만 새 릴리스/ref로 갱신합니다. 별도 설치본을 만들고 싶으면 다른 경로를 지정하세요.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/hjhun/llm-wiki/main/scripts/install.sh | bash -s -- --dir ./my-clio --start
@@ -175,7 +175,7 @@ curl -fsSL https://raw.githubusercontent.com/hjhun/llm-wiki/main/scripts/install
 | 옵션 | 설명 |
 |---|---|
 | `install` | 기본 command. 새 설치 디렉터리를 만들거나, 대상이 기존 CLIO 설치본이면 사용자 데이터를 보존한 채 프로젝트 파일을 갱신합니다 |
-| `update`, `upgrade` | 선택한 릴리스/ref에서 기존 설치본을 업데이트합니다. `raw/`, `wiki/`, `sessions/`, 로컬 설정, 런타임 파일, 웹앱 빌드/의존성 산출물은 보존합니다 |
+| `update`, `upgrade` | 선택한 릴리스/ref에서 기존 설치본을 업데이트합니다. `raw/`, `wiki/`, `sessions/`, `progress/`, 로컬 설정, 런타임 파일, 웹앱 빌드/의존성 산출물은 보존합니다 |
 | `--dir <path>` | 설치 디렉터리. 기본값은 `~/.clio` |
 | `--version <ver>` | 설치할 GitHub 릴리스 태그 또는 `latest`. 기본값은 `latest` |
 | `--ref <ref>` | GitHub 태그, 브랜치, 커밋을 정확히 설치. `--version`보다 우선합니다 |
@@ -187,7 +187,7 @@ curl -fsSL https://raw.githubusercontent.com/hjhun/llm-wiki/main/scripts/install
 특정 릴리스를 설치하려면 다음처럼 실행합니다.
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/hjhun/llm-wiki/main/scripts/install.sh | bash -s -- --version v0.1.0
+curl -fsSL https://raw.githubusercontent.com/hjhun/llm-wiki/main/scripts/install.sh | bash -s -- --version v1.0.1
 ```
 
 ## 5. 웹앱 실행과 종료
@@ -413,7 +413,7 @@ cp examples/raw/llm-wiki-demo.md raw/demo/
 /preprocess raw/<path> navigation/footer boilerplate와 빈 snapshot 제거
 ```
 
-dry-run은 `wiki/.progress/preprocess/` 아래에 계획을 쓰고, 변경될 내용을 요약합니다. 이 계획을 검토한 뒤에만 적용합니다.
+dry-run은 `progress/preprocess/` 아래에 계획을 쓰고, 변경될 내용을 요약합니다. 이 계획을 검토한 뒤에만 적용합니다.
 
 ```text
 /preprocess --apply
@@ -459,8 +459,8 @@ wiki/concepts/<concept>.md
 wiki/entities/<entity>.md
 wiki/index.md
 wiki/log.md
-wiki/.progress/ingest/.state.json
-wiki/.progress/ingest/DASHBOARD.md
+progress/ingest/.state.json
+progress/ingest/DASHBOARD.md
 sessions/YYYY-MM-DD/<time>_ingest*.md
 ```
 
@@ -483,7 +483,7 @@ flowchart TD
     H --> I["선택적으로 graph update"]
 ```
 
-이 방식 덕분에 중간에 실패해도 재개할 수 있습니다. 다음 실행은 `wiki/.progress/ingest/.state.json`을 읽고 미완료 청크부터 이어갑니다.
+이 방식 덕분에 중간에 실패해도 재개할 수 있습니다. 다음 실행은 `progress/ingest/.state.json`을 읽고 미완료 청크부터 이어갑니다.
 
 ## 10. 위키에 질문하기
 
@@ -647,7 +647,7 @@ npm run wiki:mini-lint:check        # 중복/끊긴 링크/orphan이 있으면 e
 | Enabled | 자동 인제스트 켜기/끄기 |
 | Debounce | 파일 변경 후 watch-triggered ingest까지 기다리는 시간 |
 | Interval | scheduled ingest 실행 간격 |
-| Skip if busy | `wiki/.progress/ingest/.lock`이 있으면 이번 트리거를 건너뜀 |
+| Skip if busy | `progress/ingest/.lock`이 있으면 이번 트리거를 건너뜀 |
 
 자동 인제스트도 수동 ingest-loop와 같은 드라이버를 사용합니다. 프로젝트 스킬을 우회하지 않습니다.
 
@@ -658,10 +658,10 @@ npm run wiki:mini-lint:check        # 중복/끊긴 링크/orphan이 있으면 e
 각 실행 기록은 다음 위치에 저장됩니다.
 
 ```text
-raw/automation/<job>/<run>/
+progress/automation/artifacts/<job>/<run>/
 ```
 
-이 경로는 예약/자동화 실행 산출물 전용입니다. 대화형 Chat에서 저장한 외부 조사 캡처는 `raw/chat/` 아래에 별도로 저장됩니다.
+이 경로는 예약/자동화 실행 산출물 전용입니다. 대화형 Chat에서 저장한 외부 조사 캡처는 `raw/chat/` 아래에 별도로 저장됩니다. 오래된 설치본에는 legacy `raw/automation/` 기록이 남아 있을 수 있지만, 새 실행은 `progress/automation/artifacts/`를 사용합니다.
 
 YouTube 요약, GitHub/Gerrit 패치 리뷰, 이메일 sync, custom prompt 템플릿을 사용할 수 있습니다. 외부 쓰기는 기본적으로 draft-only입니다. 즉 리뷰 댓글이나 이메일 초안은 만들 수 있지만, 자동으로 댓글을 업로드하거나 메일을 보내거나 외부 시스템 상태를 바꾸지 않습니다.
 
@@ -1003,8 +1003,8 @@ Settings를 열고 감지된 CLI의 **Use** 버튼을 누른 뒤 저장합니다
 다음을 확인합니다.
 
 ```text
-wiki/.progress/ingest/DASHBOARD.md
-wiki/.progress/ingest/.state.json
+progress/ingest/DASHBOARD.md
+progress/ingest/.state.json
 wiki/log.md
 .run/webapp.log
 ```
@@ -1012,7 +1012,7 @@ wiki/log.md
 lock이 있는데 실행 중인 ingest 프로세스가 없다면 다음 파일을 확인합니다.
 
 ```text
-wiki/.progress/ingest/.lock
+progress/ingest/.lock
 ```
 
 실제로 실행 중인 ingest가 없다고 확신할 때만 stale lock을 제거하세요.
@@ -1078,5 +1078,4 @@ wiki/.progress/ingest/.lock
 | [README.md](../README.md) | 프로젝트 개요와 빠른 시작 |
 | [AGENTS.md](../AGENTS.md) | 코딩 에이전트 운영 규칙 |
 | [CLAUDE.md](../CLAUDE.md) | Claude용 동일 운영 규칙 |
-| [IDEATION.md](./IDEATION.md) | 제품 및 아키텍처 배경 |
 | [tools/README.md](../tools/README.md) | graphify, qmd, Marp 안내 |

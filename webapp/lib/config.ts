@@ -660,8 +660,7 @@ export const ConfigSchema = z.object({
       /**
        * Telegram bot integration. When enabled, the webapp runs a polling
        * worker that dispatches messages from allowlisted Telegram chats
-       * through the existing /query pipeline. See
-       * docs/PLAN_TELEGRAM_BOT_2026-06-01.md for the full design.
+       * through the existing /query pipeline.
        */
       enabled: z.boolean().default(false),
       /** Push a Telegram notice to trusted chats when a long ingest run ends. */

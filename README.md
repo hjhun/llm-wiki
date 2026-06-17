@@ -12,7 +12,7 @@
 
 <p align="center">
   <a href="LICENSE"><img alt="License: Apache-2.0" src="https://img.shields.io/badge/License-Apache_2.0-blue.svg"></a>
-  <img alt="Version" src="https://img.shields.io/badge/version-0.12.1-informational">
+  <img alt="Version" src="https://img.shields.io/badge/version-1.0.1-informational">
   <img alt="Node" src="https://img.shields.io/badge/node-%3E%3D20-success">
   <img alt="Local-first" src="https://img.shields.io/badge/local--first-yes-brightgreen">
 </p>
@@ -245,6 +245,16 @@ raw/
 - Then run `/ingest-loop raw/<folder>`, enable Auto Ingest, or use
   `clio raw add` + `clio ingest-loop` from a terminal.
 
+## Documentation
+
+The maintained documentation set is intentionally small:
+
+| Document | Purpose |
+|---|---|
+| [docs/GUIDE.md](./docs/GUIDE.md) | Full English user guide, operations, QA, and troubleshooting. |
+| [docs/GUIDE_ko.md](./docs/GUIDE_ko.md) | Korean user guide. |
+| [AGENTS.md](./AGENTS.md) / [CLAUDE.md](./CLAUDE.md) | Operating rules for coding agents working in this repository. |
+
 ## Supported agent CLIs
 
 | CLI | Invocation shape |
@@ -265,7 +275,7 @@ webapp was started without the CLI's normal environment.
 The release installer downloads a GitHub source tarball, then runs `setup.sh`.
 It defaults to `~/.clio`; pass `--dir <path>` (or set `CLIO_INSTALL_DIR`) to
 install elsewhere. Re-installing refreshes project files while preserving
-`raw/`, `wiki/`, `sessions/`, `config/local.json`, `.run/`, and
+`raw/`, `wiki/`, `sessions/`, `progress/`, `config/local.json`, `.run/`, and
 `webapp/node_modules|.next|.env*`.
 
 ```bash
@@ -278,7 +288,7 @@ curl -fsSL https://raw.githubusercontent.com/hjhun/llm-wiki/main/scripts/install
   | bash -s -- update --dir ./my-clio --skip-build
 
 # pin a specific release
-curl -fsSL .../install.sh | bash -s -- --version v0.1.0
+curl -fsSL .../install.sh | bash -s -- --version v1.0.1
 ```
 
 **Installer options:** `install` (default) · `update`/`upgrade` ·
@@ -368,17 +378,16 @@ cd webapp && npm run typecheck && npm run build
 ./scripts/smoke-test.sh                 # smoke test
 ```
 
-**Releases:** add notes under `docs/releases/vX.Y.Z.md`, then **Actions → Release
-→ Run workflow** with a tag like `v0.2.0`. The workflow validates scripts, bumps
-`webapp/package.json` to the release version, tags, and publishes the GitHub
-Release.
+**Releases:** use **Actions → Release → Run workflow** with a tag like
+`v1.0.2`. The workflow validates scripts, bumps `webapp/package.json` to the
+release version, tags, and publishes the GitHub Release.
 
 ```text
 .
 ├── .agents/skills/   # project-local agent skills (CLIO operations)
 ├── cli-rs/           # native Rust `clio` CLI source
 ├── config/           # default + local configuration
-├── docs/             # user guides, QA notes, release notes
+├── docs/             # maintained user guides and shared SVG assets
 ├── examples/         # sample sources + mini-wiki snapshot
 ├── raw/              # user-owned source material
 ├── scripts/          # installer and utilities
@@ -411,7 +420,6 @@ active interfaces that may still change between releases.
 - [safishamsi/graphify](https://github.com/safishamsi/graphify) — knowledge graph generation behind CLIO's graph workflow.
 - [docs/GUIDE.md](./docs/GUIDE.md) / [docs/GUIDE_ko.md](./docs/GUIDE_ko.md) — complete user guides.
 - [AGENTS.md](./AGENTS.md) / [CLAUDE.md](./CLAUDE.md) — operating rules for coding agents.
-- [docs/IDEATION.md](./docs/IDEATION.md) — product and architecture notes.
 
 ## License
 

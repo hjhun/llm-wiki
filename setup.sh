@@ -7,6 +7,7 @@ TOOLS_DIR="${ROOT_DIR}/tools"
 CONFIG_DIR="${ROOT_DIR}/config"
 WIKI_DIR="${ROOT_DIR}/wiki"
 RAW_DIR="${ROOT_DIR}/raw"
+PROGRESS_DIR="${ROOT_DIR}/progress"
 SESSIONS_DIR="${ROOT_DIR}/sessions"
 RUN_DIR="${ROOT_DIR}/.run"
 CLI_RS_DIR="${ROOT_DIR}/cli-rs"
@@ -1055,7 +1056,7 @@ ensure_initial_files() {
     "${WIKI_DIR}/lint" \
     "${WIKI_DIR}/archive" \
     "${WIKI_DIR}/graph/parts" \
-    "${WIKI_DIR}/.progress/ingest/leaves" \
+    "${PROGRESS_DIR}/ingest/leaves" \
     "${SESSIONS_DIR}" \
     "${RUN_DIR}" \
     "${TOOLS_DIR}" \
