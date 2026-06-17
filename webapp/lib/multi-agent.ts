@@ -52,6 +52,7 @@ import {
   rawScopeFromMessage,
   seedOffset,
   shouldResumeWorker,
+  summarizeWorkerFailures,
 } from "./multi-agent/util";
 import {
   buildLeafScopeReference,
@@ -740,6 +741,10 @@ async function runLoopOperation(input: {
   let prevSnap = loopBefore;
   let round = 0;
   let idleRounds = 0;
+  // Cumulative count of worker-rounds that failed while the loop continued
+  // (one worker succeeding keeps the round alive). Surfaced to the manager so a
+  // crashed worker is never silently masked by a sibling's success.
+  let failedWorkerRounds = 0;
   let haltKind:
     | "normal"
     | "error"
@@ -818,6 +823,19 @@ async function runLoopOperation(input: {
     allRuns = allRuns.concat(runs);
     totalDurationMs += batch.durationMs;
     lastExitCode = batch.exitCode;
+    // Surface partial failures: when some workers failed but at least one
+    // succeeded, the loop continues (failed leaves are repartitioned next
+    // round), so without this the dead workers are invisible to the user.
+    const failures = summarizeWorkerFailures(runs);
+    if (failures.failed > 0 && failures.failed < failures.total) {
+      failedWorkerRounds += failures.failed;
+      await appendMessage(
+        input.sessionPath,
+        "system",
+        `⚠️ round ${round}: 워커 ${failures.failed}/${failures.total}명 실패 ` +
+          `(${failures.failedNames.join(", ")}). 다른 워커가 성공하여 루프는 계속됩니다.`,
+      ).catch(() => undefined);
+    }
     if (signalAborted(input.signal)) {
       haltKind = "stopped";
       haltReason = "사용자 Stop 요청";
@@ -993,7 +1011,7 @@ async function runLoopOperation(input: {
     progressNote: `[/ingest-loop ${haltKind}] ${haltReason} · rounds=${round} · progressAdvanced=${ingestMadeProgress(
       loopBefore,
       loopAfter,
-    )}`,
+    )}${failedWorkerRounds > 0 ? ` · failedWorkerRounds=${failedWorkerRounds}` : ""}`,
     timeoutMs: input.cfg.cli.timeouts.chat ?? undefined,
     onChunk: input.onChunk,
     onAgentProgress: input.onAgentProgress,

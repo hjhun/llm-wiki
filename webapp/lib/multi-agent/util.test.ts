@@ -11,10 +11,13 @@ import {
   rawScopeFromMessage,
   seedOffset,
   shouldResumeWorker,
+  summarizeWorkerFailures,
 } from "./util";
 import { EMPTY_SNAPSHOT } from "../ingest/types";
 import type { ProgressSnapshot } from "../ingest/types";
 import type { Config } from "../config";
+import type { RunResult } from "../cli";
+import type { WorkerRun } from "./types";
 
 const cfgWith = (maxConcurrentAgents: number): Config =>
   ({ agent: { orchestration: { maxConcurrentAgents } } }) as unknown as Config;
@@ -188,5 +191,55 @@ describe("buildWorkerDeltaPrompt", () => {
     });
     expect(out).toContain("ASSIGNED LEAF SCOPE");
     expect(out).toContain("raw/a");
+  });
+});
+
+describe("summarizeWorkerFailures", () => {
+  const worker = (name: string): WorkerRun["worker"] =>
+    ({ id: name, name }) as unknown as WorkerRun["worker"];
+  const ok = (exitCode: number): RunResult =>
+    ({ exitCode }) as unknown as RunResult;
+  const run = (
+    name: string,
+    opts: { exitCode?: number; error?: string } = {},
+  ): WorkerRun => ({
+    worker: worker(name),
+    round: 1,
+    result: opts.error ? null : ok(opts.exitCode ?? 0),
+    error: opts.error ?? null,
+  });
+
+  it("reports zero failures when all workers exit 0", () => {
+    expect(summarizeWorkerFailures([run("a"), run("b")])).toEqual({
+      total: 2,
+      failed: 0,
+      failedNames: [],
+    });
+  });
+
+  it("counts a non-zero exit as a failure and names it", () => {
+    const s = summarizeWorkerFailures([run("a", { exitCode: 1 }), run("b")]);
+    expect(s).toEqual({ total: 2, failed: 1, failedNames: ["a"] });
+  });
+
+  it("counts a thrown error as a failure", () => {
+    const s = summarizeWorkerFailures([run("a", { error: "boom" }), run("b")]);
+    expect(s).toEqual({ total: 2, failed: 1, failedNames: ["a"] });
+  });
+
+  it("handles a fully failed round", () => {
+    const s = summarizeWorkerFailures([
+      run("a", { exitCode: 1 }),
+      run("b", { error: "x" }),
+    ]);
+    expect(s).toEqual({ total: 2, failed: 2, failedNames: ["a", "b"] });
+  });
+
+  it("treats an empty batch as no failures", () => {
+    expect(summarizeWorkerFailures([])).toEqual({
+      total: 0,
+      failed: 0,
+      failedNames: [],
+    });
   });
 });

@@ -9,7 +9,7 @@
 import type { Config } from "../config";
 import type { ChatKind } from "../chat-events";
 import { normalizeRawScope, type ProgressSnapshot } from "../ingest-loop";
-import type { MissionProfile, OrchestratedKind } from "./types";
+import type { MissionProfile, OrchestratedKind, WorkerRun } from "./types";
 
 const ORCHESTRATED_KINDS = new Set<ChatKind>(["ingest", "ingest-loop", "lint"]);
 
@@ -140,6 +140,32 @@ export function operationPolicy(kind: OrchestratedKind): string {
     "If a per-leaf lock is already held by another live process, skip that leaf and try the next assigned leaf. If all assigned leaves are blocked or already done, exit successfully without writing anything.",
     "Do NOT run wiki-graphify and do NOT write anything under wiki/graph/. The backend triggers graph updates as separate invocations only after all ingest work and merge passes are complete.",
   ].join("\n");
+}
+
+export type WorkerFailureSummary = {
+  /** Active workers that ran this round (failed + succeeded). */
+  total: number;
+  /** Workers that errored or exited non-zero. */
+  failed: number;
+  /** Persona names of the failed workers, for surfacing to the user. */
+  failedNames: string[];
+};
+
+/**
+ * Summarize how many active workers failed in a round. A round is not halted
+ * as long as one worker succeeds (the loop repartitions the failed leaves next
+ * round), so a crashed worker is otherwise invisible. Surfacing this count in
+ * the session log and the manager progress note tells the user a worker died
+ * even though the loop kept going — the partial-failure masking gap. A run
+ * counts as failed when it threw (`error`) or its CLI exited non-zero.
+ */
+export function summarizeWorkerFailures(runs: WorkerRun[]): WorkerFailureSummary {
+  const failedNames: string[] = [];
+  for (const run of runs) {
+    const failed = run.error != null || (run.result?.exitCode ?? 0) !== 0;
+    if (failed) failedNames.push(run.worker.name);
+  }
+  return { total: runs.length, failed: failedNames.length, failedNames };
 }
 
 /**
