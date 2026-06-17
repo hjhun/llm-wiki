@@ -115,7 +115,7 @@ export function buildGraphifyPrompt(
           "For this `update-partial` run, build ONLY per-leaf partial graphs and SKIP the merge pass:",
           leafList.length > 0
             ? `- Target leaves (process exactly these, nothing else): ${leafList.map((p) => `\`${p}\``).join(", ")}.`
-            : "- Target leaves: auto-detect from wiki/.progress/ingest/.state.json (leaves whose status just turned `done`).",
+            : "- Target leaves: auto-detect from progress/ingest/.state.json (leaves whose status just turned `done`).",
           "- Output: write or overwrite wiki/graph/parts/<sha1(leafPath)>.json for those leaves only.",
           "- Update wiki/graph/.state.json entries for those leaves with `built_at` + `content_hash`.",
           "- Do NOT touch wiki/graph/graph.json, wiki/graph/GRAPH_REPORT.md, or rerun community clustering. The merge pass runs as a separate `wiki-graphify update` call later (typically at /ingest-loop end).",
@@ -124,7 +124,7 @@ export function buildGraphifyPrompt(
         ].join("\n")
       : action === "update"
         ? [
-            "For this `update` run, rebuild per-leaf partial graphs only for the scoped leaves when a leaf list is supplied, or for changed/missing leaves discovered from wiki/.progress/ingest/.state.json and wiki/graph/.state.json when no leaf list is supplied.",
+            "For this `update` run, rebuild per-leaf partial graphs only for the scoped leaves when a leaf list is supplied, or for changed/missing leaves discovered from progress/ingest/.state.json and wiki/graph/.state.json when no leaf list is supplied.",
             leafList.length > 0
               ? `- Scoped leaves to refresh before merge: ${leafList.map((p) => `\`${p}\``).join(", ")}.`
               : "- Scoped leaves: auto-detect changed/missing leaves.",

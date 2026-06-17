@@ -83,7 +83,7 @@ Each operation maps to one or more project skills. If these rules conflict with 
 - Outputs:
   - `raw/.trash/<ISO-ts>_<basename>` — files (or content backups) moved out of `raw/`
   - For content-level rules, the cleaned bytes are written back to the original `raw/` path after the original is backed up to `raw/.trash/`
-  - `wiki/.progress/preprocess/<ts>-{rules,plan}.{json,md}` and `<ts>-applied.json`
+  - `progress/preprocess/<ts>-{rules,plan}.{json,md}` and `<ts>-applied.json`
   - One line appended to `wiki/log.md`
 - Always runs in two phases: the dry-run must produce a `<ts>-plan.json` and a chat summary first; only `/preprocess --apply` mutates `raw/`.
 - Leaf-first chunking still applies for large `raw/` trees (Section 7) — the skill enumerates leaves under `target` and merges per-leaf plans into a single `<ts>-plan.json` before showing the user.
@@ -91,7 +91,7 @@ Each operation maps to one or more project skills. If these rules conflict with 
 ### 3.5 Code Wiki (inside `/ingest`, [`.agents/skills/wiki-ingest/SKILL.md`](.agents/skills/wiki-ingest/SKILL.md))
 - Input: source code, repositories, logs, stack traces, test output, CI output, or code-related captures under `raw/`.
 - Treat `raw/` code as immutable source evidence. Do not format, build, patch, delete, or vendor-prune it during Code Wiki operations.
-- Always follow the **leaf-directory chunks + merge pass** principle (Section 7), using the normal `wiki/.progress/ingest/` state. There is no separate user-facing Code Wiki command.
+- Always follow the **leaf-directory chunks + merge pass** principle (Section 7), using the normal `progress/ingest/` state. There is no separate user-facing Code Wiki command.
 - Outputs:
   - one `wiki/sources/<project>/index.md` provenance stub per code project (not one page per source file)
   - `wiki/graph/projects/<project>/` per-project graphify-out (real graphify output), produced by `wiki-graphify`

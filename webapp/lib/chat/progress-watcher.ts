@@ -6,6 +6,7 @@ import { PROJECT_ROOT } from "../paths";
 import {
   PROGRESS_STATE_PATH,
   WIKI_LOG_REL,
+  ensureIngestProgressMigrated,
   formatStateSummary,
   summarizeIngestState,
 } from "../ingest-loop";
@@ -18,7 +19,7 @@ type ProgressEvent = Extract<ChatSendEvent, { type: "progress" }>;
 
 /**
  * Polling watcher that exposes ingest sub-chunk progress to the chat stream.
- * Skills persist state to wiki/.progress/ingest/.state.json after every
+ * Skills persist state to progress/ingest/.state.json after every
  * sub-chunk and append a heading to wiki/log.md, so this watcher reads both
  * during runCli rather than relying on the CLI's stdout flushing behavior
  * (claude -p / codex exec frequently buffer until exit).
@@ -41,6 +42,7 @@ export function startProgressWatcher(
   const tick = async () => {
     if (stopped) return;
     try {
+      await ensureIngestProgressMigrated();
       const st = await fs.stat(stateAbs);
       if (st.mtimeMs !== lastStateMtime) {
         lastStateMtime = st.mtimeMs;

@@ -81,7 +81,7 @@ The webapp controls whether ingest calls scoped `update` between loop
 iterations with `graph.autoUpdateStrategy`.
 
 - `auto` (default): infer workload size from
-  `wiki/.progress/ingest/.state.json`. Run scoped `update` only when at least
+  `progress/ingest/.state.json`. Run scoped `update` only when at least
   one `graph.partialThresholds` value is met (`minLeaves`, `minFiles`,
   `minBytes`, or `minSubChunks`). Smaller ingests skip scoped updates and rely
   on the final `update`.

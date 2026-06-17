@@ -313,7 +313,7 @@ export function buildLoopContinuationPrompt(input: {
   if (input.sourcePageStatusRef) lines.push(input.sourcePageStatusRef);
   if (input.codeWikiStatusRef) lines.push(input.codeWikiStatusRef);
   lines.push(
-    `This is /ingest-loop iteration ${input.iteration}. Pick the next pending sub-chunk, merge-pass parent, or missing direct-file pseudo-leaf enumeration from wiki/.progress/ingest/.state.json${rawScope ? ` within ${rawScope}` : ""} and process exactly one unit per the wiki-ingest skill, then exit. Do not loop yourself — the backend will spawn the next iteration. For code/mixed leaves, do not create mirrored wiki/code file pages as a repair task; graphify runs separately after ingest progress is complete.`,
+    `This is /ingest-loop iteration ${input.iteration}. Pick the next pending sub-chunk, merge-pass parent, or missing direct-file pseudo-leaf enumeration from progress/ingest/.state.json${rawScope ? ` within ${rawScope}` : ""} and process exactly one unit per the wiki-ingest skill, then exit. Do not loop yourself — the backend will spawn the next iteration. For code/mixed leaves, do not create mirrored wiki/code file pages as a repair task; graphify runs separately after ingest progress is complete.`,
     "",
     "===== CONVERSATION =====",
     rawScope ? `User: /ingest-loop ${rawScope}` : "User: /ingest",

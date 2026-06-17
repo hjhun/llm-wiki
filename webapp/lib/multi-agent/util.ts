@@ -193,7 +193,7 @@ export function operationPolicy(kind: OrchestratedKind): string {
       "Code Wiki is part of ingest, not a separate command. During enumeration, classify leaves as prose/code/mixed/ignore and include direct-file pseudo-leaves for code files in non-leaf directories. For code or mixed leaves, write source summaries as provenance and record leaf/sub-chunk progress. Do not mirror the source tree into wiki/code/<project>/ or create one page per code file as a completion requirement; graphify materializes code knowledge in wiki/graph after ingest.",
       "If the progress state shows code-looking raw files not represented in state, treat that as the next unit of work and repair the leaf enumeration. Do not repair a done code/mixed leaf by writing wiki/code file or directory pages.",
       "A symlink located under raw/ is a valid source entry: follow it read-only even if its real target is outside the repository, preserve logical raw/... paths in state/citations, and reject only broken links or loops.",
-      "Honor your ASSIGNED LEAF SCOPE strictly: only touch leaves listed in your assignment (or any pending leaf if unrestricted). Use a per-leaf lock at wiki/.progress/ingest/leaves/<sha1(leafPath)>.lock for sub-chunk work; the global wiki/.progress/ingest/.lock is only a short state-mutex for enumeration/state-write windows.",
+      "Honor your ASSIGNED LEAF SCOPE strictly: only touch leaves listed in your assignment (or any pending leaf if unrestricted). Use a per-leaf lock at progress/ingest/leaves/<sha1(leafPath)>.lock for sub-chunk work; the global progress/ingest/.lock is only a short state-mutex for enumeration/state-write windows.",
       "If a per-leaf lock is already held by another live process, skip that leaf and try the next assigned leaf. If all assigned leaves are blocked or already done, exit successfully without writing anything.",
       "Do NOT run wiki-graphify and do NOT write anything under wiki/graph/. The backend triggers graph updates as separate invocations only after all ingest work and merge passes are complete.",
     ].join("\n");
@@ -204,7 +204,7 @@ export function operationPolicy(kind: OrchestratedKind): string {
     "Code Wiki is part of ingest, not a separate command. During enumeration, classify leaves as prose/code/mixed/ignore and include direct-file pseudo-leaves for code files in non-leaf directories. For code or mixed leaves, write source summaries as provenance and record leaf/sub-chunk progress. Do not mirror the source tree into wiki/code/<project>/ or create one page per code file as a completion requirement; graphify materializes code knowledge in wiki/graph after ingest.",
     "If the progress state shows code-looking raw files not represented in state, treat that as the next unit of work and repair the leaf enumeration. Do not repair a done code/mixed leaf by writing wiki/code file or directory pages.",
     "A symlink located under raw/ is a valid source entry: follow it read-only even if its real target is outside the repository, preserve logical raw/... paths in state/citations, and reject only broken links or loops.",
-    "Honor your ASSIGNED LEAF SCOPE strictly: only touch leaves listed in your assignment (or any pending leaf if unrestricted). Use a per-leaf lock at wiki/.progress/ingest/leaves/<sha1(leafPath)>.lock for sub-chunk work; the global wiki/.progress/ingest/.lock is only a short state-mutex for enumeration/state-write windows.",
+    "Honor your ASSIGNED LEAF SCOPE strictly: only touch leaves listed in your assignment (or any pending leaf if unrestricted). Use a per-leaf lock at progress/ingest/leaves/<sha1(leafPath)>.lock for sub-chunk work; the global progress/ingest/.lock is only a short state-mutex for enumeration/state-write windows.",
     "If a per-leaf lock is already held by another live process, skip that leaf and try the next assigned leaf. If all assigned leaves are blocked or already done, exit successfully without writing anything.",
     "Do NOT run wiki-graphify and do NOT write anything under wiki/graph/. The backend triggers graph updates as separate invocations only after all ingest work and merge passes are complete.",
   ].join("\n");
@@ -264,7 +264,7 @@ export function shouldResumeWorker(input: {
  * dynamics are sent: the freshly partitioned leaf scope and an instruction to
  * re-read the latest on-disk state (which other workers may have advanced)
  * before acting. The durable source of truth stays on disk (wiki +
- * wiki/.progress files).
+ * progress files).
  */
 export function buildWorkerDeltaPrompt(input: {
   workerName: string;
@@ -274,7 +274,7 @@ export function buildWorkerDeltaPrompt(input: {
   const lines = [
     `You are continuing as worker ${input.workerName} in this resumed session — /ingest-loop round ${input.round}.`,
     "Your earlier operating instructions, the wiki-ingest skill, the operation policy, your persona, and the active session log from THIS same conversation still apply. Do not reload or restate them.",
-    "Other workers may have advanced shared state since your last turn, so before writing, re-read the latest on disk yourself: wiki/.progress/ingest/.state.json plus the entity registry and any source pages you would touch. Act on that current state, not on what you remember.",
+    "Other workers may have advanced shared state since your last turn, so before writing, re-read the latest on disk yourself: progress/ingest/.state.json plus the entity registry and any source pages you would touch. Act on that current state, not on what you remember.",
   ];
   if (input.leafScopeRef) lines.push(input.leafScopeRef);
   lines.push(

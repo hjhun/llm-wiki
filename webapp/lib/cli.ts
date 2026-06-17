@@ -1059,7 +1059,7 @@ export async function runCli(
     // and let the caller shrink the prompt.
     console.warn(
       `[runCli] prompt is ${prompt.length} chars (cap ~${promptWarnCap}). ` +
-        `Reduce contextTurns or move shared context into wiki/.progress/.`,
+        `Reduce contextTurns or move shared context into progress/.`,
     );
   }
 

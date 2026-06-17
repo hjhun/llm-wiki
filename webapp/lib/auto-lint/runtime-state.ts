@@ -3,7 +3,7 @@ import path from "node:path";
 import { z } from "zod";
 import { PROJECT_ROOT } from "../paths";
 
-const STATE_REL = "wiki/.progress/auto-lint/state.json";
+const STATE_REL = "progress/auto-lint/state.json";
 
 export const AutoLintRuntimeSchema = z.object({
   status: z.enum(["idle", "running", "skipped", "disabled"]).default("idle"),

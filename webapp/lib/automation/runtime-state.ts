@@ -3,7 +3,7 @@ import path from "node:path";
 import { z } from "zod";
 import { PROJECT_ROOT } from "../paths";
 
-const STATE_REL = "wiki/.progress/automation/state.json";
+const STATE_REL = "progress/automation/state.json";
 
 const AgentResultSchema = z.object({
   agent: z.enum(["codex", "claude", "agy", "cline"]),

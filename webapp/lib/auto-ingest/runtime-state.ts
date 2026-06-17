@@ -3,7 +3,7 @@ import path from "node:path";
 import { z } from "zod";
 import { PROJECT_ROOT } from "../paths";
 
-const STATE_REL = "wiki/.progress/auto-ingest/state.json";
+const STATE_REL = "progress/auto-ingest/state.json";
 
 export const AutoIngestRuntimeSchema = z.object({
   status: z.enum(["idle", "running", "skipped", "disabled"]).default("idle"),

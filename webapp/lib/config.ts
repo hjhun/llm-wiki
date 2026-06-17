@@ -229,7 +229,7 @@ export const ConfigSchema = z.object({
       .min(16 * 1024)
       .default(256 * 1024),
     /**
-     * When true, a short reference to wiki/.progress/ingest/DASHBOARD.md is
+     * When true, a short reference to progress/ingest/DASHBOARD.md is
      * prepended to the prompt if the dashboard exists.
      */
     includeProgressDashboard: z.boolean().default(true),
@@ -578,7 +578,7 @@ export const ConfigSchema = z.object({
         })
         .default({ intervalMinutes: 30 }),
       /**
-       * When true, automatic triggers skip if wiki/.progress/ingest/.lock
+       * When true, automatic triggers skip if progress/ingest/.lock
        * exists (another ingest is already running). The next event or
        * scheduled tick picks the work up. When false, the trigger fires
        * anyway and the skill's own lock acquisition decides the outcome.
@@ -636,8 +636,8 @@ export const ConfigSchema = z.object({
       /** When true, pass `--fix` to /lint so auto-fixable issues are applied. */
       fix: z.boolean().default(true),
       /**
-       * When true, skip if either wiki/.progress/ingest/.lock or
-       * wiki/.progress/lint/.lock exists. Mirrors autoIngest.skipIfBusy.
+       * When true, skip if either progress/ingest/.lock or
+       * progress/lint/.lock exists. Mirrors autoIngest.skipIfBusy.
        */
       skipIfBusy: z.boolean().default(true),
     })

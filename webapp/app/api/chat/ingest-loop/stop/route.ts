@@ -16,7 +16,7 @@ import {
  *   - it survives Next.js dev-server hot reloads,
  *   - it works across multiple worker processes (none today, but trivial to
  *     scale later),
- *   - the loop already inspects the same `wiki/.progress/ingest/` directory
+ *   - the loop already inspects the same `progress/ingest/` directory
  *     between iterations, so adding one `fs.access` call costs nothing.
  *
  * GET returns whether the flag exists. DELETE clears it. POST creates it.

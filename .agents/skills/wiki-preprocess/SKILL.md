@@ -38,7 +38,7 @@ script would (or did) do.
   Translates the description into rules, runs the script in `plan` mode,
   presents the plan in chat, and stops. Nothing under `raw/` is changed.
 - `/preprocess --apply` — re-uses the most recent
-  `wiki/.progress/preprocess/<ts>-plan.json` and runs the script in
+  `progress/preprocess/<ts>-plan.json` and runs the script in
   `apply` mode. Skips re-translation; if the user wants different rules,
   they should run `/preprocess <args>` again to regenerate the plan.
 - Natural-language equivalents — "이 폴더에서 광고만 정리해줘",
@@ -57,13 +57,13 @@ when the user asks for it explicitly.
 
 ## Output
 
-- `wiki/.progress/preprocess/<ts>-rules.json` — the rules JSON
+- `progress/preprocess/<ts>-rules.json` — the rules JSON
   this skill produced from the user's description.
-- `wiki/.progress/preprocess/<ts>-plan.json` — the script's plan
+- `progress/preprocess/<ts>-plan.json` — the script's plan
   (machine).
-- `wiki/.progress/preprocess/<ts>-plan.md` — the chat-facing summary
+- `progress/preprocess/<ts>-plan.md` — the chat-facing summary
   written by this skill (human).
-- `wiki/.progress/preprocess/<ts>-applied.json` — produced by `apply`.
+- `progress/preprocess/<ts>-applied.json` — produced by `apply`.
 - Moves and rewrites under `raw/` (apply only).
 - One line appended to `wiki/log.md` per apply run.
 - Chat session log under `sessions/<date>/<time>_preprocess_<subject>.md`.
@@ -72,7 +72,7 @@ when the user asks for it explicitly.
 
 1. Confirm `wiki/log.md` exists. Create it with a Phase-1 template if missing.
 2. Validate the target path is inside `raw/`. Reject anything outside.
-3. Ensure `wiki/.progress/preprocess/` exists. Create `tmp/` if missing.
+3. Ensure `progress/preprocess/` exists. Create `tmp/` if missing.
 4. Read `config/default.json` for the `cli.timeouts.preprocess` bucket — that
    is enforced by the host webapp, not by this skill, but it constrains how
    much work one invocation can do.
@@ -84,7 +84,7 @@ when the user asks for it explicitly.
 1. Create the chat log session file
    `sessions/<YYYY-MM-DD>/<HHMMSS>_preprocess_<subject>.md` (frontmatter
    only).
-2. Acquire `wiki/.progress/preprocess/.lock`. Same atomic
+2. Acquire `progress/preprocess/.lock`. Same atomic
    `tmp/<rand>.lock` + rename pattern that wiki-ingest uses, with body
    `{"pid": <int>, "started_at": <ISO8601>, "session": "<rel path>"}`.
    - If `.lock` already exists and the recorded `pid` is alive, **abort**
@@ -96,7 +96,7 @@ when the user asks for it explicitly.
 ### Step 1 — Parse arguments
 
 - `/preprocess --apply [path]` → jump to Step 5 with the most recent
-  `wiki/.progress/preprocess/<ts>-plan.json`. If multiple exist, pick the
+  `progress/preprocess/<ts>-plan.json`. If multiple exist, pick the
   newest by mtime. If `--apply` is given but no plan exists, abort and
   tell the user to run `/preprocess <args>` first.
 - Otherwise extract:
@@ -145,7 +145,7 @@ Rule shape constraints:
   `(?im)` into `regexFlags`, so a Perl-style pattern is fine. Prefer
   `regexFlags: "gs"` explicitly when in doubt.
 - Save the resulting rules to
-  `wiki/.progress/preprocess/<ts>-rules.json`.
+  `progress/preprocess/<ts>-rules.json`.
 
 ### Step 3 — Run the script in `plan` mode
 
@@ -155,13 +155,13 @@ target is enough:
 ```bash
 node scripts/preprocess-raw.mjs plan \
   --target <target> \
-  --rules-file wiki/.progress/preprocess/<ts>-rules.json \
-  --out wiki/.progress/preprocess/<ts>-plan.json
+  --rules-file progress/preprocess/<ts>-rules.json \
+  --out progress/preprocess/<ts>-plan.json
 ```
 
 For large `raw/` trees, follow CLAUDE.md Section 7 (leaf-first): list
 leaf directories under `target`, run the script once per leaf into
-`wiki/.progress/preprocess/<ts>-plan-<leafhash>.json`, then merge the
+`progress/preprocess/<ts>-plan-<leafhash>.json`, then merge the
 `actions` arrays into a single `<ts>-plan.json` before showing the user.
 
 Persist the script's stdout (the JSON summary) verbatim into the chat
@@ -170,14 +170,14 @@ log session file so the user can audit it later.
 ### Step 4 — Present the plan, stop
 
 Write a human-readable summary to
-`wiki/.progress/preprocess/<ts>-plan.md` with this shape:
+`progress/preprocess/<ts>-plan.md` with this shape:
 
 ```markdown
 # Preprocess plan — <ts>
 
 - Target: `<target>`
-- Rules: `wiki/.progress/preprocess/<ts>-rules.json`
-- Plan: `wiki/.progress/preprocess/<ts>-plan.json`
+- Rules: `progress/preprocess/<ts>-rules.json`
+- Plan: `progress/preprocess/<ts>-plan.json`
 
 ## 요약
 - trash: N 파일
@@ -202,23 +202,23 @@ not** mutate `raw/` in this step.
 ### Step 5 — Apply (only when /preprocess --apply was issued)
 
 1. Locate the most recent `<ts>-plan.json` in
-   `wiki/.progress/preprocess/`. Abort if none.
+   `progress/preprocess/`. Abort if none.
 2. Re-acquire the lock if not already held.
 3. Run the script:
 
    ```bash
    node scripts/preprocess-raw.mjs apply \
-     --plan-file wiki/.progress/preprocess/<ts>-plan.json
+     --plan-file progress/preprocess/<ts>-plan.json
    ```
 
-4. The script writes `wiki/.progress/preprocess/<ts>-applied.json` and
+4. The script writes `progress/preprocess/<ts>-applied.json` and
    emits a JSON summary on stdout: `{ok, skipped, failed}`.
 5. Append one line to `wiki/log.md`:
 
    ```markdown
    ## [YYYY-MM-DD HH:MM] preprocess | <target>
-   - rules: `wiki/.progress/preprocess/<ts>-rules.json`
-   - plan:  `wiki/.progress/preprocess/<ts>-plan.json`
+   - rules: `progress/preprocess/<ts>-rules.json`
+   - plan:  `progress/preprocess/<ts>-plan.json`
    - applied: trash=N, strip=M, failed=K
    ```
 
@@ -246,7 +246,7 @@ not** mutate `raw/` in this step.
 
 - Do **not** move files anywhere except `raw/.trash/`. No deletes, no
   cross-directory shuffles, no writes outside `raw/` (other than the
-  state files under `wiki/.progress/preprocess/` and the
+  state files under `progress/preprocess/` and the
   one-line append to `wiki/log.md`).
 - Do **not** trash `.gitkeep` or any `.trash/`, `.cleaned/`, `.preview/`
   contents. The script enforces this; don't try to work around it.
@@ -258,7 +258,7 @@ not** mutate `raw/` in this step.
 
 ## State Files
 
-### `wiki/.progress/preprocess/.lock`
+### `progress/preprocess/.lock`
 
 ```json
 {
@@ -268,11 +268,11 @@ not** mutate `raw/` in this step.
 }
 ```
 
-### `wiki/.progress/preprocess/<ts>-rules.json`
+### `progress/preprocess/<ts>-rules.json`
 
 The rules JSON produced in Step 2. See the schema there.
 
-### `wiki/.progress/preprocess/<ts>-plan.json`
+### `progress/preprocess/<ts>-plan.json`
 
 Produced by `scripts/preprocess-raw.mjs plan`:
 
@@ -280,7 +280,7 @@ Produced by `scripts/preprocess-raw.mjs plan`:
 {
   "createdAt": "2026-05-18T04:30:11.234Z",
   "target": "raw/inbox",
-  "rulesFile": "wiki/.progress/preprocess/2026-05-18-0430-rules.json",
+  "rulesFile": "progress/preprocess/2026-05-18-0430-rules.json",
   "actions": [
     {
       "kind": "trash",
@@ -308,7 +308,7 @@ Produced by `scripts/preprocess-raw.mjs plan`:
 }
 ```
 
-### `wiki/.progress/preprocess/<ts>-applied.json`
+### `progress/preprocess/<ts>-applied.json`
 
 Produced by `scripts/preprocess-raw.mjs apply`. Mirrors the plan's
 `actions[]` with a `status` field (`ok`, `skipped`, `missing`,
@@ -361,14 +361,14 @@ not applicable. Do not claim the run finished while a required `[ ]` remains.
 Dry-run (default):
 
 - [ ] Validated the target path is under `raw/`; enumerated leaves leaf-first.
-- [ ] Produced `wiki/.progress/preprocess/<ts>-rules.{json,md}` and `<ts>-plan.json` and a chat summary.
+- [ ] Produced `progress/preprocess/<ts>-rules.{json,md}` and `<ts>-plan.json` and a chat summary.
 - [ ] Made NO mutation to `raw/` (no moves, no rewrites).
 
 Apply (`--apply`):
 
 - [ ] Backed up every original to `raw/.trash/<ISO-ts>_<basename>` before any move or in-place rewrite.
 - [ ] Applied only changes present in the approved `<ts>-plan.json`; touched nothing outside the described scope.
-- [ ] Wrote `wiki/.progress/preprocess/<ts>-applied.json`.
+- [ ] Wrote `progress/preprocess/<ts>-applied.json`.
 - [ ] Never deleted `raw/chat/` captures or wrote outside `raw/` / `raw/.trash/`.
 - [ ] Appended one `wiki/log.md` preprocess entry.
 

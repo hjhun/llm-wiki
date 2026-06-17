@@ -10,13 +10,19 @@ import {
   normalizeRawScope,
 } from "./scope";
 import { leafMatchesScope } from "./state";
+import {
+  INGEST_PROGRESS_DASHBOARD_PATH,
+  INGEST_PROGRESS_DIR,
+  INGEST_PROGRESS_LOCK_PATH,
+  INGEST_PROGRESS_STATE_PATH,
+} from "./progress-paths";
 
 const execFileAsync = promisify(execFile);
 
-const PROGRESS_DIR = "wiki/.progress/ingest";
-const PROGRESS_STATE_PATH = `${PROGRESS_DIR}/.state.json`;
-const PROGRESS_DASHBOARD_PATH = `${PROGRESS_DIR}/DASHBOARD.md`;
-const PROGRESS_LOCK_PATH = `${PROGRESS_DIR}/.lock`;
+const PROGRESS_DIR = INGEST_PROGRESS_DIR;
+const PROGRESS_STATE_PATH = INGEST_PROGRESS_STATE_PATH;
+const PROGRESS_DASHBOARD_PATH = INGEST_PROGRESS_DASHBOARD_PATH;
+const PROGRESS_LOCK_PATH = INGEST_PROGRESS_LOCK_PATH;
 const WIKI_LOG_PATH = "wiki/log.md";
 
 type JsonRecord = Record<string, unknown>;

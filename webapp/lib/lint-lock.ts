@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { PROJECT_ROOT } from "./paths";
 
-export const LINT_LOCK_PATH = "wiki/.progress/lint/.lock";
+export const LINT_LOCK_PATH = "progress/lint/.lock";
 
 function absPath(): string {
   return path.join(PROJECT_ROOT, LINT_LOCK_PATH);

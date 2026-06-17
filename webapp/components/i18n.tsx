@@ -557,7 +557,7 @@ export const TEXT = {
       autoIngestInterval: "간격 (분)",
       autoIngestSkipIfBusy: "다른 ingest 실행 중이면 스킵",
       autoIngestSkipIfBusyDesc:
-        "켜면 wiki/.progress/ingest/.lock 이 있을 때 트리거를 건너뛰고 다음 이벤트/주기에 다시 시도합니다.",
+        "켜면 progress/ingest/.lock 이 있을 때 트리거를 건너뛰고 다음 이벤트/주기에 다시 시도합니다.",
       autoIngestStatus: "상태",
       autoIngestStatusIdle: "대기 중",
       autoIngestStatusRunning: "실행 중",
@@ -594,7 +594,7 @@ export const TEXT = {
         "켜면 자동으로 고칠 수 있는 항목(끊긴 wikilink, 메타데이터 등)은 즉시 수정하고, 의미적 검토가 필요한 항목만 보고서에 남깁니다.",
       autoLintSkipIfBusy: "ingest/lint 락이 있으면 스킵",
       autoLintSkipIfBusyDesc:
-        "켜면 wiki/.progress/ingest/.lock 또는 wiki/.progress/lint/.lock이 있을 때 트리거를 건너뜁니다.",
+        "켜면 progress/ingest/.lock 또는 progress/lint/.lock이 있을 때 트리거를 건너뜁니다.",
       autoLintStatus: "상태",
       autoLintCounterStatus: (value: number, threshold: number) =>
         `누적 ${value} / ${threshold}`,
@@ -1185,7 +1185,7 @@ export const TEXT = {
       autoIngestInterval: "Interval (minutes)",
       autoIngestSkipIfBusy: "Skip if another ingest is running",
       autoIngestSkipIfBusyDesc:
-        "When on, the trigger is skipped if wiki/.progress/ingest/.lock exists and retried on the next event/tick.",
+        "When on, the trigger is skipped if progress/ingest/.lock exists and retried on the next event/tick.",
       autoIngestStatus: "Status",
       autoIngestStatusIdle: "Idle",
       autoIngestStatusRunning: "Running",
@@ -1222,7 +1222,7 @@ export const TEXT = {
         "When on, auto-fixable issues (broken wikilinks, missing metadata, etc.) are fixed in place; the report only records items needing manual review.",
       autoLintSkipIfBusy: "Skip if ingest/lint lock present",
       autoLintSkipIfBusyDesc:
-        "Skip the trigger when wiki/.progress/ingest/.lock or wiki/.progress/lint/.lock exists.",
+        "Skip the trigger when progress/ingest/.lock or progress/lint/.lock exists.",
       autoLintStatus: "Status",
       autoLintCounterStatus: (value: number, threshold: number) =>
         `${value} / ${threshold}`,

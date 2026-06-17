@@ -19,10 +19,8 @@ import {
   buildProgressReference,
   clearStopFlag,
   decideIngestLoopFinalize,
-  decideLoopHalt,
   ingestActivitySignature,
   ingestMadeProgress,
-  ingestRoundAdvanced,
   ingestStateFileExists,
   maybeAutoRunGraphify,
   readActionableLeafPaths,
@@ -755,7 +753,6 @@ async function runLoopOperation(input: {
   const stagnationLimit = input.cfg.cli.ingestLoop.maxStagnantRounds;
   const timeoutMs = input.cfg.cli.timeouts["ingest-loop"] ?? undefined;
   const loopBefore = await readProgressSnapshot({ rawScope });
-  let prevSnap = loopBefore;
   let round = 0;
   let idleRounds = 0;
   // Cumulative count of worker-rounds that failed while the loop continued
@@ -777,30 +774,6 @@ async function runLoopOperation(input: {
     input.progressRef !== undefined
       ? input.progressRef
       : await buildProgressReference();
-  const decideCurrentState = async (iteration: number) => {
-    const summary = await readIngestStateSummary({ rawScope });
-    const snap = await readProgressSnapshot({ rawScope });
-    const decision =
-      summary && summary.total > 0
-        ? decideLoopHalt({
-            exitCode: lastExitCode,
-            summary,
-            mergeDone: snap.mergeDone,
-            mergePending: snap.mergePendingParents > 0,
-            idleRounds,
-            stopRequested: await stopFlagExists(input.sessionPath),
-            iteration,
-            maxIter: maxRounds,
-            stagnationLimit,
-            sourcePagesMissing: snap.sourcePagesMissing,
-            codeLeavesMissingOutputs: snap.codeLeavesMissingOutputs,
-            codeFilePagesMissing: snap.codeFilePagesMissing,
-            codeDirectoryIndexesMissing: snap.codeDirectoryIndexesMissing,
-            rawScope,
-          })
-        : ({ halt: false } as const);
-    return { summary, snap, decision };
-  };
 
   await appendMessage(
     input.sessionPath,
@@ -816,51 +789,6 @@ async function runLoopOperation(input: {
       haltKind = "stopped";
       haltReason = "사용자 Stop 요청";
       break;
-    }
-
-    if (round > 0) {
-      let current = await decideCurrentState(round);
-      if (!current.decision.halt && current.snap.mergePendingParents > 0) {
-        const drain = await tryDrainScopedMergeParent({
-          rawScope,
-          signal: input.signal,
-        });
-        if (drain.note) input.onChunk?.(`\n\n---\n\n${drain.note}`);
-        if (drain.drained) {
-          totalDurationMs += drain.durationMs;
-          allRuns.push({
-            worker: {
-              index: workers.length,
-              id: "backend-merge",
-              name: "backend-merge",
-              glyph: ringGlyph("m"),
-              cli: orchestrationCli,
-              role: "Scoped Merge Drain",
-              detail: "완료된 scoped merge parent를 deterministic backend 처리로 정리합니다.",
-              asciiTask: "drain merge",
-              accent: "#2563eb",
-            },
-            round,
-            result: {
-              stdout: drain.note ?? "",
-              stderr: "",
-              exitCode: 0,
-              durationMs: drain.durationMs,
-              stdoutTruncated: null,
-              stderrTruncated: null,
-              sessionId: null,
-            },
-            error: null,
-          });
-          current = await decideCurrentState(round);
-        }
-      }
-      if (current.decision.halt) {
-        haltKind = current.decision.kind;
-        haltReason = current.decision.reason;
-        prevSnap = current.snap;
-        break;
-      }
     }
 
     round += 1;
@@ -929,45 +857,41 @@ async function runLoopOperation(input: {
     }
 
     const summary = await readIngestStateSummary({ rawScope });
-    const snap = await readProgressSnapshot({ rawScope });
     const activityAfter = await ingestActivitySignature();
-    idleRounds = ingestRoundAdvanced({
-      before: prevSnap,
-      after: snap,
-      activityBefore,
-      activityAfter,
-    })
-      ? 0
-      : idleRounds + 1;
-    // Deterministic post-merge mini-lint on the merge-just-done transition.
-    // Parallel workers are more prone to the duplicate concept/entity titles,
-    // broken wikilinks, and orphan synthesis pages this catches than the
-    // single-agent path, yet only that path ran it before — close the gap.
-    if (snap.mergeDone && !prevSnap.mergeDone && lastExitCode === 0) {
-      const lint = await runPostMergeMiniLint({ signal: input.signal });
-      if (lint.note) input.onChunk?.(lint.note);
-    }
-    prevSnap = snap;
+    idleRounds = activityBefore !== activityAfter ? 0 : idleRounds + 1;
 
-    const decision = decideLoopHalt({
-      exitCode: lastExitCode,
-      summary,
-      mergeDone: snap.mergeDone,
-      mergePending: snap.mergePendingParents > 0,
-      idleRounds,
-      stopRequested: await stopFlagExists(input.sessionPath),
-      iteration: round,
-      maxIter: maxRounds,
-      stagnationLimit,
-      sourcePagesMissing: snap.sourcePagesMissing,
-      codeLeavesMissingOutputs: snap.codeLeavesMissingOutputs,
-      codeFilePagesMissing: snap.codeFilePagesMissing,
-      codeDirectoryIndexesMissing: snap.codeDirectoryIndexesMissing,
-      rawScope,
-    });
-    if (decision.halt) {
-      haltKind = decision.kind;
-      haltReason = decision.reason;
+    if (lastExitCode !== 0) {
+      haltKind = "error";
+      haltReason = `CLI exitCode=${lastExitCode}`;
+      break;
+    }
+    if (summary && summary.error > 0) {
+      haltKind = "error";
+      haltReason = `sub-chunk ${summary.error}건이 error 상태로 종료`;
+      break;
+    }
+    if (summary && summary.total === 0) {
+      haltKind = "empty";
+      haltReason = rawScope
+        ? `지정한 스코프 ${rawScope}에 ingest할 파일이 없습니다. raw/ 아래에 해당 경로(또는 raw/ 하위의 승인된 심볼릭 링크)가 존재하는지 확인하세요.`
+        : "raw/ 아래에 ingest할 파일이 없습니다.";
+      break;
+    }
+    if (
+      summary &&
+      summary.pending === 0 &&
+      summary.in_progress === 0 &&
+      summary.partial === 0
+    ) {
+      haltKind = "normal";
+      haltReason =
+        `source generation complete (${summary.done}/${summary.total}); ` +
+        "running final validation";
+      break;
+    }
+    if (idleRounds >= stagnationLimit) {
+      haltKind = "stalled";
+      haltReason = `연속 ${idleRounds}개 라운드에서 진행이 없어 중단`;
       break;
     }
   }
@@ -980,7 +904,163 @@ async function runLoopOperation(input: {
   }
   await clearStopFlag(input.sessionPath);
 
-  const loopAfter = await readProgressSnapshot({ rawScope });
+  let loopAfter = await readProgressSnapshot({ rawScope });
+  for (let i = 0; i < maxRounds && loopAfter.mergePendingParents > 0; i += 1) {
+    const drain = await tryDrainScopedMergeParent({
+      rawScope,
+      signal: input.signal,
+    });
+    if (drain.note) input.onChunk?.(`\n\n---\n\n${drain.note}`);
+    if (!drain.drained) break;
+    totalDurationMs += drain.durationMs;
+    allRuns.push({
+      worker: {
+        index: workers.length,
+        id: "backend-merge",
+        name: "backend-merge",
+        glyph: ringGlyph("m"),
+        cli: orchestrationCli,
+        role: "Scoped Merge Drain",
+        detail: "완료된 scoped merge parent를 deterministic backend 처리로 정리합니다.",
+        asciiTask: "drain merge",
+        accent: "#2563eb",
+      },
+      round,
+      result: {
+        stdout: drain.note ?? "",
+        stderr: "",
+        exitCode: 0,
+        durationMs: drain.durationMs,
+        stdoutTruncated: null,
+        stderrTruncated: null,
+        sessionId: null,
+      },
+      error: null,
+    });
+    loopAfter = await readProgressSnapshot({ rawScope });
+  }
+  if (haltKind === "normal" && ingestWorkComplete(loopAfter)) {
+    const summary = await readIngestStateSummary({ rawScope });
+    haltReason = loopAfter.mergeDone
+      ? `모든 leaf 완료 + merge pass done (${summary?.done ?? loopAfter.leavesDone}/${summary?.total ?? loopAfter.leavesTotal})`
+      : `모든 leaf 완료 · 남은 merge 작업 없음 (${summary?.done ?? loopAfter.leavesDone}/${summary?.total ?? loopAfter.leavesTotal})`;
+  }
+  for (
+    let attempt = 0;
+    haltKind === "normal" &&
+    !ingestWorkComplete(loopAfter) &&
+    attempt < input.cfg.cli.ingestLoop.maxRetryAttempts;
+    attempt += 1
+  ) {
+    round += 1;
+    const repairPrompt = buildLoopContinuationPrompt({
+      sessionPath: input.sessionPath,
+      iteration: round,
+      progressRef: await buildProgressReference(),
+      entityRegistryRef: null,
+      sourcePageStatusRef: null,
+      codeWikiStatusRef: null,
+      rawScope,
+    });
+    input.onChunk?.(
+      `\n\n---\n\n[final validation] remaining ingest issues detected; running repair round ${attempt + 1}/${input.cfg.cli.ingestLoop.maxRetryAttempts}.\n`,
+    );
+    const repairBatch = await runWorkerBatchWithRetries(
+      {
+        cfg: input.cfg,
+        kind: "ingest-loop",
+        workers,
+        basePrompt: repairPrompt,
+        round,
+        timeoutMs,
+        signal: input.signal,
+        onChunk: input.onChunk,
+        onAgentProgress: input.onAgentProgress,
+        rawScope,
+        sessions,
+      },
+      {
+        maxAttempts: input.cfg.cli.ingestLoop.maxRetryAttempts,
+        backoffs: input.cfg.cli.ingestLoop.retryBackoffMs,
+        sessionPath: input.sessionPath,
+        signal: input.signal,
+        onChunk: input.onChunk,
+      },
+    );
+    allRuns = allRuns.concat(repairBatch.runs);
+    totalDurationMs += repairBatch.durationMs;
+    lastExitCode = repairBatch.exitCode;
+    const failures = summarizeWorkerFailures(repairBatch.runs);
+    if (failures.failed > 0 && failures.failed < failures.total) {
+      failedWorkerRounds += failures.failed;
+      await appendMessage(
+        input.sessionPath,
+        "system",
+        `⚠️ final validation repair round ${attempt + 1}: 워커 ` +
+          `${failures.failed}/${failures.total}명 실패 ` +
+          `(${failures.failedNames.join(", ")}).`,
+      ).catch(() => undefined);
+    }
+    if (lastExitCode !== 0) {
+      haltKind = "error";
+      haltReason = `final validation repair CLI exitCode=${lastExitCode}`;
+      break;
+    }
+    loopAfter = await readProgressSnapshot({ rawScope });
+    for (
+      let i = 0;
+      i < maxRounds && loopAfter.mergePendingParents > 0;
+      i += 1
+    ) {
+      const drain = await tryDrainScopedMergeParent({
+        rawScope,
+        signal: input.signal,
+      });
+      if (drain.note) input.onChunk?.(`\n\n---\n\n${drain.note}`);
+      if (!drain.drained) break;
+      totalDurationMs += drain.durationMs;
+      allRuns.push({
+        worker: {
+          index: workers.length,
+          id: "backend-merge",
+          name: "backend-merge",
+          glyph: ringGlyph("m"),
+          cli: orchestrationCli,
+          role: "Scoped Merge Drain",
+          detail: "완료된 scoped merge parent를 deterministic backend 처리로 정리합니다.",
+          asciiTask: "drain merge",
+          accent: "#2563eb",
+        },
+        round,
+        result: {
+          stdout: drain.note ?? "",
+          stderr: "",
+          exitCode: 0,
+          durationMs: drain.durationMs,
+          stdoutTruncated: null,
+          stderrTruncated: null,
+          sessionId: null,
+        },
+        error: null,
+      });
+      loopAfter = await readProgressSnapshot({ rawScope });
+    }
+  }
+  if (haltKind === "normal" && !ingestWorkComplete(loopAfter)) {
+    haltKind = "stalled";
+    haltReason =
+      "final validation found remaining ingest issues after repair attempts " +
+      `(source leaves=${loopAfter.sourcePagesMissing}, ` +
+      `code leaf progress=${loopAfter.codeLeavesMissingOutputs}, ` +
+      `untracked code files=${loopAfter.codeFilePagesMissing}, ` +
+      `legacy code directories=${loopAfter.codeDirectoryIndexesMissing}, ` +
+      `merge parents=${loopAfter.mergePendingParents})`;
+  } else if (haltKind === "normal" && ingestWorkComplete(loopAfter)) {
+    const summary = await readIngestStateSummary({ rawScope });
+    haltReason = loopAfter.mergeDone
+      ? `모든 leaf 완료 + merge pass done (${summary?.done ?? loopAfter.leavesDone}/${summary?.total ?? loopAfter.leavesTotal})`
+      : `모든 leaf 완료 · 남은 merge 작업 없음 (${summary?.done ?? loopAfter.leavesDone}/${summary?.total ?? loopAfter.leavesTotal})`;
+  }
   const finalMaintenance = ingestFinalMaintenanceDecision(input.cfg, loopAfter);
   // Shared loop-exit finalization gating (see decideIngestLoopFinalize). The
   // multi-agent driver never runs graphify incrementally, so the whole block

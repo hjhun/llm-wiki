@@ -82,7 +82,7 @@ describe("buildLeafScopeReference", () => {
     const text = buildLeafScopeReference(null, false, false);
     expect(text).toContain("bootstrap worker");
     expect(text).toContain("leaf enumeration");
-    expect(text).toContain("No wiki/.progress/ingest/.state.json exists yet");
+    expect(text).toContain("No progress/ingest/.state.json exists yet");
     // Must not contain the state-exists wording.
     expect(text).not.toContain("already exists");
   });
@@ -96,12 +96,12 @@ describe("buildLeafScopeReference", () => {
     expect(text).toContain("exactly the current raw scope or a descendant");
     expect(text).toContain("Do not drain an ancestor parent such as raw/");
     // Must not falsely claim the state file is missing.
-    expect(text).not.toContain("No wiki/.progress/ingest/.state.json exists yet");
+    expect(text).not.toContain("No progress/ingest/.state.json exists yet");
   });
 
   it("defaults stateFileExists to false (from-scratch wording)", () => {
     const text = buildLeafScopeReference(null, false);
-    expect(text).toContain("No wiki/.progress/ingest/.state.json exists yet");
+    expect(text).toContain("No progress/ingest/.state.json exists yet");
   });
 
   it("null + has state → unrestricted instructions", () => {

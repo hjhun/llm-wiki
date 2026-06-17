@@ -29,7 +29,7 @@ Read material newly dropped by the user into `raw/` and perform the following.
 
 This skill **always follows the leaf-first + merge pass** principle, and is built
 to survive interruption (OOM, SIGTERM, manual cancel) because progress is
-externalized to `wiki/.progress/ingest/`.
+externalized to `progress/ingest/`.
 
 ## Triggers
 
@@ -39,10 +39,10 @@ externalized to `wiki/.progress/ingest/`.
 - `/ingest-loop <path|URL>` — same skill body, but driven by the webapp's
   backend loop in `/api/chat/send` (`kind="ingest-loop"`). The backend keeps
   spawning a fresh CLI invocation per sub-chunk until
-  `wiki/.progress/ingest/.state.json` reports no remaining `pending`,
+  `progress/ingest/.state.json` reports no remaining `pending`,
   `in_progress`, or `partial` sub-chunks and `merge_pass.status === "done"`,
   or until the user clicks "Stop loop" (which drops
-  `wiki/.progress/ingest/.stop`). Each iteration must still process exactly
+  `progress/ingest/.stop`). Each iteration must still process exactly
   one sub-chunk and exit — the skill never loops itself.
 - `/ingest` with no argument — incremental ingest for all of `raw/`.
 - Natural-language triggers: "summarize this material", "I added something new to raw", "ingest ...".
@@ -65,7 +65,7 @@ externalized to `wiki/.progress/ingest/`.
 - List of new/updated `wiki/**` Markdown files.
 - For code-heavy inputs, graph-ready source summaries and ingest progress; the Code Wiki graph itself is produced by the separate `wiki-graphify update` invocation under `wiki/graph/`.
 - Session Markdown with chat log: `sessions/<date>/<time>_ingest.md` (conversation only).
-- Externalized progress: `wiki/.progress/ingest/.state.json` + `wiki/.progress/ingest/leaves/<hash>.json` + human-readable `wiki/.progress/ingest/DASHBOARD.md`.
+- Externalized progress: `progress/ingest/.state.json` + `progress/ingest/leaves/<hash>.json` + human-readable `progress/ingest/DASHBOARD.md`.
 - `wiki/sources/index.md` refreshed during the merge pass when source pages changed.
 - Optional `wiki/maps/<topic>.md` associative trails for active research threads.
 - Ingest entries appended to `wiki/log.md`.
@@ -82,7 +82,7 @@ patterns made that worse:
   blew up working-set memory.
 
 The mitigation is structural, not a bigger machine. **One LLM invocation = one
-sub-chunk.** All resume information lives in `wiki/.progress/ingest/`, so the
+sub-chunk.** All resume information lives in `progress/ingest/`, so the
 next invocation reads the state file (small) instead of replaying the whole
 conversation. The host webapp also slims the prompt to the last N turns
 (`chat.contextTurns`) and appends a one-line reference to the dashboard.
@@ -136,7 +136,7 @@ Treat these as `ignore` unless explicitly requested: `.git/`, `node_modules/`,
 `dist/`, `build/`, `target/`, `.next/`, `.venv/`, `vendor/`, coverage output,
 lockfile-only leaves, generated bundles, and binary assets.
 
-Record the classification in `wiki/.progress/ingest/.state.json` per leaf:
+Record the classification in `progress/ingest/.state.json` per leaf:
 
 ```json
 {
@@ -164,18 +164,18 @@ Use the nearest project manifest or the first directory under `raw/` as the
      outside the webapp/CLI adapter, create one chat log session file
      `sessions/<YYYY-MM-DD>/<HHMMSS>_ingest_<subject>.md` (frontmatter only).
    - This file holds the conversation, not progress.
-2. Ensure `wiki/.progress/ingest/` exists. Create `leaves/`, `tmp/` subfolders if missing. The `leaves/` subfolder holds per-leaf lock files (one per leaf currently being processed); it is also reused by graphify state but the lock subset is owned by ingest workers.
+2. Ensure `progress/ingest/` exists. Create `leaves/`, `tmp/` subfolders if missing. The `leaves/` subfolder holds per-leaf lock files (one per leaf currently being processed); it is also reused by graphify state but the lock subset is owned by ingest workers.
 3. Honor any `ASSIGNED LEAF SCOPE` block in the prompt:
    - If the block lists specific leaves, restrict all sub-chunk work in this invocation to those leaves.
    - If the block is empty (no leaves assigned for this round), exit successfully without acquiring any lock, writing state, or enumerating leaves.
    - If the block is absent or marks the scope as Unrestricted, operate normally over the requested raw scope.
 4. Acquire locks with the two-tier protocol:
-   - **Global state mutex** `wiki/.progress/ingest/.lock` is a *short* critical-section mutex around enumeration and `.state.json` read-modify-write windows only. File contents: `{"pid": <int>, "started_at": <ISO8601>, "session": "<rel path>", "phase": "state-write" | "enumerate" | "merge-pass"}`. Write via `tmp/<rand>.lock` then rename — atomic on POSIX. Release immediately when the critical section ends; never hold it across LLM file reads or sub-chunk processing.
-   - **Per-leaf lock** `wiki/.progress/ingest/leaves/<sha1(leafPath)>.lock` guards sub-chunk processing for a single leaf. File contents: `{"pid": <int>, "started_at": <ISO8601>, "session": "<rel path>", "leaf_path": "<raw/.../>"}`. Acquire it before reading any file in the leaf, release it on exit (success, error, or no-op).
+   - **Global state mutex** `progress/ingest/.lock` is a *short* critical-section mutex around enumeration and `.state.json` read-modify-write windows only. File contents: `{"pid": <int>, "started_at": <ISO8601>, "session": "<rel path>", "phase": "state-write" | "enumerate" | "merge-pass"}`. Write via `tmp/<rand>.lock` then rename — atomic on POSIX. Release immediately when the critical section ends; never hold it across LLM file reads or sub-chunk processing.
+   - **Per-leaf lock** `progress/ingest/leaves/<sha1(leafPath)>.lock` guards sub-chunk processing for a single leaf. File contents: `{"pid": <int>, "started_at": <ISO8601>, "session": "<rel path>", "leaf_path": "<raw/.../>"}`. Acquire it before reading any file in the leaf, release it on exit (success, error, or no-op).
    - If a per-leaf lock is held by another live process, skip that leaf and try the next assigned leaf. Do **not** abort the whole invocation just because one leaf is busy — parallel workers expect contention here.
    - The merge pass (Step 3) holds the global lock with `phase: "merge-pass"` for its duration since it touches multiple leaves' parent pages.
    - Treat any lock whose `pid` is no longer alive as stale and replace it atomically.
-5. Read `wiki/.progress/ingest/.state.json` if it exists. If `version` mismatches the current SKILL version, run the migration in §State Migration before proceeding.
+5. Read `progress/ingest/.state.json` if it exists. If `version` mismatches the current SKILL version, run the migration in §State Migration before proceeding.
 
 ### Step 1 — Enumerate Leaves (idempotent)
 
@@ -184,7 +184,7 @@ Use the nearest project manifest or the first directory under `raw/` as the
    - `leafPath` = POSIX-style relative path (always ends with `/`), using the
      logical `raw/...` path even when the leaf is reached through a symlink.
    - `hash` = sha1 of `JSON.stringify(sortedFileList.map(f => [f.path, f.size, f.mtimeMs]))`, where `f.path` is the logical `raw/...` path and `size`/`mtimeMs` are read from the target file.
-3. Update `wiki/.progress/ingest/.state.json`:
+3. Update `progress/ingest/.state.json`:
    - New leaves are added with `status: "pending"`, an empty `sub_chunks` list, and `attempts: 0`.
    - Existing leaves whose `hash` changed have their status reset to `"pending"` and their `sub_chunks` cleared. (Re-ingest is intentional when content changed.)
    - Leaves that no longer exist on disk get `status: "stale"`; do not delete them — the user may have moved files temporarily.
@@ -252,7 +252,7 @@ For exactly **one** sub-chunk whose `status === "pending"`:
    - Notes: <files done>/<files total> in leaf
    ```
 7. Mark the sub-chunk `status: "done"`, set `ended_at`, and record `source_pages_written`. For code/mixed leaves, do not block completion on `wiki/code` page creation. If this was the leaf's last sub-chunk, set `leaves[<leafPath>].status = "done"` **and queue the merge pass**: add the leaf's immediate parent directory (a POSIX path ending in `/`; use `raw/` for a leaf sitting directly under `raw/`) to `merge_pass.pending_parents` unless it is already listed. This is the only place `pending_parents` is filled — Step 3 and the `/ingest-loop` backend driver both rely on it to know merge work is outstanding, so skipping it leaves the loop unable to detect completion. Persist `.state.json`.
-8. **Regenerate `wiki/.progress/ingest/DASHBOARD.md`** from `.state.json` (idempotent — overwrite, do not append).
+8. **Regenerate `progress/ingest/DASHBOARD.md`** from `.state.json` (idempotent — overwrite, do not append).
 9. **Release the per-leaf lock (and the global state mutex if still held) and return.** Do **not** start the next sub-chunk in the same call. The next `/ingest` invocation will read `.state.json` and pick up the next `pending` sub-chunk.
 
 If an exception is raised during this step:
@@ -309,7 +309,7 @@ stale graph artifacts.
 - **Crash mid-call**: on next `/ingest`, any sub-chunk left in `status: "in_progress"` is demoted to `"pending"` if its `started_at` is older than 60 seconds and no live pid holds the lock. Resume from it.
 - **Quota-style fatal errors**: stop the loop with a clear chat message. Do not silently retry — the next attempt would just reproduce the OOM.
 - **Force re-run a leaf**: user can ask "re-ingest raw/foo/". Set that leaf's `status` back to `"pending"` and clear its `sub_chunks`; the next call processes it.
-- **`wiki/.progress/ingest/.state.json` corrupted**: rename to `.state.json.bak.<ISO8601>`, re-enumerate from scratch. Warn the user in chat.
+- **`progress/ingest/.state.json` corrupted**: rename to `.state.json.bak.<ISO8601>`, re-enumerate from scratch. Warn the user in chat.
 
 ## Code Wiki Graph Conventions
 
@@ -361,12 +361,12 @@ targeted read-only `rg` search. Do not invent line numbers.
 - Do **not** group files beyond `chunking.maxFilesPerInvocation` in one call.
 - Do **not** process more than one sub-chunk per LLM invocation when `chunking.unitPerCall === "one_subchunk"`.
 - Do **not** keep two raw file bodies in working memory at the same time within a single call.
-- Do **not** re-inject the session markdown's entire history into your own reasoning context — read `wiki/.progress/ingest/.state.json` and the relevant per-leaf JSON instead.
+- Do **not** re-inject the session markdown's entire history into your own reasoning context — read `progress/ingest/.state.json` and the relevant per-leaf JSON instead.
 - Do **not** run the merge pass and a sub-chunk in the same invocation.
 
 ## State Files
 
-### `wiki/.progress/ingest/.state.json`
+### `progress/ingest/.state.json`
 
 ```json
 {
@@ -394,7 +394,7 @@ targeted read-only `rg` search. Do not invent line numbers.
       "last_error": null,
       "last_session": "sessions/2026-05-17/123456_ingest_karpathy.md",
       "attempts": 0,
-      "part_file": "wiki/.progress/ingest/leaves/<sha1>.json"
+      "part_file": "progress/ingest/leaves/<sha1>.json"
     }
   },
   "merge_pass": {
@@ -405,7 +405,7 @@ targeted read-only `rg` search. Do not invent line numbers.
 }
 ```
 
-### `wiki/.progress/ingest/leaves/<hash>.json`
+### `progress/ingest/leaves/<hash>.json`
 
 ```json
 {
@@ -433,7 +433,7 @@ Caps to apply on this file to prevent unbounded growth:
 - `entities_touched` / `concepts_touched`: dedupe, alphabetical.
 - `contradictions`: keep all (rare, important).
 
-### `wiki/.progress/ingest/DASHBOARD.md`
+### `progress/ingest/DASHBOARD.md`
 
 Regenerated from `.state.json` after every sub-chunk. Format:
 
