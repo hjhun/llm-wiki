@@ -62,6 +62,74 @@ export function ingestWorkComplete(snapshot: ProgressSnapshot): boolean {
   );
 }
 
+export function shouldUseDeterministicIngestLoopReply(input: {
+  haltKind: string;
+  workComplete: boolean;
+  failedWorkerRounds: number;
+  lastExitCode: number;
+}): boolean {
+  return (
+    input.haltKind === "normal" &&
+    input.workComplete &&
+    input.failedWorkerRounds === 0 &&
+    input.lastExitCode === 0
+  );
+}
+
+export function buildDeterministicIngestLoopReply(input: {
+  haltKind: string;
+  haltReason: string;
+  rounds: number;
+  rawScope: string | null;
+  snapshot: ProgressSnapshot;
+  runs: WorkerRun[];
+  totalDurationMs: number;
+}): string {
+  const scope = input.rawScope ?? "raw/";
+  const durationSeconds = Math.max(0, input.totalDurationMs / 1000);
+  const successfulRuns = input.runs
+    .filter((run) => run.error == null && (run.result?.exitCode ?? 0) === 0)
+    .slice(-5);
+  const failedRuns = input.runs
+    .filter((run) => run.error != null || (run.result?.exitCode ?? 0) !== 0)
+    .slice(-5);
+
+  const lines = [
+    `[/ingest-loop ${input.haltKind}] ${input.haltReason}`,
+    "",
+    `- Scope: \`${scope}\``,
+    `- Rounds: ${input.rounds}`,
+    `- Duration: ${durationSeconds.toFixed(1)}s`,
+    `- Leaves: ${input.snapshot.leavesDone}/${input.snapshot.leavesTotal}`,
+    `- Source pages: ${input.snapshot.sourcePagesWritten}/${input.snapshot.filesTotal}`,
+    `- Pending merge parents: ${input.snapshot.mergePendingParents}`,
+  ];
+
+  if (successfulRuns.length > 0) {
+    lines.push("", "Recent completed steps:");
+    for (const run of successfulRuns) {
+      const duration = run.result?.durationMs;
+      const durationText =
+        typeof duration === "number" && Number.isFinite(duration)
+          ? `, ${Math.max(0, duration / 1000).toFixed(1)}s`
+          : "";
+      lines.push(`- Round ${run.round}: ${run.worker.name}${durationText}`);
+    }
+  }
+
+  if (failedRuns.length > 0) {
+    lines.push("", "Recent failed steps:");
+    for (const run of failedRuns) {
+      const exitCode = run.result?.exitCode;
+      const reason =
+        run.error ?? (typeof exitCode === "number" ? `exitCode=${exitCode}` : "failed");
+      lines.push(`- Round ${run.round}: ${run.worker.name} (${reason})`);
+    }
+  }
+
+  return lines.join("\n");
+}
+
 export function missionProfiles(kind: OrchestratedKind): MissionProfile[] {
   if (kind === "lint") {
     return [

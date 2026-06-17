@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildDeterministicIngestLoopReply,
   buildWorkerDeltaPrompt,
   clampAgentCount,
   displayManagerName,
@@ -10,6 +11,7 @@ import {
   operationPolicy,
   rawScopeFromMessage,
   seedOffset,
+  shouldUseDeterministicIngestLoopReply,
   shouldResumeWorker,
   summarizeWorkerFailures,
 } from "./util";
@@ -122,6 +124,71 @@ describe("ingestWorkComplete", () => {
         snap({ leavesTotal: 3, leavesDone: 3, mergePendingParents: 1 }),
       ),
     ).toBe(false);
+  });
+});
+
+describe("shouldUseDeterministicIngestLoopReply", () => {
+  const base = {
+    haltKind: "normal",
+    workComplete: true,
+    failedWorkerRounds: 0,
+    lastExitCode: 0,
+  };
+
+  it("uses the deterministic reply only for a clean normal completion", () => {
+    expect(shouldUseDeterministicIngestLoopReply(base)).toBe(true);
+  });
+
+  it("falls back to the manager for non-normal or risky endings", () => {
+    expect(
+      shouldUseDeterministicIngestLoopReply({ ...base, haltKind: "timeout" }),
+    ).toBe(false);
+    expect(
+      shouldUseDeterministicIngestLoopReply({ ...base, workComplete: false }),
+    ).toBe(false);
+    expect(
+      shouldUseDeterministicIngestLoopReply({ ...base, failedWorkerRounds: 1 }),
+    ).toBe(false);
+    expect(
+      shouldUseDeterministicIngestLoopReply({ ...base, lastExitCode: 1 }),
+    ).toBe(false);
+  });
+});
+
+describe("buildDeterministicIngestLoopReply", () => {
+  const worker = (name: string): WorkerRun["worker"] =>
+    ({ id: name, name }) as unknown as WorkerRun["worker"];
+  const ok = (durationMs: number): RunResult =>
+    ({ exitCode: 0, durationMs }) as unknown as RunResult;
+
+  it("formats a compact successful ingest-loop summary", () => {
+    const out = buildDeterministicIngestLoopReply({
+      haltKind: "normal",
+      haltReason: "all ingest work complete",
+      rounds: 2,
+      rawScope: "raw/demo",
+      snapshot: snap({
+        leavesTotal: 1,
+        leavesDone: 1,
+        filesTotal: 1,
+        sourcePagesWritten: 1,
+      }),
+      runs: [
+        {
+          worker: worker("Ada Lovelace"),
+          round: 1,
+          result: ok(1250),
+          error: null,
+        },
+      ],
+      totalDurationMs: 2500,
+    });
+
+    expect(out).toContain("[/ingest-loop normal] all ingest work complete");
+    expect(out).toContain("Scope: `raw/demo`");
+    expect(out).toContain("Duration: 2.5s");
+    expect(out).toContain("Leaves: 1/1");
+    expect(out).toContain("Round 1: Ada Lovelace, 1.3s");
   });
 });
 

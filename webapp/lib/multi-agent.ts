@@ -49,12 +49,14 @@ import {
   displayManagerName,
   fitAsciiCell,
   buildWorkerDeltaPrompt,
+  buildDeterministicIngestLoopReply,
   ingestWorkComplete,
   isOrchestratedKind,
   missionProfiles,
   operationPolicy,
   rawScopeFromMessage,
   seedOffset,
+  shouldUseDeterministicIngestLoopReply,
   shouldResumeWorker,
   summarizeWorkerFailures,
 } from "./multi-agent/util";
@@ -63,6 +65,7 @@ import {
   partitionActionableLeaves,
   workerHasWorkThisRound,
 } from "./multi-agent/partition";
+import { tryDrainScopedMergeParent } from "./ingest/merge-drain";
 
 // Re-export the public surface that moved into ./multi-agent/* so existing
 // `@/lib/multi-agent` importers keep working unchanged.
@@ -774,6 +777,30 @@ async function runLoopOperation(input: {
     input.progressRef !== undefined
       ? input.progressRef
       : await buildProgressReference();
+  const decideCurrentState = async (iteration: number) => {
+    const summary = await readIngestStateSummary({ rawScope });
+    const snap = await readProgressSnapshot({ rawScope });
+    const decision =
+      summary && summary.total > 0
+        ? decideLoopHalt({
+            exitCode: lastExitCode,
+            summary,
+            mergeDone: snap.mergeDone,
+            mergePending: snap.mergePendingParents > 0,
+            idleRounds,
+            stopRequested: await stopFlagExists(input.sessionPath),
+            iteration,
+            maxIter: maxRounds,
+            stagnationLimit,
+            sourcePagesMissing: snap.sourcePagesMissing,
+            codeLeavesMissingOutputs: snap.codeLeavesMissingOutputs,
+            codeFilePagesMissing: snap.codeFilePagesMissing,
+            codeDirectoryIndexesMissing: snap.codeDirectoryIndexesMissing,
+            rawScope,
+          })
+        : ({ halt: false } as const);
+    return { summary, snap, decision };
+  };
 
   await appendMessage(
     input.sessionPath,
@@ -789,6 +816,51 @@ async function runLoopOperation(input: {
       haltKind = "stopped";
       haltReason = "사용자 Stop 요청";
       break;
+    }
+
+    if (round > 0) {
+      let current = await decideCurrentState(round);
+      if (!current.decision.halt && current.snap.mergePendingParents > 0) {
+        const drain = await tryDrainScopedMergeParent({
+          rawScope,
+          signal: input.signal,
+        });
+        if (drain.note) input.onChunk?.(`\n\n---\n\n${drain.note}`);
+        if (drain.drained) {
+          totalDurationMs += drain.durationMs;
+          allRuns.push({
+            worker: {
+              index: workers.length,
+              id: "backend-merge",
+              name: "backend-merge",
+              glyph: ringGlyph("m"),
+              cli: orchestrationCli,
+              role: "Scoped Merge Drain",
+              detail: "완료된 scoped merge parent를 deterministic backend 처리로 정리합니다.",
+              asciiTask: "drain merge",
+              accent: "#2563eb",
+            },
+            round,
+            result: {
+              stdout: drain.note ?? "",
+              stderr: "",
+              exitCode: 0,
+              durationMs: drain.durationMs,
+              stdoutTruncated: null,
+              stderrTruncated: null,
+              sessionId: null,
+            },
+            error: null,
+          });
+          current = await decideCurrentState(round);
+        }
+      }
+      if (current.decision.halt) {
+        haltKind = current.decision.kind;
+        haltReason = current.decision.reason;
+        prevSnap = current.snap;
+        break;
+      }
     }
 
     round += 1;
@@ -1023,6 +1095,34 @@ async function runLoopOperation(input: {
       durationMs: totalDurationMs,
       exitCode: lastExitCode,
     });
+  }
+
+  const completedWithoutManager = shouldUseDeterministicIngestLoopReply({
+    haltKind,
+    workComplete: ingestWorkComplete(loopAfter),
+    failedWorkerRounds,
+    lastExitCode,
+  });
+  if (completedWithoutManager) {
+    await appendMessage(
+      input.sessionPath,
+      "system",
+      `multi-agent /ingest-loop 종료: ${haltReason} (rounds=${round}, manager=skipped).`,
+    ).catch(() => undefined);
+    return {
+      finalReply: buildDeterministicIngestLoopReply({
+        haltKind,
+        haltReason,
+        rounds: round,
+        rawScope,
+        snapshot: loopAfter,
+        runs: allRuns.slice(-Math.max(workers.length * 3, 12)),
+        totalDurationMs,
+      }),
+      lastExitCode,
+      totalDurationMs,
+      assistantAgent: displayManagerName(input.cfg.agent.orchestration.managerName),
+    };
   }
 
   const manager = await runManager({
