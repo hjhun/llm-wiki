@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  mergeParentBlocksScopeCompletion,
   normalizePosixPath,
   normalizeRawScope,
   pathMatchesScope,
@@ -46,6 +47,40 @@ describe("pathMatchesScope", () => {
   it("rejects siblings and unrelated paths", () => {
     expect(pathMatchesScope("raw/books", "raw/articles")).toBe(false);
     expect(pathMatchesScope("raw/articles2", "raw/articles")).toBe(false);
+  });
+});
+
+describe("mergeParentBlocksScopeCompletion", () => {
+  it("matches every pending merge parent when no raw scope is set", () => {
+    expect(mergeParentBlocksScopeCompletion("raw", null)).toBe(true);
+    expect(mergeParentBlocksScopeCompletion("raw/articles", "")).toBe(true);
+  });
+
+  it("counts exact and descendant parents for scoped completion", () => {
+    expect(
+      mergeParentBlocksScopeCompletion("raw/articles", "raw/articles"),
+    ).toBe(true);
+    expect(
+      mergeParentBlocksScopeCompletion(
+        "raw/articles/chapter-1",
+        "raw/articles",
+      ),
+    ).toBe(true);
+  });
+
+  it("does not let ancestor parents globally block a narrower scope", () => {
+    expect(
+      mergeParentBlocksScopeCompletion("raw", "raw/clio-selftest"),
+    ).toBe(false);
+    expect(
+      mergeParentBlocksScopeCompletion("raw/articles", "raw/articles/deep"),
+    ).toBe(false);
+  });
+
+  it("rejects sibling parents", () => {
+    expect(
+      mergeParentBlocksScopeCompletion("raw/books", "raw/articles"),
+    ).toBe(false);
   });
 });
 

@@ -34,6 +34,16 @@ export function pathMatchesScope(
   );
 }
 
+export function mergeParentBlocksScopeCompletion(
+  parent: string,
+  rawScope?: string | null,
+): boolean {
+  const scope = normalizeRawScope(rawScope);
+  if (!scope) return true;
+  const normalized = normalizePosixPath(parent);
+  return normalized === scope || normalized.startsWith(`${scope}/`);
+}
+
 export function pathSegments(relPath: string): string[] {
   return relPath.replace(/\\/g, "/").split("/").filter(Boolean);
 }

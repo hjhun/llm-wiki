@@ -86,7 +86,9 @@ export function buildLeafScopeReference(
       return [
         "===== ASSIGNED LEAF SCOPE =====",
         "A wiki/.progress/ingest/.state.json already exists but lists no actionable leaf for the current scope.",
-        "You are the enumeration worker for this round: re-run wiki-ingest Step 1 over the requested raw scope to pick up newly added or changed leaves, updating .state.json idempotently (do not reset leaves already marked done/stale). If enumeration still yields no pending sub-chunk, exit successfully without writing pages.",
+        "You are the enumeration worker for this round: re-run wiki-ingest Step 1 over the requested raw scope to pick up newly added or changed leaves, updating .state.json idempotently (do not reset leaves already marked done/stale).",
+        "If enumeration still yields no pending sub-chunk, check merge_pass.pending_parents and process at most one merge-pass parent that is exactly the current raw scope or a descendant of it. Do not drain an ancestor parent such as raw/ for a narrower scoped run.",
+        "If there is no scoped merge-pass parent either, exit successfully without writing pages.",
         "Otherwise process at most one pending sub-chunk. Hold the global wiki/.progress/ingest/.lock only for the short enumeration/state-write critical section.",
       ].join("\n");
     }

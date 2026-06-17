@@ -92,6 +92,9 @@ describe("buildLeafScopeReference", () => {
     expect(text).toContain("already exists but lists no actionable leaf");
     expect(text).toContain("enumeration worker");
     expect(text).toContain("idempotently");
+    expect(text).toContain("process at most one merge-pass parent");
+    expect(text).toContain("exactly the current raw scope or a descendant");
+    expect(text).toContain("Do not drain an ancestor parent such as raw/");
     // Must not falsely claim the state file is missing.
     expect(text).not.toContain("No wiki/.progress/ingest/.state.json exists yet");
   });
