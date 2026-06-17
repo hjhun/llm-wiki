@@ -46,7 +46,6 @@ import { runPostMergeMiniLint } from "./post-merge-lint";
 import {
   clampAgentCount,
   displayManagerName,
-  fitAsciiCell,
   buildWorkerDeltaPrompt,
   buildDeterministicIngestLoopReply,
   ingestWorkComplete,
@@ -89,12 +88,9 @@ function cancellationResult(input: {
   };
 }
 
-// CLIO's mascot is a set of slightly-open concentric rings (see
-// `RingMascot` in components/agent-panel/AgentMascot.tsx). Each agent card
-// renders that mascot in ASCII via `ringGlyph`: an outer and inner ring drawn
-// around a per-persona core mark, with a deliberate gap in the top arc so the
-// loop reads as a hand-drawn open ring rather than a closed circle. Personas
-// only carry the single core character that distinguishes them.
+// Personas keep a small stable core mark so worker identities remain
+// deterministic across runs. The chat progress UI intentionally shows text
+// status only; it no longer renders these marks as ASCII mission cards.
 const AGENT_PERSONAS = [
   { name: "Nikola Tesla", core: "o" },
   { name: "Isaac Newton", core: "-" },
@@ -137,25 +133,6 @@ const AGENT_ACCENTS = [
   "#8b5cf6",
 ];
 
-function buildAsciiBrief(worker: Worker): string {
-  const name = fitAsciiCell(worker.name, 22);
-  const role = fitAsciiCell(worker.role, 22);
-  const task = fitAsciiCell(worker.asciiTask, 22);
-  // Inner width is the 22-char cell plus the single padding space on each side.
-  const border = "─".repeat(24);
-  const handoff =
-    worker.id === "manager" ? "   -> Close run" : "   -> Coordinator";
-  return [
-    `╭${border}╮`,
-    `│ ${name} │`,
-    `│ ${role} │`,
-    `│ ${task} │`,
-    `╰${border}╯`,
-    ...worker.glyph,
-    handoff,
-  ].join("\n");
-}
-
 function buildWorkers(
   cfg: Config,
   managerCli: CliName,
@@ -183,6 +160,36 @@ function buildWorkers(
   });
 }
 
+function compactAssignedLeaves(assignedLeaves: string[] | null): string {
+  if (assignedLeaves === null) return "현재 scope";
+  if (assignedLeaves.length === 0) return "배정된 leaf 없음";
+  const shown = assignedLeaves.slice(0, 2).join(", ");
+  const remaining = assignedLeaves.length - 2;
+  return remaining > 0 ? `${shown} 외 ${remaining}개` : shown;
+}
+
+function currentAssignmentDetail(
+  assignedLeaves: string[] | null,
+  phase: "assigned" | "running" | "done",
+): string {
+  if (assignedLeaves === null) {
+    if (phase === "assigned") {
+      return "현재 scope의 ingest 단위 확인 대기 중입니다.";
+    }
+    if (phase === "running") {
+      return "현재 scope의 ingest 단위를 확인하고 처리 중입니다.";
+    }
+    return "현재 scope의 ingest 단위 처리를 완료했습니다.";
+  }
+  if (assignedLeaves.length === 0) {
+    return "이번 라운드에 배정된 leaf가 없습니다.";
+  }
+  const target = compactAssignedLeaves(assignedLeaves);
+  if (phase === "assigned") return `이번 라운드 배정 leaf: ${target}`;
+  if (phase === "running") return `배정된 leaf 처리 중: ${target}`;
+  return `배정된 leaf 처리 완료: ${target}`;
+}
+
 function emitAgentProgress(
   emit: ((event: AgentProgressEvent) => void) | undefined,
   worker: Worker,
@@ -200,7 +207,6 @@ function emitAgentProgress(
     name: worker.name,
     role: worker.role,
     detail: input.detail ?? worker.detail,
-    ascii: buildAsciiBrief(worker),
     status: input.status,
     cli: worker.cli,
     round: input.round,
@@ -320,12 +326,12 @@ async function runWorkerBatch(input: {
     });
   const activeWorkers: Worker[] = [];
   for (const worker of input.workers) {
-    if (!workerHasWorkThisRound(assignmentFor(worker))) {
+    const assignedLeaves = assignmentFor(worker);
+    if (!workerHasWorkThisRound(assignedLeaves)) {
       emitAgentProgress(input.onAgentProgress, worker, {
         status: "done",
         round: input.round,
-        detail:
-          "이번 라운드에 배정된 leaf가 없어 idle 처리했습니다 (CLI 미실행).",
+        detail: "이번 라운드에 배정된 leaf가 없습니다 (CLI 미실행).",
         durationMs: 0,
       });
       continue;
@@ -333,6 +339,7 @@ async function runWorkerBatch(input: {
     emitAgentProgress(input.onAgentProgress, worker, {
       status: "assigned",
       round: input.round,
+      detail: currentAssignmentDetail(assignedLeaves, "assigned"),
     });
     activeWorkers.push(worker);
   }
@@ -350,9 +357,10 @@ async function runWorkerBatch(input: {
     : null;
   return Promise.all(
     activeWorkers.map(async (worker): Promise<WorkerRun> => {
+      const assignedLeaves = assignmentFor(worker);
       const leafScopeRef = partition
         ? buildLeafScopeReference(
-            assignmentFor(worker),
+            assignedLeaves,
             partition.hasState,
             stateFileExists,
           )
@@ -396,6 +404,7 @@ async function runWorkerBatch(input: {
       emitAgentProgress(input.onAgentProgress, worker, {
         status: "running",
         round: input.round,
+        detail: currentAssignmentDetail(assignedLeaves, "running"),
       });
       try {
         const result = await runCli(worker.cli, prompt, {
@@ -415,7 +424,7 @@ async function runWorkerBatch(input: {
           round: input.round,
           detail:
             result.exitCode === 0
-              ? `${worker.role} mission complete. Handoff queued for Coordinator review.`
+              ? currentAssignmentDetail(assignedLeaves, "done")
               : `${worker.role} 임무가 exitCode=${result.exitCode}로 종료되었습니다.`,
           durationMs: result.durationMs,
         });
@@ -554,7 +563,7 @@ async function runManager(input: {
     glyph: ringGlyph("c"),
     cli: input.agent,
     role: "Supervisor / Coordinator",
-    detail: "Worker handoffs를 받아 최종 판단을 내리고 실행을 종료합니다.",
+    detail: "worker 결과를 모아 최종 응답을 정리 중입니다.",
     asciiTask: "receive & close",
     accent: "#64748b",
   };
@@ -565,7 +574,6 @@ async function runManager(input: {
     name: managerName,
     role: managerWorker.role,
     detail: managerWorker.detail,
-    ascii: buildAsciiBrief(managerWorker),
     status: "consolidating",
     cli: input.agent,
     round: Math.max(...input.runs.map((run) => run.round), 1),
@@ -598,9 +606,8 @@ async function runManager(input: {
     role: managerWorker.role,
     detail:
       result.exitCode === 0
-        ? "Coordinator received every handoff, delivered the final response, and closed the run."
-        : `Coordinator pass가 exitCode=${result.exitCode}로 종료되었습니다.`,
-    ascii: buildAsciiBrief(managerWorker),
+        ? "최종 응답 정리를 완료했습니다."
+        : `최종 정리 단계가 exitCode=${result.exitCode}로 종료되었습니다.`,
     status: result.exitCode === 0 ? "done" : "error",
     cli: input.agent,
     round: Math.max(...input.runs.map((run) => run.round), 1),

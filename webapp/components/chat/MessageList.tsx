@@ -280,11 +280,6 @@ export default function MessageList({
                     <div className="mt-2 line-clamp-2 text-[11.5px] leading-snug text-ink-dim">
                       {agent.detail}
                     </div>
-                    {agent.ascii ? (
-                      <pre className="chat-agent-ascii mt-2 overflow-hidden rounded border px-2 py-1.5 font-mono text-[10.5px] leading-[1.08]">
-                        {agent.ascii}
-                      </pre>
-                    ) : null}
                     <div className="mt-2 flex items-center justify-between gap-2 font-mono text-[10px] uppercase tracking-widest text-ink-faint">
                       <span>{agent.cli}</span>
                       <span>
