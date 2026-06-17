@@ -47,16 +47,6 @@ function statusTone(status: AutoLintRuntime["status"]) {
   }
 }
 
-function formatTime(iso: string | null): string {
-  if (!iso) return "—";
-  try {
-    const d = new Date(iso);
-    return d.toLocaleString();
-  } catch {
-    return iso;
-  }
-}
-
 function pad2(n: number): string {
   return n < 10 ? `0${n}` : `${n}`;
 }
@@ -68,7 +58,7 @@ export default function AutoLintPanel({
   draft: SettingsConfig["autoLint"];
   onChange: (next: SettingsConfig["autoLint"]) => void;
 }) {
-  const { t } = useLanguage();
+  const { t, formatDateTime } = useLanguage();
   const [runtime, setRuntime] = useState<AutoLintRuntime | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -370,7 +360,7 @@ export default function AutoLintPanel({
               <dt className="text-ink-faint">{t.settings.autoLintLastRun}</dt>
               <dd className="font-mono text-[11px]">
                 {runtime?.lastRunAt
-                  ? `${formatTime(runtime.lastRunAt)} · ${runtime.lastResult?.halt ?? "?"}`
+                  ? `${formatDateTime(runtime.lastRunAt)} · ${runtime.lastResult?.halt ?? "?"}`
                   : t.settings.autoLintNoLastRun}
               </dd>
             </div>
@@ -378,7 +368,7 @@ export default function AutoLintPanel({
               <dt className="text-ink-faint">{t.settings.autoLintNextRun}</dt>
               <dd className="font-mono text-[11px]">
                 {runtime?.cronEnabled && runtime?.nextRunAt
-                  ? formatTime(runtime.nextRunAt)
+                  ? formatDateTime(runtime.nextRunAt)
                   : t.settings.autoLintNoNextRun}
               </dd>
             </div>

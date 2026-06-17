@@ -1,6 +1,12 @@
 "use client";
 
 import { BRAND_NAME } from "@/lib/branding";
+import {
+  formatDateTime,
+  formatNumber,
+  normalizeLanguage,
+  type Language,
+} from "@/lib/i18n";
 
 import {
   createContext,
@@ -11,7 +17,7 @@ import {
   useState,
 } from "react";
 
-export type Language = "ko" | "en";
+export type { Language } from "@/lib/i18n";
 
 export const TEXT = {
   ko: {
@@ -38,6 +44,80 @@ export const TEXT = {
       paletteLanguageAction: "언어 전환",
       paletteNoResults: "결과 없음",
       paletteWikiResults: "위키 검색",
+    },
+    publicClio: {
+      disabledTitle: "공개 query가 꺼져 있습니다",
+      disabledDescription:
+        "관리자가 Settings > Access에서 비밀번호 없는 /clio 공유를 켜면 이 주소에서 query-only 채팅을 사용할 수 있습니다.",
+      accessTitle: "접근 패스프레이즈가 필요합니다",
+      accessDescription:
+        "이 공개 채팅은 관리자가 설정한 패스프레이즈로 보호됩니다. 패스프레이즈를 입력하세요.",
+      passphrasePlaceholder: "패스프레이즈",
+      passphraseIncorrect: "패스프레이즈가 올바르지 않습니다. 다시 시도해주세요.",
+      continue: "계속",
+      queryOnly: "query 전용",
+      newLocalChat: "새 로컬 채팅",
+      clearCurrentChat: "현재 채팅 비우기",
+      askAboutWiki: "wiki에 대해 물어보세요.",
+      newChat: "새 채팅",
+      selectAll: "전체 선택",
+      clearSelection: "선택 해제",
+      deleteSelected: "선택 삭제",
+      deleteCount: (count: number) => `삭제 ${count || ""}`.trim(),
+      deleteSelectedConfirm: (count: number) =>
+        `선택한 대화 ${count.toLocaleString()}개를 삭제할까요? 이 작업은 되돌릴 수 없습니다.`,
+      noLocalChats: "아직 로컬 채팅이 없습니다.",
+      localHistoryHint: "로컬 브라우저 기록이 여기에 표시됩니다.",
+      selectConversation: (title: string) => `${title} 선택`,
+      messageCount: (count: number) => `${count.toLocaleString()}개 메시지`,
+      deleteSelectedChats: "선택한 채팅 삭제",
+      conversationTitleFallback: "CLIO Query",
+      you: "나",
+      clio: "clio",
+      system: "system",
+    },
+    automationSchedule: {
+      kinds: {
+        minutes: "분마다",
+        hourly: "시간마다",
+        daily: "매일",
+        weekly: "매주",
+        monthly: "매월",
+        advanced: "고급(cron)",
+      },
+      weekdaysShort: ["일", "월", "화", "수", "목", "금", "토"],
+      every: "매",
+      minutesSuffix: "분마다",
+      hoursSuffix: "시간마다,",
+      minuteAtSuffix: "분에",
+      dailyPrefix: "매일",
+      atSuffix: "에",
+      timeLabel: "시각",
+      monthlyPrefix: "매월",
+      daySuffix: "일",
+      summary: "요약",
+      next: "다음",
+      valid: "유효",
+      custom: (cron: string) => `사용자 지정 (${cron})`,
+      everyMinutes: (value: number | undefined) => `${value}분마다`,
+      hourlyAt: (minute: number | undefined) =>
+        `매시간 ${String(minute ?? 0).padStart(2, "0")}분`,
+      everyHoursAt: (hours: number | undefined, minute: number | undefined) =>
+        `${hours}시간마다 ${String(minute ?? 0).padStart(2, "0")}분`,
+      dailyAt: (time: string) => `매일 ${time}`,
+      weeklyAt: (days: string, time: string) => `매주 ${days} ${time}`,
+      monthlyAt: (day: number | undefined, time: string) =>
+        `매월 ${day}일 ${time}`,
+      errors: {
+        minuteRange: "분 간격은 1–59 사이여야 합니다",
+        unevenMinute: (value: number) =>
+          `${value}은 60의 약수가 아니라 매시 경계에서 간격이 일정하지 않습니다`,
+        hourRange: "시간 간격은 1·2·3·4·6·8·12 중 하나여야 합니다",
+        minuteValueRange: "분은 0–59 사이여야 합니다",
+        invalidTime: "시각이 올바르지 않습니다",
+        weekdayRequired: "요일을 최소 1개 선택하세요",
+        dayOfMonthRange: "일자는 1–28 사이여야 합니다",
+      },
     },
     onboarding: {
       title: "시작하기",
@@ -664,6 +744,80 @@ export const TEXT = {
       paletteNoResults: "No results",
       paletteWikiResults: "Wiki search",
     },
+    publicClio: {
+      disabledTitle: "Public query is disabled",
+      disabledDescription:
+        "An administrator can enable passwordless /clio sharing from Settings > Access to make this query-only chat available.",
+      accessTitle: "Access passphrase required",
+      accessDescription:
+        "This shared chat is protected by an administrator passphrase. Enter it to continue.",
+      passphrasePlaceholder: "Passphrase",
+      passphraseIncorrect: "Incorrect passphrase. Please try again.",
+      continue: "Continue",
+      queryOnly: "query only",
+      newLocalChat: "New local chat",
+      clearCurrentChat: "Clear current chat",
+      askAboutWiki: "Ask about the wiki.",
+      newChat: "New Chat",
+      selectAll: "Select all",
+      clearSelection: "Clear",
+      deleteSelected: "Delete selected",
+      deleteCount: (count: number) => `Delete ${count || ""}`.trim(),
+      deleteSelectedConfirm: (count: number) =>
+        `Delete ${count.toLocaleString()} selected conversation(s)? This cannot be undone.`,
+      noLocalChats: "No local chats yet.",
+      localHistoryHint: "Local browser history will appear here.",
+      selectConversation: (title: string) => `Select ${title}`,
+      messageCount: (count: number) => `${count.toLocaleString()} messages`,
+      deleteSelectedChats: "Delete selected chats",
+      conversationTitleFallback: "CLIO Query",
+      you: "you",
+      clio: "clio",
+      system: "system",
+    },
+    automationSchedule: {
+      kinds: {
+        minutes: "Every few minutes",
+        hourly: "Hourly",
+        daily: "Daily",
+        weekly: "Weekly",
+        monthly: "Monthly",
+        advanced: "Advanced (cron)",
+      },
+      weekdaysShort: ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"],
+      every: "Every",
+      minutesSuffix: "minutes",
+      hoursSuffix: "hours,",
+      minuteAtSuffix: "minutes past",
+      dailyPrefix: "Daily at",
+      atSuffix: "",
+      timeLabel: "Time",
+      monthlyPrefix: "Monthly on day",
+      daySuffix: "",
+      summary: "Summary",
+      next: "Next",
+      valid: "valid",
+      custom: (cron: string) => `Custom (${cron})`,
+      everyMinutes: (value: number | undefined) => `Every ${value} minutes`,
+      hourlyAt: (minute: number | undefined) =>
+        `Every hour at :${String(minute ?? 0).padStart(2, "0")}`,
+      everyHoursAt: (hours: number | undefined, minute: number | undefined) =>
+        `Every ${hours} hours at :${String(minute ?? 0).padStart(2, "0")}`,
+      dailyAt: (time: string) => `Daily at ${time}`,
+      weeklyAt: (days: string, time: string) => `Weekly on ${days} at ${time}`,
+      monthlyAt: (day: number | undefined, time: string) =>
+        `Monthly on day ${day} at ${time}`,
+      errors: {
+        minuteRange: "Minute interval must be between 1 and 59.",
+        unevenMinute: (value: number) =>
+          `${value} does not divide evenly into 60, so spacing resets at hour boundaries.`,
+        hourRange: "Hour interval must be one of 1, 2, 3, 4, 6, 8, or 12.",
+        minuteValueRange: "Minute must be between 0 and 59.",
+        invalidTime: "Time is invalid.",
+        weekdayRequired: "Select at least one weekday.",
+        dayOfMonthRange: "Day must be between 1 and 28.",
+      },
+    },
     onboarding: {
       title: "Getting started",
       next: "Next",
@@ -1272,11 +1426,50 @@ export const TEXT = {
 
 type TextBundle = (typeof TEXT)[Language];
 
+type StringLeafPath<T> = T extends string
+  ? ""
+  : T extends (...args: never[]) => unknown
+    ? never
+    : T extends readonly unknown[]
+      ? never
+      : T extends object
+        ? {
+            [K in Extract<keyof T, string>]: T[K] extends string
+              ? K
+              : StringLeafPath<T[K]> extends infer P
+                ? P extends string
+                  ? P extends ""
+                    ? K
+                    : `${K}.${P}`
+                  : never
+                : never;
+          }[Extract<keyof T, string>]
+        : never;
+
+export type TranslationKey = StringLeafPath<TextBundle>;
+
+function getPathValue(source: unknown, key: string): unknown {
+  return key.split(".").reduce<unknown>((current, part) => {
+    if (!current || typeof current !== "object") return undefined;
+    return (current as Record<string, unknown>)[part];
+  }, source);
+}
+
+export function translate(language: Language, key: TranslationKey): string {
+  const value = getPathValue(TEXT[language], key);
+  if (typeof value === "string") return value;
+  const fallback = getPathValue(TEXT.ko, key);
+  return typeof fallback === "string" ? fallback : key;
+}
+
 type LanguageContextValue = {
   language: Language;
   setLanguage: (language: Language) => Promise<void>;
   savingLanguage: boolean;
   t: TextBundle;
+  tr: (key: TranslationKey) => string;
+  formatDateTime: (value: string | number | Date | null | undefined) => string;
+  formatNumber: (value: number) => string;
 };
 
 const LanguageContext = createContext<LanguageContextValue | null>(null);
@@ -1288,7 +1481,9 @@ export function LanguageProvider({
   initialLanguage: Language;
   children: React.ReactNode;
 }) {
-  const [language, setLanguageState] = useState<Language>(initialLanguage);
+  const [language, setLanguageState] = useState<Language>(
+    normalizeLanguage(initialLanguage),
+  );
   const [savingLanguage, setSavingLanguage] = useState(false);
 
   useEffect(() => {
@@ -1297,15 +1492,16 @@ export function LanguageProvider({
 
   const setLanguage = useCallback(
     async (nextLanguage: Language) => {
-      if (nextLanguage === language) return;
+      const normalized = normalizeLanguage(nextLanguage);
+      if (normalized === language) return;
       const previous = language;
-      setLanguageState(nextLanguage);
+      setLanguageState(normalized);
       setSavingLanguage(true);
       try {
         const res = await fetch("/api/settings/language", {
           method: "PUT",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ language: nextLanguage }),
+          body: JSON.stringify({ language: normalized }),
         });
         if (!res.ok) throw new Error(`language save failed (${res.status})`);
       } catch (err) {
@@ -1318,14 +1514,40 @@ export function LanguageProvider({
     [language],
   );
 
+  const tr = useCallback(
+    (key: TranslationKey) => translate(language, key),
+    [language],
+  );
+
+  const formatDateTimeForLanguage = useCallback(
+    (value: string | number | Date | null | undefined) =>
+      formatDateTime(value, language),
+    [language],
+  );
+
+  const formatNumberForLanguage = useCallback(
+    (value: number) => formatNumber(value, language),
+    [language],
+  );
+
   const value = useMemo(
     () => ({
       language,
       setLanguage,
       savingLanguage,
       t: TEXT[language],
+      tr,
+      formatDateTime: formatDateTimeForLanguage,
+      formatNumber: formatNumberForLanguage,
     }),
-    [language, savingLanguage, setLanguage],
+    [
+      language,
+      savingLanguage,
+      setLanguage,
+      tr,
+      formatDateTimeForLanguage,
+      formatNumberForLanguage,
+    ],
   );
 
   return (

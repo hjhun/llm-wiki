@@ -61,7 +61,7 @@ export default function DirectoryView({
   onContextAction: (action: ExplorerAction, target: Entry | null) => void;
   onDeleteEntries: (entries: Entry[]) => void;
 }) {
-  const { t } = useLanguage();
+  const { t, formatDateTime } = useLanguage();
   const currentPath = entry?.kind === "dir" ? entry.path : "";
   const [entries, setEntries] = useState<Entry[]>([]);
   const [loading, setLoading] = useState(false);
@@ -339,7 +339,7 @@ export default function DirectoryView({
                     {item.kind === "dir" ? "-" : formatBytes(item.size)}
                   </td>
                   <td className="truncate px-3 py-2 font-mono text-[11px] text-ink-faint">
-                    {new Date(item.mtime).toLocaleString()}
+                    {formatDateTime(item.mtime)}
                   </td>
                   <td className="px-2 py-1.5">
                     <div className="flex justify-end gap-1 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">

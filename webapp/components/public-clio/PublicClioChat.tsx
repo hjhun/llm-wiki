@@ -177,8 +177,7 @@ export default function PublicClioChat({
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [accessInput, setAccessInput] = useState("");
   const [accessError, setAccessError] = useState<string | null>(null);
-  const { language } = useLanguage();
-  const isKorean = language === "ko";
+  const { t } = useLanguage();
   const taRef = useRef<HTMLTextAreaElement | null>(null);
   const endRef = useRef<HTMLDivElement | null>(null);
   const activeConversation =
@@ -359,9 +358,7 @@ export default function PublicClioChat({
 
   function clearActive() {
     if (!activeConversation || pending) return;
-    const ok = window.confirm(
-      isKorean ? "현재 대화 내용을 비울까요?" : "Clear the current conversation?",
-    );
+    const ok = window.confirm(t.publicClio.clearCurrentChat);
     if (!ok) return;
     setConversations((current) =>
       sortConversations(
@@ -396,11 +393,7 @@ export default function PublicClioChat({
 
   function deleteSelected() {
     if (selectedCount === 0 || pending) return;
-    const ok = window.confirm(
-      isKorean
-        ? `선택한 대화 ${selectedCount}개를 삭제할까요? 이 작업은 되돌릴 수 없습니다.`
-        : `Delete ${selectedCount} selected conversation(s)? This cannot be undone.`,
-    );
+    const ok = window.confirm(t.publicClio.deleteSelectedConfirm(selectedCount));
     if (!ok) return;
     const ids = new Set(selectedIds);
     const nextConversations = conversations.filter(
@@ -427,34 +420,30 @@ export default function PublicClioChat({
           <div className="flex items-center gap-2 text-ink">
             <LockKeyhole className="h-4 w-4" />
             <h1 className="text-lg font-semibold">
-              {isKorean ? "접근 패스프레이즈가 필요합니다" : "Access passphrase required"}
+              {t.publicClio.accessTitle}
             </h1>
           </div>
           {appSubtitle ? (
             <div className="mt-1 text-xs text-ink-dim">{appSubtitle}</div>
           ) : null}
           <p className="mt-2 text-sm leading-relaxed text-ink-dim">
-            {isKorean
-              ? "이 공개 채팅은 관리자가 설정한 패스프레이즈로 보호됩니다. 패스프레이즈를 입력하세요."
-              : "This shared chat is protected by an administrator passphrase. Enter it to continue."}
+            {t.publicClio.accessDescription}
           </p>
           <input
             type="password"
             autoFocus
             value={accessInput}
             onChange={(e) => setAccessInput(e.target.value)}
-            placeholder={isKorean ? "패스프레이즈" : "Passphrase"}
+            placeholder={t.publicClio.passphrasePlaceholder}
             className="mt-4 w-full rounded border border-line bg-bg px-3 py-2 text-sm text-ink outline-none focus:border-accent"
           />
           {accessError ? (
             <p className="mt-2 text-xs text-danger">
-              {isKorean
-                ? "패스프레이즈가 올바르지 않습니다. 다시 시도해주세요."
-                : "Incorrect passphrase. Please try again."}
+              {t.publicClio.passphraseIncorrect}
             </p>
           ) : null}
           <Button type="submit" disabled={!accessInput.trim()} className="mt-4 w-full">
-            {isKorean ? "계속" : "Continue"}
+            {t.publicClio.continue}
           </Button>
         </form>
       </main>
@@ -491,17 +480,17 @@ export default function PublicClioChat({
               {appSubtitle ? `public clio · ${appSubtitle}` : "public clio"}
             </div>
             <h1 className="truncate text-base font-semibold text-ink">
-              {activeConversation?.title ?? "CLIO Query"}
+              {activeConversation?.title ?? t.publicClio.conversationTitleFallback}
             </h1>
           </div>
           <div className="flex shrink-0 items-center gap-2">
             <StatusBadge tone="ready">
               <LockKeyhole aria-hidden className="mr-1 h-3 w-3" />
-              query only
+              {t.publicClio.queryOnly}
             </StatusBadge>
             <IconButton
               icon={MessageSquarePlus}
-              label="New local chat"
+              label={t.publicClio.newLocalChat}
               onClick={newConversation}
               disabled={pending}
               variant="ghost"
@@ -509,7 +498,7 @@ export default function PublicClioChat({
             />
             <IconButton
               icon={Eraser}
-              label="Clear current chat"
+              label={t.publicClio.clearCurrentChat}
               onClick={clearActive}
               disabled={pending || !activeConversation || messages.length === 0}
               variant="ghost"
@@ -545,7 +534,7 @@ export default function PublicClioChat({
             {messages.length === 0 ? (
               <div className="flex min-h-40 flex-col justify-end border-b border-line/70 pb-6">
                 <div className="max-w-2xl text-2xl font-semibold leading-tight text-ink sm:text-3xl">
-                  {isKorean ? "wiki에 대해 물어보세요." : "Ask about the wiki."}
+                  {t.publicClio.askAboutWiki}
                 </div>
               </div>
             ) : null}
@@ -589,7 +578,7 @@ export default function PublicClioChat({
                   void send();
                 }
               }}
-              placeholder={isKorean ? "질문 입력" : "Ask a question"}
+              placeholder={t.publicClio.askAboutWiki}
               disabled={pending}
               className="block w-full resize-none rounded-md border border-line bg-bg px-4 py-3 text-[15px] leading-relaxed text-ink outline-none transition-colors placeholder:text-ink-faint focus:border-accent disabled:opacity-60"
             />
@@ -601,7 +590,7 @@ export default function PublicClioChat({
               icon={pending ? LoaderCircle : Send}
               className={cx(pending && "[&>svg]:animate-spin")}
             >
-              Send
+              {t.chat.send}
             </Button>
           </div>
         </div>
@@ -637,6 +626,8 @@ function PublicConversationList({
   onDelete: () => void;
   running: boolean;
 }) {
+  const { t } = useLanguage();
+
   return (
     <div className="flex h-full flex-col overflow-hidden">
       <div className="border-b border-line p-2">
@@ -647,7 +638,7 @@ function PublicConversationList({
           className="w-full"
           disabled={pending}
         >
-          New Chat
+          {t.publicClio.newChat}
         </Button>
         <div className="mt-2">
           <AgentMascot running={running} />
@@ -660,7 +651,7 @@ function PublicConversationList({
             icon={CheckSquare}
             className="h-7 text-[11px]"
           >
-            {allSelected ? "Clear" : "Select all"}
+            {allSelected ? t.publicClio.clearSelection : t.publicClio.selectAll}
           </Button>
           <Button
             onClick={onDelete}
@@ -669,7 +660,7 @@ function PublicConversationList({
             icon={Trash2}
             className="h-7 px-2 text-[11px]"
           >
-            Delete {selectedCount || ""}
+            {t.publicClio.deleteCount(selectedCount)}
           </Button>
         </div>
       </div>
@@ -677,7 +668,7 @@ function PublicConversationList({
       <div className="min-h-0 flex-1 overflow-auto py-1">
         {conversations.length === 0 ? (
           <div className="m-2 rounded-md border border-dashed border-line bg-bg-panel/68 px-3 py-5 text-center text-xs text-ink-faint">
-            No local chats yet.
+            {t.publicClio.noLocalChats}
           </div>
         ) : (
           conversations.map((conversation) => (
@@ -716,10 +707,12 @@ function PublicConversationStrip({
   onToggle: (id: string) => void;
   onDelete: () => void;
 }) {
+  const { t } = useLanguage();
+
   if (conversations.length === 0) {
     return (
       <div className="text-xs text-ink-faint">
-        Local browser history will appear here.
+        {t.publicClio.localHistoryHint}
       </div>
     );
   }
@@ -741,7 +734,7 @@ function PublicConversationStrip({
             checked={selectedIds.has(conversation.id)}
             onChange={() => onToggle(conversation.id)}
             disabled={pending}
-            aria-label={`Select ${conversation.title}`}
+            aria-label={t.publicClio.selectConversation(conversation.title)}
             className="h-3.5 w-3.5 accent-accent"
           />
           <button
@@ -752,14 +745,14 @@ function PublicConversationStrip({
           >
             <span className="block truncate font-medium">{conversation.title}</span>
             <span className="block truncate font-mono text-[10px] text-ink-faint">
-              {conversation.messages.length} messages
+              {t.publicClio.messageCount(conversation.messages.length)}
             </span>
           </button>
         </div>
       ))}
       <IconButton
         icon={Trash2}
-        label="Delete selected chats"
+        label={t.publicClio.deleteSelectedChats}
         onClick={onDelete}
         disabled={selectedCount === 0 || pending}
         variant="danger"
@@ -784,6 +777,8 @@ function ConversationRow({
   onSelect: () => void;
   onToggle: () => void;
 }) {
+  const { t, formatDateTime } = useLanguage();
+
   return (
     <div
       className={cx(
@@ -799,7 +794,7 @@ function ConversationRow({
           checked={selected}
           onChange={onToggle}
           disabled={disabled}
-          aria-label={`Select ${conversation.title}`}
+          aria-label={t.publicClio.selectConversation(conversation.title)}
           className="h-3.5 w-3.5 accent-accent disabled:opacity-50"
         />
       </span>
@@ -811,8 +806,8 @@ function ConversationRow({
       >
         <span className="block truncate font-medium">{conversation.title}</span>
         <span className="block truncate font-mono text-[10px] text-ink-faint">
-          {conversation.messages.length} messages ·{" "}
-          {new Date(conversation.updated).toLocaleString()}
+          {t.publicClio.messageCount(conversation.messages.length)} ·{" "}
+          {formatDateTime(conversation.updated)}
         </span>
       </button>
     </div>
@@ -820,10 +815,15 @@ function ConversationRow({
 }
 
 function MessageBubble({ message }: { message: PublicMessage }) {
+  const { t } = useLanguage();
   const Icon =
     message.role === "user" ? UserRound : message.role === "assistant" ? Bot : LockKeyhole;
   const label =
-    message.role === "user" ? "you" : message.role === "assistant" ? "clio" : "system";
+    message.role === "user"
+      ? t.publicClio.you
+      : message.role === "assistant"
+        ? t.publicClio.clio
+        : t.publicClio.system;
 
   return (
     <article
@@ -847,10 +847,10 @@ function MessageBubble({ message }: { message: PublicMessage }) {
         <MarkdownContent content={message.content} />
       </div>
       <div className="mt-2 flex justify-end">
-        <MessageCopyButton
-          content={message.content}
-          copyLabel="Copy message"
-          copiedLabel="Copied"
+          <MessageCopyButton
+            content={message.content}
+          copyLabel={t.chat.copyMessage}
+          copiedLabel={t.chat.copiedMessage}
         />
       </div>
     </article>

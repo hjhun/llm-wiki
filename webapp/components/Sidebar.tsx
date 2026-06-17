@@ -18,6 +18,7 @@ import { useEffect, useState } from "react";
 import packageJson from "../package.json";
 import AutoLintBadge from "./AutoLintBadge";
 import { BRAND_NAME } from "@/lib/branding";
+import { LANGUAGE_OPTIONS } from "@/lib/i18n";
 import { type Language, useLanguage } from "./i18n";
 import { IconButton, cx } from "./ui";
 import type { LucideIcon } from "lucide-react";
@@ -181,7 +182,7 @@ export default function Sidebar({
             </div>
           )}
           <div className={collapsed ? "flex flex-col gap-1" : "grid grid-cols-2 gap-1"}>
-            {(["ko", "en"] as const).map((code) => (
+            {LANGUAGE_OPTIONS.map(({ code }) => (
               <button
                 key={code}
                 type="button"

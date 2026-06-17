@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { z } from "zod";
+import { SUPPORTED_LANGUAGES } from "./i18n";
 import {
   CONFIG_DEFAULT_PATH,
   CONFIG_LOCAL_PATH,
@@ -399,7 +400,7 @@ export const ConfigSchema = z.object({
       }),
   }),
   ui: z.object({
-    language: z.enum(["ko", "en"]).default("ko"),
+    language: z.enum(SUPPORTED_LANGUAGES).default("ko"),
     theme: z.enum(["default", "light", "dark"]).default("default"),
     appSubtitle: z.string().max(80).default(""),
     defaultTab: z

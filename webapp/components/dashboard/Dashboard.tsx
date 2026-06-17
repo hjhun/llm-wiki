@@ -101,14 +101,8 @@ const JOB_TONE: Record<JobRunStatus, StatusTone> = {
   disabled: "disabled",
 };
 
-function formatTime(iso: string): string {
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return iso;
-  return date.toLocaleString();
-}
-
 export default function Dashboard() {
-  const { t } = useLanguage();
+  const { t, formatDateTime } = useLanguage();
   const td = t.dashboard;
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -142,7 +136,7 @@ export default function Dashboard() {
         title={td.title}
         meta={
           data
-            ? `${td.updatedAt}: ${formatTime(data.generatedAt)}`
+            ? `${td.updatedAt}: ${formatDateTime(data.generatedAt)}`
             : undefined
         }
         actions={
@@ -462,6 +456,8 @@ function JobRow({
   lastRunAt: string | null;
   td: Record<string, string>;
 }) {
+  const { formatDateTime } = useLanguage();
+
   return (
     <div className="flex items-center gap-3 rounded-md border border-line bg-bg/40 px-3 py-2">
       <Cpu aria-hidden className="h-3.5 w-3.5 shrink-0 text-ink-faint" />
@@ -473,11 +469,11 @@ function JobRow({
       ) : null}
       {nextRunAt && enabled ? (
         <span className="hidden shrink-0 font-mono text-[11px] text-ink-faint md:inline">
-          {td.nextRun}: {formatTime(nextRunAt)}
+          {td.nextRun}: {formatDateTime(nextRunAt)}
         </span>
       ) : lastRunAt ? (
         <span className="hidden shrink-0 font-mono text-[11px] text-ink-faint md:inline">
-          {td.lastRun}: {formatTime(lastRunAt)}
+          {td.lastRun}: {formatDateTime(lastRunAt)}
         </span>
       ) : null}
       <StatusBadge tone={JOB_TONE[status]}>{td[`status_${status}`] ?? status}</StatusBadge>

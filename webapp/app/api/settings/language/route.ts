@@ -2,11 +2,12 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireSession, errorMessage, jsonError } from "@/lib/api";
 import { loadConfig, patchLocalConfig, type Config } from "@/lib/config";
+import { SUPPORTED_LANGUAGES } from "@/lib/i18n";
 
 export const dynamic = "force-dynamic";
 
 const Body = z.object({
-  language: z.enum(["ko", "en"]),
+  language: z.enum(SUPPORTED_LANGUAGES),
 });
 
 export async function PUT(req: Request) {

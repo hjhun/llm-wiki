@@ -17,6 +17,7 @@ import { Button, EmptyState, PageHeader, StatusBadge } from "../ui";
 import MarkdownPreview from "../explorer/MarkdownPreview";
 import ScheduleBuilder from "./ScheduleBuilder";
 import { validateFriendly, cronToFriendly } from "@/lib/automation/schedule-format";
+import { useLanguage } from "../i18n";
 
 type CliName = "codex" | "claude" | "agy" | "cline";
 type Template = "youtube-summary" | "github-gerrit-review" | "email-sync" | "custom";
@@ -158,15 +159,6 @@ async function asError(res: Response): Promise<Error> {
   return new Error(j?.error ?? `request failed (${res.status})`);
 }
 
-function formatTime(iso: string | null): string {
-  if (!iso) return "—";
-  try {
-    return new Date(iso).toLocaleString();
-  } catch {
-    return iso;
-  }
-}
-
 
 function statusTone(status: AutomationRuntime["status"]) {
   switch (status) {
@@ -197,6 +189,7 @@ function statusBadgeTone(status: AutomationRuntime["status"]) {
 }
 
 export default function Automations() {
+  const { language, formatDateTime } = useLanguage();
   const [config, setConfig] = useState<AutomationConfig | null>(null);
   const [runtime, setRuntime] = useState<AutomationRuntime | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -329,16 +322,16 @@ export default function Automations() {
 
   const globalNextRun = useMemo(() => {
     if (!runtime?.nextRunAt) return "—";
-    return formatTime(runtime.nextRunAt);
-  }, [runtime?.nextRunAt]);
+    return formatDateTime(runtime.nextRunAt);
+  }, [formatDateTime, runtime?.nextRunAt]);
 
   const scheduleError = useMemo(() => {
     const f =
       draft.schedule.mode === "cron"
         ? cronToFriendly(draft.schedule.cron)
         : null;
-    return f ? validateFriendly(f).error : null;
-  }, [draft.schedule]);
+    return f ? validateFriendly(f, language).error : null;
+  }, [draft.schedule, language]);
 
   async function saveGlobal(next: Partial<AutomationConfig>) {
     if (!config) return;
@@ -691,7 +684,7 @@ export default function Automations() {
                           ))}
                         </div>
                         <div className="mt-2 truncate font-mono text-[10px] text-ink-faint">
-                          next {formatTime(rt?.nextRunAt ?? null)}
+                          next {formatDateTime(rt?.nextRunAt ?? null)}
                         </div>
                       </button>
                     );
@@ -1007,8 +1000,14 @@ export default function Automations() {
 
                 <Panel title="Runtime" eyebrow={selectedRuntime?.status ?? "idle"}>
                   <dl className="grid gap-2 text-xs text-ink-dim">
-                    <InfoRow label="Last run" value={formatTime(selectedRuntime?.lastRunAt ?? null)} />
-                    <InfoRow label="Next run" value={formatTime(selectedRuntime?.nextRunAt ?? null)} />
+                    <InfoRow
+                      label="Last run"
+                      value={formatDateTime(selectedRuntime?.lastRunAt ?? null)}
+                    />
+                    <InfoRow
+                      label="Next run"
+                      value={formatDateTime(selectedRuntime?.nextRunAt ?? null)}
+                    />
                     <InfoRow label="Reason" value={selectedRuntime?.reason ?? "—"} />
                     <InfoRow
                       label="Artifact"

@@ -27,7 +27,7 @@ export default function Editor({
   targetLine?: number | null;
   onSaved?: () => void;
 }) {
-  const { t } = useLanguage();
+  const { t, formatDateTime, formatNumber } = useLanguage();
   const [original, setOriginal] = useState<string>("");
   const [content, setContent] = useState<string>("");
   const [loading, setLoading] = useState(false);
@@ -171,8 +171,8 @@ export default function Editor({
             {ws}/{entry.path}
           </div>
           <div className="text-[10px] text-ink-faint">
-            {entry.size.toLocaleString()} bytes · {t.explorer.modified}{" "}
-            {new Date(entry.mtime).toLocaleString()}
+            {formatNumber(entry.size)} bytes · {t.explorer.modified}{" "}
+            {formatDateTime(entry.mtime)}
           </div>
           {entry.isSymlink ? (
             <div className="mt-0.5 flex items-center gap-1 text-[10px] text-ink-faint">

@@ -1,3 +1,5 @@
+import type { Language } from "@/lib/i18n";
+
 export type CliName = "codex" | "claude" | "agy" | "cline";
 
 export type CliInfo = {
@@ -138,7 +140,7 @@ export type SettingsConfig = {
     };
   };
   ui: {
-    language: "ko" | "en";
+    language: Language;
     theme: "default" | "light" | "dark";
     appSubtitle: string;
     defaultTab: "chat" | "explorer" | "graph" | "automations" | "settings";

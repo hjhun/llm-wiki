@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireSession, errorMessage, jsonError } from "@/lib/api";
 import { loadConfig, patchLocalConfig, type Config } from "@/lib/config";
+import { SUPPORTED_LANGUAGES } from "@/lib/i18n";
 import { readSettingsState, invalidateDetectionCache } from "@/lib/settings";
 import { getAutoIngestManager } from "@/lib/auto-ingest/manager";
 import { getAutoLintManager } from "@/lib/auto-lint/manager";
@@ -106,7 +107,7 @@ const Body = z.object({
     .optional(),
   ui: z
     .object({
-      language: z.enum(["ko", "en"]),
+      language: z.enum(SUPPORTED_LANGUAGES),
       theme: z.enum(["default", "light", "dark"]),
       appSubtitle: z.string().max(80).optional(),
       defaultTab: z.enum(["chat", "explorer", "graph", "automations", "settings"]),

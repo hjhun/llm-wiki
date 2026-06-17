@@ -19,6 +19,7 @@ import {
   Zap,
   type LucideIcon,
 } from "lucide-react";
+import { LANGUAGE_OPTIONS } from "@/lib/i18n";
 import { type Language, useLanguage } from "../i18n";
 import { useTheme } from "../theme";
 import AutoIngestPanel from "./AutoIngestPanel";
@@ -102,7 +103,7 @@ function statusTone(status: "ready" | "warning" | "missing") {
 
 export default function Settings() {
   const router = useRouter();
-  const { language, setLanguage, t } = useLanguage();
+  const { language, setLanguage, t, formatDateTime } = useLanguage();
   const { setTheme } = useTheme();
   const [state, setState] = useState<SettingsState | null>(null);
   const [draft, setDraft] = useState<SettingsConfig | null>(null);
@@ -742,8 +743,11 @@ export default function Settings() {
                         }}
                         className="mt-1 block w-full rounded border border-line bg-bg-panel px-2 py-1.5 text-sm text-ink outline-none focus:border-accent"
                       >
-                        <option value="ko">{t.common.korean}</option>
-                        <option value="en">{t.common.english}</option>
+                        {LANGUAGE_OPTIONS.map((option) => (
+                          <option key={option.code} value={option.code}>
+                            {option.code === "ko" ? t.common.korean : t.common.english}
+                          </option>
+                        ))}
                       </select>
                     </label>
                     <div className="rounded border border-line bg-bg px-3 py-2">
@@ -1133,7 +1137,7 @@ function UpdatePanel({
   onRefresh: () => void;
   onUpdate: () => void;
 }) {
-  const { t } = useLanguage();
+  const { t, formatDateTime } = useLanguage();
   const latestVersion = releaseInfo?.latestVersion ?? "-";
   const currentVersion = releaseInfo?.currentVersion ?? "-";
   const isUpdating = busy === "update";
@@ -1206,7 +1210,7 @@ function UpdatePanel({
             label={t.settings.releasePublishedAt}
             value={
               releaseInfo?.latestPublishedAt
-                ? new Date(releaseInfo.latestPublishedAt).toLocaleString()
+                ? formatDateTime(releaseInfo.latestPublishedAt)
                 : "-"
             }
           />
@@ -1240,7 +1244,7 @@ function UpdatePanel({
             label={t.settings.lastChecked}
             value={
               releaseInfo?.checkedAt
-                ? new Date(releaseInfo.checkedAt).toLocaleString()
+                ? formatDateTime(releaseInfo.checkedAt)
                 : "-"
             }
           />
@@ -1267,11 +1271,11 @@ function UpdatePanel({
           <div className="grid gap-3 md:grid-cols-3">
             <InfoTile
               label={t.settings.updateStartedAt}
-              value={new Date(updateResult.startedAt).toLocaleString()}
+              value={formatDateTime(updateResult.startedAt)}
             />
             <InfoTile
               label={t.settings.updateFinishedAt}
-              value={new Date(updateResult.finishedAt).toLocaleString()}
+              value={formatDateTime(updateResult.finishedAt)}
             />
             <InfoTile
               label={t.settings.updateExitCode}

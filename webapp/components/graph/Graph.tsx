@@ -98,13 +98,6 @@ async function consumeRunStream(
   return { done, error };
 }
 
-function fmtDate(value: string | null): string {
-  if (!value) return "-";
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return value;
-  return d.toLocaleString();
-}
-
 function topNodes(graph: GraphData): GraphNode[] {
   return [...graph.nodes]
     .sort((a, b) => (b.centrality ?? 0) - (a.centrality ?? 0))
@@ -162,7 +155,7 @@ function activeHistoryId(history: SelectionHistory): string | null {
 }
 
 export default function Graph() {
-  const { t } = useLanguage();
+  const { t, formatDateTime } = useLanguage();
   const [state, setState] = useState<GraphState | null>(null);
   const [viewMode, setViewMode] = useState<GraphViewMode>("all");
   const [selectionHistory, setSelectionHistory] = useState<SelectionHistory>(
@@ -460,7 +453,7 @@ export default function Graph() {
             />
             <Metric
               label={t.graph.updated}
-              value={fmtDate(state?.updatedAt ?? null)}
+              value={formatDateTime(state?.updatedAt ?? null)}
             />
           </div>
 

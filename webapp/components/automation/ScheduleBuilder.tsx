@@ -10,6 +10,7 @@ import {
   type FriendlySchedule,
 } from "@/lib/automation/schedule-format";
 import { nextCronFires } from "@/lib/automation/cron";
+import { useLanguage } from "../i18n";
 
 type Schedule = {
   mode: "preset" | "cron";
@@ -21,16 +22,15 @@ type Schedule = {
   timezone: string;
 };
 
-const KINDS: Array<{ kind: FriendlyKind; label: string }> = [
-  { kind: "minutes", label: "분마다" },
-  { kind: "hourly", label: "시간마다" },
-  { kind: "daily", label: "매일" },
-  { kind: "weekly", label: "매주" },
-  { kind: "monthly", label: "매월" },
-  { kind: "advanced", label: "고급(cron)" },
+const KINDS: FriendlyKind[] = [
+  "minutes",
+  "hourly",
+  "daily",
+  "weekly",
+  "monthly",
+  "advanced",
 ];
 
-const WEEKDAY_LABELS = ["일", "월", "화", "수", "목", "금", "토"];
 const MINUTE_OPTIONS = [5, 10, 15, 20, 30];
 const HOUR_OPTIONS = [1, 2, 3, 4, 6, 8, 12];
 
@@ -107,6 +107,7 @@ export default function ScheduleBuilder({
   schedule: Schedule;
   onChange: (next: Schedule) => void;
 }) {
+  const { language, t, formatDateTime } = useLanguage();
   // Local UI state is the source of truth for the inputs. Deriving everything
   // from the serialized cron each render (the previous approach) could neither
   // hold the "advanced" mode (its cron re-parses to a concrete kind) nor let a
@@ -159,13 +160,13 @@ export default function ScheduleBuilder({
   // validation all read from it so they match exactly what will be saved (and
   // what the parent's Save guard validates).
   const cron = friendlyToCron(friendly);
-  const v = validateFriendly(cronToFriendly(cron));
+  const v = validateFriendly(cronToFriendly(cron), language);
   const fires = nextCronFires(cron, 3, new Date(), tz);
 
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap gap-1.5">
-        {KINDS.map(({ kind, label }) => (
+        {KINDS.map((kind) => (
           <button
             key={kind}
             type="button"
@@ -177,14 +178,14 @@ export default function ScheduleBuilder({
                 : "border-line bg-bg text-ink-dim hover:text-ink",
             ].join(" ")}
           >
-            {label}
+            {t.automationSchedule.kinds[kind]}
           </button>
         ))}
       </div>
 
       {friendly.kind === "minutes" ? (
         <div className="flex flex-wrap items-center gap-1.5 text-sm text-ink-dim">
-          매
+          {t.automationSchedule.every}
           {MINUTE_OPTIONS.map((n) => (
             <button
               key={n}
@@ -208,13 +209,13 @@ export default function ScheduleBuilder({
             }
             className="w-16 rounded border border-line bg-bg px-2 py-1 font-mono text-sm text-ink"
           />
-          분마다
+          {t.automationSchedule.minutesSuffix}
         </div>
       ) : null}
 
       {friendly.kind === "hourly" ? (
         <div className="flex flex-wrap items-center gap-1.5 text-sm text-ink-dim">
-          매
+          {t.automationSchedule.every}
           {HOUR_OPTIONS.map((n) => (
             <button
               key={n}
@@ -225,7 +226,7 @@ export default function ScheduleBuilder({
               {n}
             </button>
           ))}
-          시간마다,
+          {t.automationSchedule.hoursSuffix}
           <input
             type="number"
             min={0}
@@ -239,27 +240,27 @@ export default function ScheduleBuilder({
             }
             className="w-16 rounded border border-line bg-bg px-2 py-1 font-mono text-sm text-ink"
           />
-          분에
+          {t.automationSchedule.minuteAtSuffix}
         </div>
       ) : null}
 
       {friendly.kind === "daily" ? (
         <label className="flex items-center gap-2 text-sm text-ink-dim">
-          매일
+          {t.automationSchedule.dailyPrefix}
           <input
             type="time"
             value={timeValue(friendly)}
             onChange={(e) => setTime(e.target.value)}
             className="rounded border border-line bg-bg px-2 py-1 font-mono text-sm text-ink"
           />
-          에
+          {t.automationSchedule.atSuffix}
         </label>
       ) : null}
 
       {friendly.kind === "weekly" ? (
         <div className="space-y-2">
           <div className="flex flex-wrap gap-1">
-            {WEEKDAY_LABELS.map((label, idx) => (
+            {t.automationSchedule.weekdaysShort.map((label, idx) => (
               <button
                 key={label}
                 type="button"
@@ -276,7 +277,7 @@ export default function ScheduleBuilder({
             ))}
           </div>
           <label className="flex items-center gap-2 text-sm text-ink-dim">
-            시각
+            {t.automationSchedule.timeLabel}
             <input
               type="time"
               value={timeValue(friendly)}
@@ -289,7 +290,7 @@ export default function ScheduleBuilder({
 
       {friendly.kind === "monthly" ? (
         <label className="flex items-center gap-2 text-sm text-ink-dim">
-          매월
+          {t.automationSchedule.monthlyPrefix}
           <input
             type="number"
             min={1}
@@ -303,14 +304,14 @@ export default function ScheduleBuilder({
             }
             className="w-16 rounded border border-line bg-bg px-2 py-1 font-mono text-sm text-ink"
           />
-          일
+          {t.automationSchedule.daySuffix}
           <input
             type="time"
             value={timeValue(friendly)}
             onChange={(e) => setTime(e.target.value)}
             className="rounded border border-line bg-bg px-2 py-1 font-mono text-sm text-ink"
           />
-          에
+          {t.automationSchedule.atSuffix}
         </label>
       ) : null}
 
@@ -324,11 +325,16 @@ export default function ScheduleBuilder({
       ) : null}
 
       <div className="rounded border border-line bg-bg-subtle px-3 py-2">
-        <div className="text-xs uppercase tracking-widest text-ink-faint">요약</div>
-        <div className="mt-0.5 text-sm text-ink">{describeCron(cron)}</div>
+        <div className="text-xs uppercase tracking-widest text-ink-faint">
+          {t.automationSchedule.summary}
+        </div>
+        <div className="mt-0.5 text-sm text-ink">
+          {describeCron(cron, language)}
+        </div>
         {fires.length > 0 ? (
           <div className="mt-1 text-xs text-ink-dim">
-            다음: {fires.map((d) => formatFire(d)).join(" · ")}
+            {t.automationSchedule.next}:{" "}
+            {fires.map((d) => formatDateTime(d)).join(" · ")}
             {tz ? <span className="text-ink-faint"> ({tz})</span> : null}
           </div>
         ) : null}
@@ -339,7 +345,9 @@ export default function ScheduleBuilder({
           ) : v.warning ? (
             <span className="text-amber-400">{v.warning}</span>
           ) : (
-            <span className="text-emerald-400">✓ 유효</span>
+            <span className="text-emerald-400">
+              ✓ {t.automationSchedule.valid}
+            </span>
           )}
         </div>
       </div>
@@ -360,9 +368,4 @@ function chip(on: boolean): string {
     "rounded-full border px-2.5 py-0.5 text-xs",
     on ? "border-accent bg-accent/15 text-ink" : "border-line bg-bg text-ink-dim",
   ].join(" ");
-}
-
-function formatFire(d: Date): string {
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getMonth() + 1}/${d.getDate()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }

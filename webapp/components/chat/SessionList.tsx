@@ -24,7 +24,7 @@ export default function SessionList({
   deleting: boolean;
   running: boolean;
 }) {
-  const { t } = useLanguage();
+  const { t, formatDateTime } = useLanguage();
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
   const selectedCount = selected.size;
   const allSelected = sessions.length > 0 && selectedCount === sessions.length;
@@ -135,7 +135,7 @@ export default function SessionList({
                   </span>
                   <span className="block truncate font-mono text-[10px] text-ink-faint">
                     {s.meta.agent ?? "—"} ·{" "}
-                    {new Date(s.meta.updated).toLocaleString()}
+                    {formatDateTime(s.meta.updated)}
                   </span>
                 </button>
               </div>

@@ -49,16 +49,6 @@ function statusTone(status: AutoIngestRuntime["status"]) {
   }
 }
 
-function formatTime(iso: string | null): string {
-  if (!iso) return "—";
-  try {
-    const d = new Date(iso);
-    return d.toLocaleString();
-  } catch {
-    return iso;
-  }
-}
-
 export default function AutoIngestPanel({
   draft,
   onChange,
@@ -66,7 +56,7 @@ export default function AutoIngestPanel({
   draft: SettingsConfig["autoIngest"];
   onChange: (next: SettingsConfig["autoIngest"]) => void;
 }) {
-  const { t } = useLanguage();
+  const { t, formatDateTime } = useLanguage();
   const [runtime, setRuntime] = useState<AutoIngestRuntime | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -284,7 +274,7 @@ export default function AutoIngestPanel({
               <dt className="text-ink-faint">{t.settings.autoIngestLastRun}</dt>
               <dd className="font-mono text-[11px]">
                 {runtime?.lastRunAt
-                  ? `${formatTime(runtime.lastRunAt)} · ${runtime.lastResult?.halt ?? "?"} (iter=${runtime.lastResult?.iterations ?? 0})`
+                  ? `${formatDateTime(runtime.lastRunAt)} · ${runtime.lastResult?.halt ?? "?"} (iter=${runtime.lastResult?.iterations ?? 0})`
                   : t.settings.autoIngestNoLastRun}
               </dd>
             </div>
@@ -292,7 +282,7 @@ export default function AutoIngestPanel({
               <dt className="text-ink-faint">{t.settings.autoIngestNextRun}</dt>
               <dd className="font-mono text-[11px]">
                 {runtime?.nextRunAt
-                  ? formatTime(runtime.nextRunAt)
+                  ? formatDateTime(runtime.nextRunAt)
                   : t.settings.autoIngestNoNextRun}
               </dd>
             </div>

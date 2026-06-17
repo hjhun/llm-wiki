@@ -15,6 +15,7 @@ import {
   Settings,
   type LucideIcon,
 } from "lucide-react";
+import { LANGUAGE_OPTIONS, nextLanguage } from "@/lib/i18n";
 import { useLanguage } from "./i18n";
 import { useTheme, type Theme } from "./theme";
 import { cx } from "./ui";
@@ -137,10 +138,10 @@ export default function CommandPalette() {
     nav.push({
       id: "language",
       label: t.common.paletteLanguageAction,
-      hint: language === "ko" ? "한국어 → English" : "English → 한국어",
+      hint: `${languageLabel(language)} → ${languageLabel(nextLanguage(language))}`,
       icon: Languages,
       group: "action",
-      run: () => void setLanguage(language === "ko" ? "en" : "ko"),
+      run: () => void setLanguage(nextLanguage(language)),
     });
     const q = query.trim().toLowerCase();
     if (!q) return nav;
@@ -264,5 +265,11 @@ export default function CommandPalette() {
         </ul>
       </div>
     </div>
+  );
+}
+
+function languageLabel(code: string): string {
+  return (
+    LANGUAGE_OPTIONS.find((option) => option.code === code)?.nativeName ?? code
   );
 }

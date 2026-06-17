@@ -50,15 +50,6 @@ type StatusPayload = {
   pendingCount: number;
 };
 
-function formatTimestamp(iso: string | null): string {
-  if (!iso) return "—";
-  try {
-    return new Date(iso).toLocaleString();
-  } catch {
-    return iso;
-  }
-}
-
 /**
  * M2: full webhook flow. Adds Webhook URL/secret management, Allowlist
  * and Pending tables wired to /api/telegram/{approve,revoke}, and a
@@ -75,7 +66,7 @@ export default function TelegramPanel({
   onNotice: (message: string) => void;
   onError: (message: string) => void;
 }) {
-  const { t } = useLanguage();
+  const { t, formatDateTime } = useLanguage();
   const [tokenInput, setTokenInput] = useState("");
   const [revealToken, setRevealToken] = useState(false);
   const [busy, setBusy] = useState<
@@ -713,6 +704,7 @@ function AllowlistTable(props: {
   t: ReturnType<typeof useLanguage>["t"];
 }) {
   const { allowlist, busy, revoke, t } = props;
+  const { formatDateTime } = useLanguage();
   return (
     <div className="rounded border border-line bg-bg px-3 py-3">
       <div className="flex items-baseline justify-between">
@@ -757,7 +749,7 @@ function AllowlistTable(props: {
                   </span>
                 </td>
                 <td className="py-1 text-ink-dim">
-                  {formatTimestamp(entry.approvedAt)}
+                  {formatDateTime(entry.approvedAt)}
                 </td>
                 <td className="py-1 text-right">
                   <button
@@ -785,6 +777,7 @@ function StatusPanel(props: {
   t: ReturnType<typeof useLanguage>["t"];
 }) {
   const { status, busy, refresh, t } = props;
+  const { formatDateTime } = useLanguage();
   return (
     <div className="rounded border border-line bg-bg px-3 py-3">
       <div className="flex items-center justify-between">
@@ -833,7 +826,7 @@ function StatusPanel(props: {
               {status.webhook.lastErrorMessage ? (
                 <span className="ml-2 text-rose-300">
                   {status.webhook.lastErrorMessage}{" "}
-                  ({formatTimestamp(status.webhook.lastErrorAt)})
+                  ({formatDateTime(status.webhook.lastErrorAt)})
                 </span>
               ) : null}
             </div>
@@ -855,26 +848,26 @@ function StatusPanel(props: {
             </div>
             <div className="text-ink-dim">
               {t.settings.telegramPollingLastPolled}:{" "}
-              {formatTimestamp(status.polling.lastPolledAt)}
+              {formatDateTime(status.polling.lastPolledAt)}
             </div>
             {status.polling.lastErrorMessage ? (
               <div className="text-rose-200">
                 {status.polling.lastErrorMessage} ·{" "}
-                {formatTimestamp(status.polling.lastErrorAt)}
+                {formatDateTime(status.polling.lastErrorAt)}
               </div>
             ) : null}
           </div>
           <div className="grid grid-cols-2 gap-x-4 gap-y-1 sm:grid-cols-3">
-            <Stat label={t.settings.telegramStatStartedAt} value={formatTimestamp(status.stats.startedAt)} />
+            <Stat label={t.settings.telegramStatStartedAt} value={formatDateTime(status.stats.startedAt)} />
             <Stat label={t.settings.telegramStatRequests} value={String(status.stats.webhookRequests)} />
             <Stat label={t.settings.telegramStatDispatched} value={String(status.stats.dispatched)} />
             <Stat label={t.settings.telegramStatRejected} value={String(status.stats.rejected)} />
             <Stat label={t.settings.telegramStatSkipped} value={String(status.stats.skipped)} />
             <Stat label={t.settings.telegramStatThrottled} value={String(status.stats.throttled)} />
             <Stat label={t.settings.telegramStatErrors} value={String(status.stats.errors)} />
-            <Stat label={t.settings.telegramStatLastWebhook} value={formatTimestamp(status.stats.lastWebhookAt)} />
-            <Stat label={t.settings.telegramStatLastDispatch} value={formatTimestamp(status.stats.lastDispatchAt)} />
-            <Stat label={t.settings.telegramStatLastError} value={formatTimestamp(status.stats.lastErrorAt)} />
+            <Stat label={t.settings.telegramStatLastWebhook} value={formatDateTime(status.stats.lastWebhookAt)} />
+            <Stat label={t.settings.telegramStatLastDispatch} value={formatDateTime(status.stats.lastDispatchAt)} />
+            <Stat label={t.settings.telegramStatLastError} value={formatDateTime(status.stats.lastErrorAt)} />
           </div>
           {status.stats.lastErrorMessage ? (
             <div className="rounded border border-rose-700/60 bg-bg-subtle px-2 py-1 text-rose-200">
