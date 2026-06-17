@@ -39,6 +39,7 @@ import {
   graphIncrementalDecision,
   ingestFinalMaintenanceDecision,
 } from "./ingest/graphify-decision";
+import { bootstrapIngestProgress } from "./ingest/bootstrap";
 import { runCliWithIngestLoopRetries } from "./ingest/cli-retry";
 import {
   FINAL_GRAPH_SKIPPED_NOTE,
@@ -1433,6 +1434,7 @@ export async function runIngestLoop(
       onChunk?.(banner);
     }
 
+    await bootstrapIngestProgress({ cfg, rawScope });
     const activityBefore = await ingestActivitySignature();
     const attempt = await runCliWithIngestLoopRetries(
       {

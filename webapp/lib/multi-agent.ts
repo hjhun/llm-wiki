@@ -41,6 +41,7 @@ import {
   finalMaintenanceSkippedNote,
   ingestFinalMaintenanceDecision,
 } from "./ingest/graphify-decision";
+import { bootstrapIngestProgress } from "./ingest/bootstrap";
 import { runPostMergeMiniLint } from "./post-merge-lint";
 import {
   clampAgentCount,
@@ -279,6 +280,12 @@ async function runWorkerBatch(input: {
   sessions?: Map<string, string | null>;
 }): Promise<WorkerRun[]> {
   const isIngest = input.kind === "ingest" || input.kind === "ingest-loop";
+  if (isIngest) {
+    await bootstrapIngestProgress({
+      cfg: input.cfg,
+      rawScope: input.rawScope,
+    });
+  }
   const actionableLeaves = isIngest
     ? await readActionableLeafPaths(input.rawScope ?? null)
     : null;

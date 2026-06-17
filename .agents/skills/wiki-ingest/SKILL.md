@@ -42,8 +42,11 @@ externalized to `progress/ingest/`.
   `progress/ingest/.state.json` reports no remaining `pending`,
   `in_progress`, or `partial` sub-chunks and `merge_pass.status === "done"`,
   or until the user clicks "Stop loop" (which drops
-  `progress/ingest/.stop`). Each iteration must still process exactly
-  one sub-chunk and exit — the skill never loops itself.
+  `progress/ingest/.stop`). Before fan-out, the backend performs a deterministic
+  filename/stat-only leaf bootstrap so the first worker round can partition
+  actionable leaves immediately instead of spending one LLM call on
+  enumeration. Each worker iteration must still process exactly one sub-chunk
+  and exit — the skill never loops itself.
 - `/ingest` with no argument — incremental ingest for all of `raw/`.
 - Natural-language triggers: "summarize this material", "I added something new to raw", "ingest ...".
 - UI: chat input `+` menu -> ingest.
@@ -178,6 +181,12 @@ Use the nearest project manifest or the first directory under `raw/` as the
 5. Read `progress/ingest/.state.json` if it exists. If `version` mismatches the current SKILL version, run the migration in §State Migration before proceeding.
 
 ### Step 1 — Enumerate Leaves (idempotent)
+
+When the webapp backend has already populated `progress/ingest/.state.json` and
+the prompt assigns concrete leaves, skip this step and process the assigned
+pending sub-chunk. Run this step only when there is no state, no actionable leaf
+for the requested scope, or the prompt explicitly says this worker is the
+enumeration worker.
 
 1. From the requested input root (default `raw/`), list every leaf directory (no child directories) **and every direct-file pseudo-leaf**: if a directory has source files directly inside it as well as child directories, create a separate leaf unit for those direct files using that directory's logical `raw/.../` path. This is required for code repositories whose project root or parent modules contain files such as `package.json`, `src/index.ts`, route files, or config files alongside child directories. A single file or URL counts as a virtual leaf whose path is its parent directory. Follow symlinked files/directories that are located under `raw/`, but track visited real paths/inodes to avoid cycles and do not traverse the same real directory twice under one target.
 2. For each leaf compute a stable identity:
