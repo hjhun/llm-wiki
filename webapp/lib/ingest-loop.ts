@@ -48,6 +48,10 @@ import { bootstrapIngestProgress } from "./ingest/bootstrap";
 import { reconcileWikiIndex } from "./ingest/index-reconcile";
 import { runCliWithIngestLoopRetries } from "./ingest/cli-retry";
 import {
+  decideCompaction,
+  compactionWindowFor,
+} from "./ingest/compaction";
+import {
   FINAL_GRAPH_SKIPPED_NOTE,
   LOOP_STAGNATION_LIMIT,
   buildLoopContinuationPrompt,
@@ -1435,6 +1439,7 @@ export async function runIngestLoop(
   const canResume =
     cfg.cli.ingestLoop.resumeSessions && cliSupportsResume(agent);
   let sessionId: string | null = null;
+  let pendingClineCompaction = false;
 
   while (true) {
     if (await stopFlagExists(sessionPath)) {
@@ -1493,6 +1498,7 @@ export async function runIngestLoop(
         sessionPath,
         onChunk,
         session,
+        compact: pendingClineCompaction,
       },
       {
         runCli,
@@ -1503,6 +1509,8 @@ export async function runIngestLoop(
       },
     );
     lastDurationMs += attempt.durationMs;
+    // The --compaction flag is single-shot: it applied to the call just made.
+    pendingClineCompaction = false;
     if (!attempt.ok) {
       lastExitCode = attempt.lastExitCode;
       haltKind = attempt.kind;
@@ -1515,6 +1523,32 @@ export async function runIngestLoop(
     // conversation. Keep the prior id if this run reported none (e.g. a codex
     // capture miss) so a later iteration can retry the resume.
     if (canResume) sessionId = result.sessionId ?? sessionId;
+
+    // Context-window compaction: when the host CLI's measured usage reaches the
+    // configured ratio of its token window, compact before the next iteration.
+    // claude/codex: drop the resume id so the next iteration starts a fresh
+    // session that re-reads disk state (.state.json + source pages) = lossless.
+    // cline: keep the task but request its native --compaction next iteration.
+    const compaction = decideCompaction({
+      contextTokens: result.contextTokens ?? null,
+      windowTokens: compactionWindowFor(cfg, agent),
+      ratio: cfg.cli.ingestLoop.compaction.ratio,
+      enabled: cfg.cli.ingestLoop.compaction.enabled,
+    });
+    if (compaction.compact) {
+      const used = compaction.usedTokens ?? 0;
+      const note =
+        agent === "cline"
+          ? `[compaction] 컨텍스트 ${used}/${compaction.limitTokens} 토큰 도달 → 다음 라운드 --compaction`
+          : `[compaction] 컨텍스트 ${used}/${compaction.limitTokens} 토큰 도달 → 새 세션으로 리셋`;
+      onChunk?.(`\n${note}\n`);
+      await appendMessage(sessionPath, "system", note).catch(() => undefined);
+      if (agent === "cline") {
+        pendingClineCompaction = true;
+      } else {
+        sessionId = null;
+      }
+    }
     lastExitCode = result.exitCode;
     const iterReply =
       result.stdout.trim() ||
