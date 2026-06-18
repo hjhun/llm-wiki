@@ -11,11 +11,11 @@ import {
   buildSessionPromptContext,
   newSession,
 } from "@/lib/sessions";
-import { buildProgressReference } from "@/lib/ingest-loop";
 import {
-  isOrchestratedKind,
-  runMultiAgentOperation,
-} from "@/lib/multi-agent";
+  buildProgressReference,
+  normalizeRawScope,
+  runIngestLoop,
+} from "@/lib/ingest-loop";
 import {
   snapshotAnswerMtimes,
   sweepAnswersForSecrets,
@@ -55,6 +55,17 @@ const Body = z.object({
    */
   kind: z.enum(CHAT_KINDS).optional(),
 });
+
+// Parse an optional `raw/...` scope out of a `/ingest` or `/ingest-loop`
+// message so a targeted run only walks that subtree. Mirrors the parser the
+// retired multi-agent coordinator used.
+function rawScopeFromMessage(message?: string | null): string | null {
+  if (!message) return null;
+  const m = /^\/(?:ingest-loop|ingest)(?:\s+([\s\S]+?))?\s*$/.exec(
+    message.trim(),
+  );
+  return normalizeRawScope(m?.[1]?.trim());
+}
 
 export async function POST(req: Request) {
   const unauth = await requireSession();
@@ -192,26 +203,24 @@ export async function POST(req: Request) {
     const answersBaseline = await snapshotAnswerMtimes();
 
     try {
-      if (isOrchestratedKind(kind)) {
-        // -------- Multi-agent wiki operations --------
-        // /ingest, /ingest-loop, and /lint are dispatched through a small
-        // coordinator that starts named workers up to the configured
-        // concurrency limit and then asks a coordinator agent to consolidate the
-        // result. /query intentionally stays on the single-CLI path below for
-        // lower latency and more consistent evidence handling. The job
-        // AbortSignal is shared by all live worker CLIs so a Stop request
-        // interrupts them immediately.
-        const result = await runMultiAgentOperation({
+      if (kind === "ingest" || kind === "ingest-loop") {
+        // -------- Single warm-session ingest loop --------
+        // /ingest and /ingest-loop drive the wiki-ingest skill through one
+        // backend loop that keeps a single CLI session warm and lets the agent
+        // batch sub-chunks per invocation (config.chunking.unitPerCall). The
+        // backend loop is the outer resumption/safety net; it no longer
+        // cold-respawns a fresh CLI per sub-chunk or fans out parallel worker
+        // CLIs. The job AbortSignal lets a Stop request interrupt the live
+        // child immediately. Ingest progress UI is driven by startProgressWatcher.
+        const result = await runIngestLoop({
           cfg,
-          kind,
           agent,
           sessionPath,
-          prompt,
-          message: parsed.data.message,
+          initialPrompt: prompt,
           progressRef,
+          rawScope: rawScopeFromMessage(parsed.data.message),
           signal: job.abort.signal,
           onChunk: emitChunk,
-          onAgentProgress: (event) => send(event),
         });
         const finalReply = job.cancelled
           ? formatCancelledReply({
@@ -224,7 +233,7 @@ export async function POST(req: Request) {
           sessionPath,
           "assistant",
           finalReply,
-          result.assistantAgent,
+          agent,
         );
         send({
           type: "done",
@@ -234,7 +243,7 @@ export async function POST(req: Request) {
           durationMs: result.totalDurationMs,
         });
       } else {
-        // -------- Single CLI call (chat, query, preprocess, graph) --------
+        // -------- Single CLI call (chat, query, preprocess, graph, lint) --------
         const result = await runCli(agent, prompt, {
           safeMode: cfg.agent.safeMode,
           // null in config means "no timeout for this operation kind".
