@@ -155,4 +155,26 @@ describe("runCliWithIngestLoopRetries", () => {
       expect(r.lastExitCode).toBe(-1);
     }
   });
+
+  it("forwards compact:true into runCli opts", async () => {
+    let seenCompact: boolean | undefined;
+    const runCli = vi.fn(async (_agent: unknown, _prompt: unknown, opts: { compact?: boolean }) => {
+      seenCompact = opts?.compact;
+      return result(0);
+    }) as unknown as CliRetryDeps["runCli"];
+
+    await runCliWithIngestLoopRetries(
+      {
+        agent: "cline",
+        prompt: "p",
+        cfg: cfg(1),
+        iteration: 2,
+        sessionPath: "/tmp/s",
+        compact: true,
+      },
+      makeDeps([], { runCli }),
+    );
+
+    expect(seenCompact).toBe(true);
+  });
 });

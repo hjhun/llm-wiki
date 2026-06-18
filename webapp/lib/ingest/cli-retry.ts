@@ -94,6 +94,8 @@ export type CliRetryInput = {
    * fresh-process behavior.
    */
   session?: SessionOption;
+  /** Request the CLI's native history compaction this iteration (cline). */
+  compact?: boolean;
 };
 
 export async function runCliWithIngestLoopRetries(
@@ -135,6 +137,7 @@ export async function runCliWithIngestLoopRetries(
         // child immediately regardless of timeout config.
         killOnAbort: true,
         session: input.session,
+        compact: input.compact,
         onStdout: (chunk) => {
           input.onChunk?.(chunk);
         },
