@@ -106,6 +106,21 @@ describe("planSession", () => {
   });
 });
 
+describe("planSession codex resume with measurement", () => {
+  it("adds --json + capture on codex resume when measuring", () => {
+    const p = planSession("codex", { id: "t1", resume: true }, { measureContext: true });
+    expect(p.args).toContain("--json");
+    expect(p.capture).toBe(true);
+    expect(p.resumeId).toBe("t1");
+    expect(p.sessionId).toBe("t1");
+  });
+  it("keeps plain resume (no --json) when not measuring", () => {
+    const p = planSession("codex", { id: "t1", resume: true });
+    expect(p.args).not.toContain("--json");
+    expect(p.capture).toBe(false);
+  });
+});
+
 describe("publicSandboxReadOnlyHomePathsForCli", () => {
   it("narrows Codex binds to credential/config files and writable runtime dirs", () => {
     expect(

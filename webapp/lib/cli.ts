@@ -8,6 +8,7 @@ import { loadConfig } from "./config";
 import { createClaudeStreamParser } from "./cli-stream-json";
 import { createCodexJsonParser } from "./cli-codex-json";
 import { createClineTaskParser } from "./cli-cline-task";
+import { compactionEnabledFor } from "./ingest/compaction";
 import {
   CLI_RUNTIME_DETECTED_PATH,
   CONFIG_ROOT,
@@ -95,7 +96,11 @@ export type SessionPlan = {
  * transparently get the legacy fresh-process behavior. Exported for unit
  * testing — it is the pure core of resume arg construction.
  */
-export function planSession(cli: CliName, session?: SessionOption): SessionPlan {
+export function planSession(
+  cli: CliName,
+  session?: SessionOption,
+  opts?: { measureContext?: boolean },
+): SessionPlan {
   const noop: SessionPlan = {
     args: [],
     resumeId: null,
@@ -115,8 +120,18 @@ export function planSession(cli: CliName, session?: SessionOption): SessionPlan 
     }
     case "codex": {
       if (session.resume && session.id) {
-        // Resume rounds run without --json: stdout is plain text and the id is
-        // already known, so no capture is needed.
+        // Resume rounds normally run as plain text. When measuring context we
+        // re-enable --json so the `turn.completed.usage` event is emitted; the
+        // codex parser then both reduces JSONL to plain text and reads usage.
+        if (opts?.measureContext) {
+          return {
+            ...noop,
+            args: ["--json"],
+            resumeId: session.id,
+            sessionId: session.id,
+            capture: true,
+          };
+        }
         return { ...noop, resumeId: session.id, sessionId: session.id };
       }
       // Fresh round: --json so the thread_id (and reply text) can be captured.
@@ -271,15 +286,17 @@ function buildArgs(
   streamTokens: boolean,
   sessionArgs: string[] = [],
   codexResumeId: string | null = null,
+  measureContext: boolean = false,
+  compact: boolean = false,
 ): string[] {
   switch (cli) {
     case "codex": {
       const skip = skipGitRepoCheck ? ["--skip-git-repo-check"] : [];
       const bypass = safeMode ? [] : ["--dangerously-bypass-approvals-and-sandbox"];
       if (codexResumeId) {
-        // `codex exec resume [OPTIONS] <SESSION_ID> <PROMPT>` continues the
-        // worker's own conversation; options precede the positional id.
-        return ["exec", "resume", ...skip, ...bypass, codexResumeId, prompt];
+        // `codex exec resume [OPTIONS] <SESSION_ID> <PROMPT>`; options (incl.
+        // --json when measuring) precede the positional id.
+        return ["exec", "resume", ...skip, ...bypass, ...sessionArgs, codexResumeId, prompt];
       }
       return ["exec", ...skip, ...bypass, ...sessionArgs, prompt];
     }
@@ -288,7 +305,9 @@ function buildArgs(
       // runCli stdout handler. Without it, `-p` buffers everything until exit.
       // --include-partial-messages makes claude emit fine-grained token deltas
       // (stream_event/content_block_delta) instead of one big block at the end.
-      const stream = streamTokens
+      // Also enable stream-json when measuring context (to get usage events).
+      const useStream = streamTokens || measureContext;
+      const stream = useStream
         ? [
             "--output-format",
             "stream-json",
@@ -320,8 +339,12 @@ function buildArgs(
     case "cline": {
       // `-p <prompt>` runs non-interactively and prints the `Task started: <id>`
       // banner; `-y` adds auto-approval. sessionArgs carries `-T <id>` on resume.
+      // IMPORTANT: `-v`/`--compaction` are ONLY valid combined with `-p <prompt>`,
+      // so they must come AFTER `base` (which always contains `-p <prompt>`).
       const base = safeMode ? ["-p", prompt] : ["-y", "-p", prompt];
-      return [...base, ...sessionArgs];
+      const measure = measureContext ? ["-v"] : [];
+      const comp = compact ? ["--compaction"] : [];
+      return [...base, ...measure, ...comp, ...sessionArgs];
     }
   }
 }
@@ -350,6 +373,8 @@ export type RunResult = {
    * request a session need not construct it.
    */
   sessionId?: string | null;
+  /** Measured host-CLI context usage in tokens, or null when unmeasured. */
+  contextTokens?: number | null;
 };
 
 type BubblewrapSandbox = {
@@ -1083,6 +1108,8 @@ export async function runCli(
      * RunResult.sessionId. Ignored by CLIs without resume-by-id support.
      */
     session?: SessionOption;
+    /** Request the CLI's native history compaction this run (cline only). */
+    compact?: boolean;
   } = {},
 ): Promise<RunResult> {
   const info = await detectCli(cli);
@@ -1107,11 +1134,12 @@ export async function runCli(
     );
   }
 
+  const measureContext = compactionEnabledFor(cfg, cli);
   const cwd = opts.cwd ?? PROJECT_ROOT;
   const projectRoot = opts.projectRoot ?? cwd;
   // Token streaming is opt-in and currently claude-only; other CLIs ignore it.
   const streamTokens = (cfg.cli.streamTokens ?? false) && cli === "claude";
-  const sessionPlan = planSession(cli, opts.session);
+  const sessionPlan = planSession(cli, opts.session, { measureContext });
   const args = buildArgs(
     cli,
     prompt,
@@ -1121,6 +1149,8 @@ export async function runCli(
     streamTokens,
     sessionPlan.args,
     sessionPlan.resumeId,
+    measureContext,
+    opts.compact ?? false,
   );
   const spawnPlan = opts.sandbox
     ? await buildBubblewrapSpawnPlan({
@@ -1154,7 +1184,10 @@ export async function runCli(
     // In streaming mode the raw NDJSON never reaches stdoutBuf or onStdout —
     // the parser emits plain-text deltas live and the final plain text is
     // pushed into stdoutBuf on close, so RunResult.stdout stays plain text.
-    const streamParser = streamTokens ? createClaudeStreamParser() : null;
+    // Also enable stream-json parsing when measuring context (to read usage).
+    const useClaudeStream =
+      cli === "claude" && (streamTokens || measureContext);
+    const streamParser = useClaudeStream ? createClaudeStreamParser() : null;
     // Codex capture round: stdout is JSONL. Parse the thread_id (session id)
     // and the agent_message reply text out, keeping raw JSONL out of the
     // buffer and the live stream so RunResult.stdout stays plain text.
@@ -1162,8 +1195,11 @@ export async function runCli(
       sessionPlan.capture && cli === "codex" ? createCodexJsonParser() : null;
     // cline capture round: stdout is plain text we keep verbatim — the parser
     // only sniffs the `Task started: <id>` banner to capture the task id.
+    // Also create the parser on measured runs (capture is false on resume rounds).
     const clineParser =
-      sessionPlan.capture && cli === "cline" ? createClineTaskParser() : null;
+      cli === "cline" && (sessionPlan.capture || measureContext)
+        ? createClineTaskParser()
+        : null;
     let closed = false;
     let timedOut = false;
     let aborted = false;
@@ -1255,6 +1291,14 @@ export async function runCli(
           : clineParser
             ? clineParser.taskId() ?? sessionPlan.sessionId
             : sessionPlan.sessionId,
+        contextTokens:
+          cli === "claude"
+            ? streamParser?.contextTokens() ?? null
+            : cli === "codex"
+              ? codexParser?.contextTokens() ?? null
+              : cli === "cline"
+                ? clineParser?.contextTokens() ?? null
+                : null,
       });
     });
   });
