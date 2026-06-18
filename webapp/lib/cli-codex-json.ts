@@ -26,12 +26,15 @@ export type CodexJsonParser = {
   threadId(): string | null;
   /** Concatenated `agent_message` text, the plain-text answer. */
   text(): string;
+  /** input+output tokens of the latest turn.completed, or null. */
+  contextTokens(): number | null;
 };
 
 export function createCodexJsonParser(): CodexJsonParser {
   let buffer = "";
   let threadId: string | null = null;
   const messages: string[] = [];
+  let context: number | null = null;
 
   function consumeLine(line: string): void {
     const trimmed = line.trim();
@@ -53,6 +56,14 @@ export function createCodexJsonParser(): CodexJsonParser {
       if (item.type === "agent_message" && typeof item.text === "string") {
         messages.push(item.text);
       }
+    }
+    if (o.type === "turn.completed" && o.usage && typeof o.usage === "object") {
+      const u = o.usage as Record<string, unknown>;
+      const inTok = typeof u.input_tokens === "number" ? u.input_tokens : 0;
+      const outTok = typeof u.output_tokens === "number" ? u.output_tokens : 0;
+      const total = inTok + outTok;
+      if (total > 0) context = total;
+      return;
     }
   }
 
@@ -76,6 +87,9 @@ export function createCodexJsonParser(): CodexJsonParser {
         buffer = "";
       }
       return messages.join("\n").trim();
+    },
+    contextTokens(): number | null {
+      return context;
     },
   };
 }

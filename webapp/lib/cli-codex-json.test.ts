@@ -54,3 +54,30 @@ describe("createCodexJsonParser", () => {
     expect(p.text()).toBe("");
   });
 });
+
+describe("codex contextTokens", () => {
+  it("sums input+output from the latest turn.completed usage", () => {
+    const p = createCodexJsonParser();
+    p.push(
+      JSON.stringify({ type: "thread.started", thread_id: "t1" }) + "\n",
+    );
+    p.push(
+      JSON.stringify({
+        type: "turn.completed",
+        usage: {
+          input_tokens: 17271,
+          cached_input_tokens: 4992,
+          output_tokens: 17,
+          reasoning_output_tokens: 10,
+        },
+      }) + "\n",
+    );
+    expect(p.contextTokens()).toBe(17288);
+  });
+
+  it("returns null when no turn.completed seen", () => {
+    const p = createCodexJsonParser();
+    p.push(JSON.stringify({ type: "thread.started", thread_id: "t" }) + "\n");
+    expect(p.contextTokens()).toBeNull();
+  });
+});
