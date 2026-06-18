@@ -6,7 +6,8 @@ import path from "node:path";
 import { loadConfig } from "./config";
 import { runCli, type CliName } from "./cli";
 import { resolveAgentForRole } from "./agent-roles";
-import { CONFIG_ROOT, PROJECT_ROOT, WIKI_ROOT } from "./paths";
+import { CONFIG_ROOT } from "./paths";
+import { listWikiMarkdownDocs } from "./wiki-docs";
 
 export type PublicQuerySource = {
   path: string;
@@ -44,13 +45,7 @@ const MAX_DOC_BYTES = 256 * 1024;
 const MAX_CONTEXT_DOCS = 8;
 const MAX_EXCERPT_CHARS = 1400;
 const PUBLIC_QUERY_CLI_TIMEOUT_MS = 300_000;
-const MARKDOWN_EXT = /\.(md|mdx)$/i;
 const PUBLIC_CLI_HOME = path.join(CONFIG_ROOT, "public-cli-home");
-const SKIP_DIRS = new Set([
-  ".git",
-  ".progress",
-  "archive",
-]);
 
 export function normalizePublicQuestion(input: string): string {
   const trimmed = input.trim().replace(/\r\n?/g, "\n");
@@ -80,58 +75,13 @@ function tokenize(input: string): string[] {
   return matches ? Array.from(new Set(matches)).slice(0, 80) : [];
 }
 
-function titleFromMarkdown(rel: string, text: string): string {
-  const frontmatterTitle = /^---\n[\s\S]*?\ntitle:\s*(.+?)\n[\s\S]*?\n---/m.exec(text);
-  if (frontmatterTitle?.[1]) {
-    return frontmatterTitle[1].replace(/^["']|["']$/g, "").trim();
-  }
-  const heading = /^#\s+(.+)$/m.exec(text);
-  if (heading?.[1]) return heading[1].trim();
-  return path.basename(rel, path.extname(rel));
-}
-
-async function walkWiki(dir: string, out: string[]): Promise<void> {
-  let entries: import("node:fs").Dirent[];
-  try {
-    entries = await fs.readdir(dir, { withFileTypes: true });
-  } catch (err) {
-    if ((err as NodeJS.ErrnoException).code === "ENOENT") return;
-    throw err;
-  }
-
-  for (const entry of entries) {
-    if (entry.name.startsWith(".") && entry.name !== ".progress") continue;
-    if (SKIP_DIRS.has(entry.name)) continue;
-    const abs = path.join(dir, entry.name);
-    if (entry.isDirectory()) {
-      await walkWiki(abs, out);
-    } else if (entry.isFile() && MARKDOWN_EXT.test(entry.name)) {
-      out.push(abs);
-    }
-  }
-}
-
 async function readWikiDocs(): Promise<WikiDoc[]> {
-  const docs: WikiDoc[] = [];
-  const indexAbs = path.join(WIKI_ROOT, "index.md");
-  const seen = new Set<string>();
-
-  async function readOne(abs: string) {
-    if (seen.has(abs)) return;
-    seen.add(abs);
-    const st = await fs.stat(abs).catch(() => null);
-    if (!st?.isFile() || st.size > MAX_DOC_BYTES) return;
-    const text = await fs.readFile(abs, "utf8");
-    const rel = path.relative(PROJECT_ROOT, abs).split(path.sep).join("/");
-    docs.push({ rel, title: titleFromMarkdown(rel, text), text });
-  }
-
-  await readOne(indexAbs);
-  const files: string[] = [];
-  await walkWiki(WIKI_ROOT, files);
-  files.sort();
-  for (const abs of files) await readOne(abs);
-  return docs;
+  const docs = await listWikiMarkdownDocs({ maxDocBytes: MAX_DOC_BYTES });
+  return docs.map((doc) => ({
+    rel: doc.projectPath,
+    title: doc.title,
+    text: doc.text,
+  }));
 }
 
 function scoreDoc(doc: WikiDoc, tokens: string[]): number {

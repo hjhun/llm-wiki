@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { cliSupportsResume, planSession } from "./cli";
+import {
+  cliSupportsResume,
+  planSession,
+  publicSandboxReadOnlyHomePathsForCli,
+} from "./cli";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
@@ -99,5 +103,32 @@ describe("planSession", () => {
     for (const cli of ["agy"] as const) {
       expect(planSession(cli, { id: "x", resume: true })).toEqual(NOOP);
     }
+  });
+});
+
+describe("publicSandboxReadOnlyHomePathsForCli", () => {
+  it("narrows Codex binds to credential/config files and writable runtime dirs", () => {
+    expect(
+      publicSandboxReadOnlyHomePathsForCli("codex", "/home/test", [
+        ".codex",
+        ".local/share/codex",
+        "/home/test/.cache/codex",
+        ".agents",
+      ]),
+    ).toEqual([
+      ".agents",
+      ".codex.json",
+      ".codex/AGENTS.md",
+      ".codex/auth.json",
+      ".codex/config.toml",
+      ".codex/rules",
+    ]);
+  });
+
+  it("leaves non-Codex sandbox paths unchanged", () => {
+    const paths = [".codex", ".claude", ".local/share/claude"];
+    expect(
+      publicSandboxReadOnlyHomePathsForCli("claude", "/home/test", paths),
+    ).toBe(paths);
   });
 });

@@ -590,6 +590,45 @@ function mergeHomePathEntries(
   return Array.from(seen).sort();
 }
 
+const CODEX_READ_ONLY_FILES = [
+  ".codex/AGENTS.md",
+  ".codex/auth.json",
+  ".codex/config.toml",
+  ".codex/rules",
+  ".codex.json",
+] as const;
+
+const CODEX_WRITABLE_RUNTIME_DIRS = new Set([
+  ".codex",
+  ".config/codex",
+  ".local/share/codex",
+  ".local/state/codex",
+  ".cache/codex",
+]);
+
+export function publicSandboxReadOnlyHomePathsForCli(
+  cli: CliName,
+  hostHome: string,
+  readOnlyPaths: string[],
+): string[] {
+  if (cli !== "codex") return readOnlyPaths;
+
+  const seen = new Set<string>();
+  for (const entry of readOnlyPaths) {
+    const rel = homeRelativeEntry(entry, hostHome);
+    if (!rel) continue;
+
+    if (rel === ".codex") {
+      for (const replacement of CODEX_READ_ONLY_FILES) seen.add(replacement);
+      continue;
+    }
+
+    if (CODEX_WRITABLE_RUNTIME_DIRS.has(rel)) continue;
+    seen.add(rel);
+  }
+  return Array.from(seen).sort();
+}
+
 function hostXdgBaseRel(
   envName: XdgEnvName,
   defaultRel: string,
@@ -932,6 +971,11 @@ async function buildBubblewrapSpawnPlan(input: {
     input.sandbox.readOnlyPaths ?? [],
     await detectedRuntimeHomePaths(input.cli),
   );
+  const cliReadOnlyHomePaths = publicSandboxReadOnlyHomePathsForCli(
+    input.cli,
+    hostHome,
+    readOnlyHomePaths,
+  );
   const cwd = path.resolve(input.cwd);
   const args = [
     "--die-with-parent",
@@ -976,7 +1020,7 @@ async function buildBubblewrapSpawnPlan(input: {
     args,
     sandboxHomeSource,
     sandboxHomeTarget,
-    readOnlyHomePaths,
+    cliReadOnlyHomePaths,
   );
   const sandboxCliPath = await addCliRuntimeBinds(args, input.cli, input.cliPath);
   await addAgentBrowserRuntimeBinds(args, sandboxHomeSource, sandboxHomeTarget);
