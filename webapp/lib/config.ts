@@ -368,6 +368,43 @@ export const ConfigSchema = z.object({
          * path. Set false to force the legacy path for every iteration.
          */
         resumeSessions: z.boolean().default(true),
+        /**
+         * Context-window compaction. When a host CLI's measured context usage
+         * (RunResult.contextTokens) reaches `ratio` of its
+         * `contextWindowTokens[cli]`, the ingest loop compacts: claude/codex
+         * drop the resume session id so the next iteration starts a fresh
+         * session re-reading disk state; cline runs the next iteration with its
+         * native `--compaction` flag. A window of 0 (e.g. agy, which has no
+         * token telemetry) disables compaction for that CLI.
+         */
+        compaction: z
+          .object({
+            enabled: z.boolean().default(true),
+            ratio: z.number().gt(0).lte(1).default(0.9),
+            contextWindowTokens: z
+              .object({
+                claude: z.number().int().min(0).default(200000),
+                codex: z.number().int().min(0).default(272000),
+                cline: z.number().int().min(0).default(200000),
+                agy: z.number().int().min(0).default(0),
+              })
+              .default({
+                claude: 200000,
+                codex: 272000,
+                cline: 200000,
+                agy: 0,
+              }),
+          })
+          .default({
+            enabled: true,
+            ratio: 0.9,
+            contextWindowTokens: {
+              claude: 200000,
+              codex: 272000,
+              cline: 200000,
+              agy: 0,
+            },
+          }),
       })
       .default({
         maxIterations: 1000,
@@ -375,6 +412,16 @@ export const ConfigSchema = z.object({
         maxRetryAttempts: 3,
         retryBackoffMs: [5000, 30_000],
         resumeSessions: true,
+        compaction: {
+          enabled: true,
+          ratio: 0.9,
+          contextWindowTokens: {
+            claude: 200000,
+            codex: 272000,
+            cline: 200000,
+            agy: 0,
+          },
+        },
       }),
   }),
   ui: z.object({
