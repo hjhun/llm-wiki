@@ -800,7 +800,15 @@ In the `case "claude":` branch, force stream-json when measuring (so the `result
     }
 ```
 
-In the `case "cline":` branch, add `-v` when measuring and `--compaction` when requested:
+In the `case "cline":` branch, add `-v` when measuring and `--compaction` when requested.
+
+**CONSTRAINT (verified by the user):** cline `-v` is only valid when combined
+with `-y -p <prompt>`. A standalone `-v` (or `-v` without `-p <prompt>`) drops
+cline into interactive mode, which hangs a non-interactive backend run. The
+`base` array below always contains `-p <prompt>`, so `-v`/`--compaction` are
+always appended to an invocation that already carries the prompt — never
+standalone. Keep this ordering (`... -p <prompt> -v [--compaction] [sessionArgs]`)
+and never emit `-v`/`--compaction` outside this branch.
 
 ```ts
     case "cline": {
