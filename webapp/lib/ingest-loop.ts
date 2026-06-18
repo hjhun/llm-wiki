@@ -1,7 +1,12 @@
 import fs from "node:fs/promises";
 import { createHash } from "node:crypto";
 import path from "node:path";
-import { runCli, type CliName } from "./cli";
+import {
+  runCli,
+  cliSupportsResume,
+  type CliName,
+  type SessionOption,
+} from "./cli";
 import type { Config } from "./config";
 import { buildGraphifyPrompt } from "./graph";
 import { runPostMergeMiniLint } from "./post-merge-lint";
@@ -1363,6 +1368,28 @@ export type RunIngestLoopResult = {
   anyProgress: boolean;
 };
 
+/**
+ * Compact continuation prompt for the single ingest-loop agent resuming its OWN
+ * warm CLI conversation across iterations. The operating instructions, the
+ * wiki-ingest skill, and the session log were established earlier in the same
+ * conversation, so they are deliberately not repeated — that is the point of
+ * resume. Only per-iteration dynamics are sent: re-read the latest on-disk
+ * state before acting, since the durable source of truth is the wiki +
+ * progress files.
+ */
+function buildIngestLoopDeltaPrompt(input: {
+  iteration: number;
+  rawScope: string | null;
+}): string {
+  const scope = input.rawScope ?? "raw/";
+  return [
+    `Continue this resumed /ingest-loop session — iteration ${input.iteration}.`,
+    "Your earlier operating instructions, the wiki-ingest skill, the operation policy, and the active session log from THIS same conversation still apply. Do not reload or restate them.",
+    `Before writing, re-read the latest on disk yourself: progress/ingest/.state.json plus the entity registry and any source pages you would touch (scope: ${scope}). Act on the current on-disk state, not on what you remember.`,
+    "Process the next pending sub-chunks for the scope per the configured chunking.unitPerCall contract, persisting each source page + state as you go. When the scope's pending/in_progress/partial work reaches zero or you hit a natural stopping point, exit — the backend loop resumes you if anything remains.",
+  ].join("\n");
+}
+
 export async function runIngestLoop(
   input: RunIngestLoopInput,
 ): Promise<RunIngestLoopResult> {
@@ -1400,6 +1427,14 @@ export async function runIngestLoop(
     input.progressRef !== undefined
       ? input.progressRef
       : await buildProgressReference();
+  // Keep one warm CLI conversation across iterations when the host CLI supports
+  // resume-by-id and config enables it. Iteration 1 assigns/captures the id;
+  // later iterations resume it with a compact delta prompt instead of a full
+  // context re-injection. CLIs without resume support (agy) transparently fall
+  // back to the legacy fresh-process + full-prompt path.
+  const canResume =
+    cfg.cli.ingestLoop.resumeSessions && cliSupportsResume(agent);
+  let sessionId: string | null = null;
 
   while (true) {
     if (await stopFlagExists(sessionPath)) {
@@ -1414,8 +1449,14 @@ export async function runIngestLoop(
     }
 
     iteration += 1;
-    const iterPrompt =
-      iteration === 1
+    // Resume this iteration only when the warm session is already established
+    // (iteration > 1 with a captured/assigned id). Iteration 1 — or any
+    // iteration after an id capture failed — starts/assigns a session with the
+    // full prompt; later resumed iterations send a compact delta.
+    const resuming = canResume && iteration > 1 && sessionId != null;
+    const iterPrompt = resuming
+      ? buildIngestLoopDeltaPrompt({ iteration, rawScope })
+      : iteration === 1
         ? initialPrompt
         : buildLoopContinuationPrompt({
             sessionPath,
@@ -1428,6 +1469,11 @@ export async function runIngestLoop(
             codeWikiStatusRef: await buildCodeWikiStatusReference({ rawScope }),
             rawScope,
           });
+    const session: SessionOption | undefined = canResume
+      ? resuming
+        ? { id: sessionId as string, resume: true }
+        : {}
+      : undefined;
 
     const banner = `\n\n---\n[loop iter ${iteration}/${maxIter}]\n`;
     if (iteration > 1) {
@@ -1446,6 +1492,7 @@ export async function runIngestLoop(
         iteration,
         sessionPath,
         onChunk,
+        session,
       },
       {
         runCli,
@@ -1464,6 +1511,10 @@ export async function runIngestLoop(
     }
 
     const result = attempt.result;
+    // Thread the resolved id forward so the next iteration resumes this same
+    // conversation. Keep the prior id if this run reported none (e.g. a codex
+    // capture miss) so a later iteration can retry the resume.
+    if (canResume) sessionId = result.sessionId ?? sessionId;
     lastExitCode = result.exitCode;
     const iterReply =
       result.stdout.trim() ||

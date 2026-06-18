@@ -530,7 +530,7 @@ export const TEXT = {
         "랄프 루프 budget입니다. 진행이 있는 라운드는 무제한으로 계속하고, 진행이 없는(실패) 라운드가 연속으로 이 횟수에 도달하면 루프를 중단합니다. 진행이 감지되면 카운트는 0으로 리셋됩니다.",
       resumeSessions: "워커 세션 이어가기 (claude·codex·cline)",
       resumeSessionsDesc:
-        "멀티 에이전트 /ingest-loop에서 각 워커가 자신의 CLI 대화를 라운드마다 resume하고(claude --session-id/--resume, codex exec resume, cline -T <task id>), 전체 컨텍스트 재주입 대신 짧은 델타 프롬프트만 받습니다. resume를 지원하지 않는 CLI(agy)는 기존 방식으로 자동 폴백합니다. 끄면 모든 워커가 기존(매 라운드 새 프로세스+전체 프롬프트) 방식으로 동작합니다.",
+        "/ingest-loop이 iteration마다 하나의 warm CLI 대화를 resume합니다(claude --session-id/--resume, codex exec resume, cline -T <task id>). 첫 iteration이 세션 id를 할당/캡처하고, 이후 iteration은 전체 컨텍스트 재주입 대신 짧은 델타 프롬프트만 받습니다. resume를 지원하지 않는 CLI(agy)는 기존 방식으로 자동 폴백합니다. 끄면 매 iteration 새 프로세스+전체 프롬프트로 동작합니다.",
       followDefaultCli: "기본 CLI 따름",
       roleMaintenanceCli: "유지보수 CLI (ingest·lint·graph)",
       roleQueryCli: "Query CLI (/query·/clio)",
@@ -1227,7 +1227,7 @@ export const TEXT = {
         "Ralph-loop budget. Productive rounds run unbounded; the loop halts only after this many consecutive no-progress (failed) rounds. The counter resets to zero whenever a round makes progress.",
       resumeSessions: "Resume worker sessions (claude·codex·cline)",
       resumeSessionsDesc:
-        "In multi-agent /ingest-loop, each worker resumes its own CLI conversation across rounds (claude --session-id/--resume, codex exec resume, cline -T <task id>) and receives a compact delta prompt instead of a full context re-injection. CLIs without resume-by-id support (agy) fall back to the legacy behavior automatically. Turn off to force every worker into the legacy fresh-process + full-prompt path.",
+        "/ingest-loop keeps one warm CLI conversation across iterations (claude --session-id/--resume, codex exec resume, cline -T <task id>). Iteration 1 assigns/captures the session id; later iterations resume it and receive a compact delta prompt instead of a full context re-injection. CLIs without resume-by-id support (agy) fall back to the legacy behavior automatically. Turn off to force the legacy fresh-process + full-prompt path every iteration.",
       followDefaultCli: "Follow default CLI",
       roleMaintenanceCli: "Maintenance CLI (ingest·lint·graph)",
       roleQueryCli: "Query CLI (/query·/clio)",

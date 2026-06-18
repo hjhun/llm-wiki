@@ -359,12 +359,13 @@ export const ConfigSchema = z.object({
           .array(z.number().int().min(0))
           .default([5000, 30_000]),
         /**
-         * Native CLI conversation resume across loop iterations (claude
-         * `--session-id`/`--resume`, codex `exec resume`, cline `-T <task id>`).
-         * Built for the removed multi-agent workers; the single-agent
-         * `runIngestLoop` does not yet thread it, so this currently has no
-         * effect. Retained for config back-compat and a future loop-resume
-         * optimization. See `cli.ts` RESUME_SUPPORT.
+         * Keep one warm CLI conversation across /ingest-loop iterations via
+         * native resume-by-id (claude `--session-id`/`--resume`, codex
+         * `exec resume`, cline `-T <task id>`). Iteration 1 assigns/captures the
+         * id; later iterations resume it and receive a compact delta prompt
+         * instead of a full context re-injection. CLIs without resume support
+         * (agy) transparently fall back to the legacy fresh-process + full-prompt
+         * path. Set false to force the legacy path for every iteration.
          */
         resumeSessions: z.boolean().default(true),
       })

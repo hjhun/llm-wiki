@@ -9,7 +9,7 @@
  */
 
 import type { runCli, CliName } from "../cli";
-import type { RunResult } from "../cli";
+import type { RunResult, SessionOption } from "../cli";
 import type { Config } from "../config";
 import type { appendMessage } from "../sessions";
 import type { StateSummary } from "./types";
@@ -86,6 +86,14 @@ export type CliRetryInput = {
   iteration: number;
   sessionPath: string;
   onChunk?: (text: string) => void;
+  /**
+   * Native CLI conversation resume for this iteration. When set, the loop
+   * keeps one warm CLI session across iterations: the first iteration assigns
+   * or captures a session id; later iterations resume it. The resolved id is
+   * available on the returned `result.sessionId`. Undefined keeps the legacy
+   * fresh-process behavior.
+   */
+  session?: SessionOption;
 };
 
 export async function runCliWithIngestLoopRetries(
@@ -117,6 +125,7 @@ export async function runCliWithIngestLoopRetries(
         timeoutMs: input.timeoutMs,
         signal: input.signal,
         killOnAbort: input.timeoutMs != null,
+        session: input.session,
         onStdout: (chunk) => {
           input.onChunk?.(chunk);
         },

@@ -125,6 +125,15 @@ describe("runCliWithIngestLoopRetries", () => {
     expect(deps.runCli).toHaveBeenCalledTimes(1);
   });
 
+  it("forwards the session option to runCli for warm-session resume", async () => {
+    const deps = makeDeps([result(0)]);
+    const session = { id: "sess-1", resume: true };
+    await runCliWithIngestLoopRetries({ ...input, session }, deps);
+    expect(deps.runCli).toHaveBeenCalledTimes(1);
+    const opts = (deps.runCli as ReturnType<typeof vi.fn>).mock.calls[0][2];
+    expect(opts.session).toEqual(session);
+  });
+
   it("treats a thrown runCli as a failed attempt", async () => {
     const deps = makeDeps([], {
       runCli: vi.fn(async () => {
