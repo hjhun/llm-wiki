@@ -23,7 +23,7 @@
     "maxBytes": 262144,
     "maxFilesPerInvocation": 4,
     "maxBytesPerFile": 131072,
-    "unitPerCall": "one_subchunk"
+    "unitPerCall": "session_batch"
   },
   "graph": {
     "minCommunitySize": 3,

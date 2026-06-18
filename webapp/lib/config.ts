@@ -55,20 +55,17 @@ export const ConfigSchema = z.object({
     orchestration: z
       .object({
         /**
-         * Optional CLI used by multi-agent wiki operations. When null, the
-         * operation uses the caller/default CLI. When set, every worker and
-         * coordinator pass uses this single CLI instead of rotating across all
-         * detected CLIs.
+         * @deprecated Unused since the multi-CLI coordinator was removed;
+         * ingest/lint now run through the single-agent loop. Kept so existing
+         * config files validate. Safe to drop with its Settings UI section.
          */
         cli: z
           .enum(["codex", "claude", "agy", "cline"])
           .nullable()
           .default(null),
         /**
-         * Upper bound for worker CLI processes the chat orchestrator may run
-         * for /ingest, /ingest-loop, and /lint. /query uses a single CLI
-         * agent. The coordinator uses the selected orchestration CLI and uses
-         * `namePrefix` as a stable seed for live worker personas.
+         * @deprecated No longer launches parallel worker CLIs — ingest is a
+         * single warm session. Retained only for config back-compat.
          */
         maxConcurrentAgents: z.number().int().min(1).max(16).default(2),
         namePrefix: z.string().min(1).max(40).default("scientists"),
@@ -97,13 +94,19 @@ export const ConfigSchema = z.object({
      */
     maxBytesPerFile: z.number().int().min(1024).default(128 * 1024),
     /**
-     * Unit of work per LLM invocation. "one_subchunk" is the default — after a
-     * sub-chunk finishes, the call exits and the next sub-chunk runs in a
-     * fresh invocation.
+     * Unit of work per warm CLI session. "session_batch" is the default — the
+     * agent keeps processing the next pending sub-chunk in the SAME session
+     * (each sub-chunk still bounded by maxFilesPerInvocation/maxBytesPerFile),
+     * persisting its source page and state after each, until the scope's
+     * pending work reaches zero or it hits a natural stopping point, then
+     * exits. The backend ingest loop resumes a fresh session if it ended early.
+     * This avoids cold-respawning a CLI per sub-chunk, the main ingest cost.
+     * "one_subchunk" is the conservative fallback for small-context hosts:
+     * exactly one sub-chunk per invocation, then exit.
      */
     unitPerCall: z
-      .enum(["one_subchunk", "one_leaf", "one_file"])
-      .default("one_subchunk"),
+      .enum(["one_subchunk", "one_leaf", "one_file", "session_batch"])
+      .default("session_batch"),
   }),
   graph: z.object({
     minCommunitySize: z.number().int().min(1).default(3),
@@ -381,13 +384,12 @@ export const ConfigSchema = z.object({
           .array(z.number().int().min(0))
           .default([5000, 30_000]),
         /**
-         * When true, each multi-agent /ingest-loop worker resumes its OWN host
-         * CLI conversation across rounds (claude `--session-id`/`--resume`,
-         * codex `exec resume`, cline `-T <task id>`) and receives a compact
-         * delta prompt instead of a full context re-injection each round.
-         * Workers on CLIs without resume-by-id support (agy) transparently fall
-         * back to the legacy fresh-process + full-prompt behavior. Set false to
-         * force the legacy behavior for every worker.
+         * Native CLI conversation resume across loop iterations (claude
+         * `--session-id`/`--resume`, codex `exec resume`, cline `-T <task id>`).
+         * Built for the removed multi-agent workers; the single-agent
+         * `runIngestLoop` does not yet thread it, so this currently has no
+         * effect. Retained for config back-compat and a future loop-resume
+         * optimization. See `cli.ts` RESUME_SUPPORT.
          */
         resumeSessions: z.boolean().default(true),
       })

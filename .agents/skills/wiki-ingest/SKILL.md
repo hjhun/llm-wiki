@@ -33,20 +33,27 @@ externalized to `progress/ingest/`.
 
 ## Triggers
 
-- `/ingest <path|URL>` — chat slash command. Processes **exactly one
-  sub-chunk** and exits, per the `unitPerCall: "one_subchunk"` contract. The
-  user (or the webapp) re-invokes `/ingest` to advance.
-- `/ingest-loop <path|URL>` — same skill body, but driven by the webapp's
-  backend loop in `/api/chat/send` (`kind="ingest-loop"`). The backend keeps
-  spawning a fresh CLI invocation per sub-chunk until
-  `progress/ingest/.state.json` reports no remaining `pending`,
-  `in_progress`, or `partial` sub-chunks and `merge_pass.status === "done"`,
-  or until the user clicks "Stop loop" (which drops
-  `progress/ingest/.stop`). Before fan-out, the backend performs a deterministic
-  filename/stat-only leaf bootstrap so the first worker round can partition
-  actionable leaves immediately instead of spending one LLM call on
-  enumeration. Each worker iteration must still process exactly one sub-chunk
-  and exit — the skill never loops itself.
+- `/ingest <path|URL>` — chat slash command. Both `/ingest` and `/ingest-loop`
+  run through one single-agent backend loop (`runIngestLoop`); there is no
+  multi-worker fan-out. Per the default `unitPerCall: "session_batch"` contract,
+  keep processing the next pending sub-chunk **in this same session** (each
+  sub-chunk still bounded by `maxFilesPerInvocation`/`maxBytesPerFile`),
+  persisting its source page and state after each, until the scope's pending
+  work reaches zero or you hit a natural stopping point, then exit. Do not exit
+  after a single sub-chunk unless `unitPerCall: "one_subchunk"` is configured.
+- `/ingest-loop <path|URL>` — same skill body, driven by the webapp's backend
+  loop in `/api/chat/send` (`kind="ingest-loop"`). The backend re-invokes the
+  CLI (resuming the warm session when the host CLI supports it) until
+  `progress/ingest/.state.json` reports no remaining `pending`, `in_progress`,
+  or `partial` sub-chunks and `merge_pass.status === "done"`, or until the user
+  clicks "Stop loop" (which drops `progress/ingest/.stop`). Before the first
+  iteration, the backend performs a deterministic filename/stat-only leaf
+  bootstrap so the session can act on actionable leaves immediately instead of
+  spending one LLM call on enumeration. The backend loop is the outer
+  resumption/safety net; within a session you self-loop over sub-chunks per the
+  `session_batch` contract, but stop and exit cleanly when you hit a per-leaf
+  lock you cannot pass or context grows large enough that a fresh session would
+  be cleaner — the backend resumes you.
 - `/ingest` with no argument — incremental ingest for all of `raw/`.
 - Natural-language triggers: "summarize this material", "I added something new to raw", "ingest ...".
 - UI: chat input `+` menu -> ingest.
@@ -104,7 +111,11 @@ conversation. The host webapp also slims the prompt to the last N turns
    - `chunking.maxFiles`, `chunking.maxBytes` — soft cap per chunk.
    - `chunking.maxFilesPerInvocation` — **hard cap per LLM call**. Defaults to 4.
    - `chunking.maxBytesPerFile` — files above this read head + tail only.
-   - `chunking.unitPerCall` — defaults to `"one_subchunk"`. Honor this strictly.
+   - `chunking.unitPerCall` — defaults to `"session_batch"`: keep processing
+     pending sub-chunks within this one warm session (each still bounded by the
+     caps above) until the scope is done or you hit a natural stop, then exit.
+     `"one_subchunk"` is the conservative fallback — exactly one sub-chunk per
+     invocation. Honor whichever is configured strictly.
 4. If the host coding-agent CLI is stateless (`claude -p`, `codex exec`, …), the
    host already slim-injects: a short dashboard reference + last N turns. Do
    **not** ask for the whole session markdown back.
