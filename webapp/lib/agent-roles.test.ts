@@ -13,12 +13,6 @@ function makeConfig(agent: Partial<Config["agent"]>): Config {
       safeMode: false,
       paths: {},
       roles: { maintenance: null, query: null },
-      orchestration: {
-        cli: null,
-        maxConcurrentAgents: 2,
-        namePrefix: "scientists",
-        managerName: "Coordinator",
-      },
       ...agent,
     },
   } as unknown as Config;

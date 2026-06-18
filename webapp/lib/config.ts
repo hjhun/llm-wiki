@@ -52,31 +52,6 @@ export const ConfigSchema = z.object({
           .default(null),
       })
       .default({ maintenance: null, query: null }),
-    orchestration: z
-      .object({
-        /**
-         * @deprecated Unused since the multi-CLI coordinator was removed;
-         * ingest/lint now run through the single-agent loop. Kept so existing
-         * config files validate. Safe to drop with its Settings UI section.
-         */
-        cli: z
-          .enum(["codex", "claude", "agy", "cline"])
-          .nullable()
-          .default(null),
-        /**
-         * @deprecated No longer launches parallel worker CLIs — ingest is a
-         * single warm session. Retained only for config back-compat.
-         */
-        maxConcurrentAgents: z.number().int().min(1).max(16).default(2),
-        namePrefix: z.string().min(1).max(40).default("scientists"),
-        managerName: z.string().min(1).max(40).default("Coordinator"),
-      })
-      .default({
-        cli: null,
-        maxConcurrentAgents: 2,
-        namePrefix: "scientists",
-        managerName: "Coordinator",
-      }),
   }),
   chunking: z.object({
     /** Soft cap on the number of files in a single chunk. */
@@ -831,18 +806,6 @@ function normalizeLegacyGeminiCli(value: unknown): unknown {
       }
       delete nextPaths.gemini;
       nextAgent.paths = nextPaths;
-    }
-    const orchestration = nextAgent.orchestration;
-    if (
-      orchestration &&
-      typeof orchestration === "object" &&
-      !Array.isArray(orchestration)
-    ) {
-      const nextOrchestration: Record<string, unknown> = {
-        ...(orchestration as Record<string, unknown>),
-      };
-      if (nextOrchestration.cli === "gemini") nextOrchestration.cli = "agy";
-      nextAgent.orchestration = nextOrchestration;
     }
     const roles = nextAgent.roles;
     if (roles && typeof roles === "object" && !Array.isArray(roles)) {

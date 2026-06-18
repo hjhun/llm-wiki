@@ -62,7 +62,6 @@ function cloneConfig(config: SettingsConfig): SettingsConfig {
       ...config.agent,
       paths: { ...config.agent.paths },
       roles: { ...config.agent.roles },
-      orchestration: { ...config.agent.orchestration },
     },
     cli: {
       ...config.cli,
@@ -600,64 +599,6 @@ export default function Settings() {
                   </div>
                   <p className="mt-2 text-xs leading-relaxed text-ink-faint">
                     {t.settings.agentRolesDesc}
-                  </p>
-                  <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                    <label className="rounded border border-line bg-bg px-3 py-2">
-                      <span className="text-xs text-ink-faint">
-                        {t.settings.multiAgentCli}
-                      </span>
-                      <select
-                        value={draft.agent.orchestration.cli ?? ""}
-                        onChange={(e) =>
-                          updateDraft((next) => {
-                            next.agent.orchestration.cli =
-                              e.target.value === ""
-                                ? null
-                                : (e.target.value as CliName);
-                          })
-                        }
-                        className="mt-1 block w-full rounded border border-line bg-bg-panel px-2 py-1.5 text-sm text-ink outline-none focus:border-accent"
-                      >
-                        <option value="">{t.settings.followDefaultCli}</option>
-                        {CLI_NAMES.map((name) => (
-                          <option key={name} value={name}>
-                            {name}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <NumberField
-                      label={t.settings.maxConcurrentAgents}
-                      value={draft.agent.orchestration.maxConcurrentAgents}
-                      min={1}
-                      max={16}
-                      onChange={(value) =>
-                        updateDraft((next) => {
-                          next.agent.orchestration.maxConcurrentAgents = value;
-                        })
-                      }
-                    />
-                    <TextField
-                      label={t.settings.agentNamePrefix}
-                      value={draft.agent.orchestration.namePrefix}
-                      onChange={(value) =>
-                        updateDraft((next) => {
-                          next.agent.orchestration.namePrefix = value;
-                        })
-                      }
-                    />
-                    <TextField
-                      label={t.settings.managerName}
-                      value={draft.agent.orchestration.managerName}
-                      onChange={(value) =>
-                        updateDraft((next) => {
-                          next.agent.orchestration.managerName = value;
-                        })
-                      }
-                    />
-                  </div>
-                  <p className="mt-2 text-xs leading-relaxed text-ink-faint">
-                    {t.settings.agentOrchestrationDesc}
                   </p>
                 </Panel>
               ) : null}

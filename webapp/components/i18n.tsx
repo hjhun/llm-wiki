@@ -419,7 +419,7 @@ export const TEXT = {
       settingsNavDesc: "항목을 탭으로 나눠 변경하고, 마지막에 우측 상단 Save로 저장합니다.",
       settingsActiveSection: "현재 섹션",
       settingsTabAgent: "Agent",
-      settingsTabAgentDesc: "기본 CLI, 안전 모드, 멀티 에이전트 실행 방식을 설정합니다.",
+      settingsTabAgentDesc: "기본 CLI, 안전 모드, 작업별 에이전트 역할을 설정합니다.",
       settingsTabRuntime: "Runtime",
       settingsTabRuntimeDesc: "위키 작업 기본값, 그래프, 언어와 테마를 조정합니다.",
       settingsTabAutomation: "Automation",
@@ -531,17 +531,11 @@ export const TEXT = {
       resumeSessions: "워커 세션 이어가기 (claude·codex·cline)",
       resumeSessionsDesc:
         "멀티 에이전트 /ingest-loop에서 각 워커가 자신의 CLI 대화를 라운드마다 resume하고(claude --session-id/--resume, codex exec resume, cline -T <task id>), 전체 컨텍스트 재주입 대신 짧은 델타 프롬프트만 받습니다. resume를 지원하지 않는 CLI(agy)는 기존 방식으로 자동 폴백합니다. 끄면 모든 워커가 기존(매 라운드 새 프로세스+전체 프롬프트) 방식으로 동작합니다.",
-      multiAgentCli: "멀티 에이전트 CLI",
       followDefaultCli: "기본 CLI 따름",
-      maxConcurrentAgents: "최대 동시 에이전트",
-      agentNamePrefix: "페르소나 시드",
-      managerName: "코디네이터 이름",
       roleMaintenanceCli: "유지보수 CLI (ingest·lint·graph)",
       roleQueryCli: "Query CLI (/query·/clio)",
       agentRolesDesc:
         "작업 종류별로 코딩 에이전트를 분리합니다. 유지보수(ingest, ingest-loop, lint, preprocess, graph)와 query(/query 및 공개 /clio)에 서로 다른 CLI를 지정할 수 있습니다. 비워두면 위의 기본 CLI를 따릅니다. 채팅에서 에이전트를 직접 고른 경우에는 그 선택이 우선합니다.",
-      agentOrchestrationDesc:
-        "/ingest, /ingest-loop, /lint는 여러 에이전트의 현재 배정 leaf와 상태를 진행 카드로 보여줍니다. /query는 단일 에이전트로 실행됩니다.",
       runtimeDefaults: "Runtime Defaults",
       wikiOperation: "wiki operation",
       appSubtitle: "CLIO 서브 이름",
@@ -1122,7 +1116,7 @@ export const TEXT = {
       settingsNavDesc: "Edit one section at a time, then use the top-right Save button.",
       settingsActiveSection: "Current section",
       settingsTabAgent: "Agent",
-      settingsTabAgentDesc: "Default CLI, safe mode, and multi-agent orchestration.",
+      settingsTabAgentDesc: "Default CLI, safe mode, and per-operation agent roles.",
       settingsTabRuntime: "Runtime",
       settingsTabRuntimeDesc: "Wiki operation defaults, graph behavior, language, and theme.",
       settingsTabAutomation: "Automation",
@@ -1234,17 +1228,11 @@ export const TEXT = {
       resumeSessions: "Resume worker sessions (claude·codex·cline)",
       resumeSessionsDesc:
         "In multi-agent /ingest-loop, each worker resumes its own CLI conversation across rounds (claude --session-id/--resume, codex exec resume, cline -T <task id>) and receives a compact delta prompt instead of a full context re-injection. CLIs without resume-by-id support (agy) fall back to the legacy behavior automatically. Turn off to force every worker into the legacy fresh-process + full-prompt path.",
-      multiAgentCli: "Multi-agent CLI",
       followDefaultCli: "Follow default CLI",
-      maxConcurrentAgents: "Max concurrent agents",
-      agentNamePrefix: "Persona seed",
-      managerName: "Coordinator name",
       roleMaintenanceCli: "Maintenance CLI (ingest·lint·graph)",
       roleQueryCli: "Query CLI (/query·/clio)",
       agentRolesDesc:
         "Split the coding agent by operation. Maintenance (ingest, ingest-loop, lint, preprocess, graph) and query (/query and the public /clio) can each use a different CLI. Leave a role empty to follow the default CLI above. An agent explicitly chosen in chat always takes precedence.",
-      agentOrchestrationDesc:
-        "/ingest, /ingest-loop, and /lint show each worker's current assigned leaf and status. /query runs as a single agent.",
       runtimeDefaults: "Runtime Defaults",
       wikiOperation: "wiki operation",
       appSubtitle: "CLIO subtitle",

@@ -32,12 +32,6 @@ const Body = z.object({
         maintenance: z.enum(["codex", "claude", "agy", "cline"]).nullable(),
         query: z.enum(["codex", "claude", "agy", "cline"]).nullable(),
       }),
-      orchestration: z.object({
-        cli: z.enum(["codex", "claude", "agy", "cline"]).nullable(),
-        maxConcurrentAgents: z.number().int().min(1).max(16),
-        namePrefix: z.string().min(1).max(40),
-        managerName: z.string().min(1).max(40),
-      }),
     })
     .optional(),
   cli: z

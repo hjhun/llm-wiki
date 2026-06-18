@@ -10,12 +10,6 @@
     "roles": {
       "maintenance": null,
       "query": null
-    },
-    "orchestration": {
-      "cli": null,
-      "maxConcurrentAgents": 2,
-      "namePrefix": "agent",
-      "managerName": "manager"
     }
   },
   "chunking": {

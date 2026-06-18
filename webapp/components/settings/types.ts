@@ -84,12 +84,6 @@ export type SettingsConfig = {
       maintenance: CliName | null;
       query: CliName | null;
     };
-    orchestration: {
-      cli: CliName | null;
-      maxConcurrentAgents: number;
-      namePrefix: string;
-      managerName: string;
-    };
   };
   cli: {
     streamTokens: boolean;
