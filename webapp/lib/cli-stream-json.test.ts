@@ -109,3 +109,49 @@ describe("createClaudeStreamParser", () => {
     expect(p.finalText()).toBe("complete");
   });
 });
+
+describe("claude stream-json contextTokens", () => {
+  it("sums usage from the terminal result event", () => {
+    const p = createClaudeStreamParser();
+    p.push(
+      JSON.stringify({
+        type: "assistant",
+        message: { content: [{ type: "text", text: "hi" }] },
+      }) + "\n",
+    );
+    p.push(
+      JSON.stringify({
+        type: "result",
+        result: "hi",
+        usage: {
+          input_tokens: 1000,
+          output_tokens: 50,
+          cache_read_input_tokens: 4000,
+          cache_creation_input_tokens: 200,
+        },
+      }) + "\n",
+    );
+    expect(p.finalText()).toBe("hi");
+    expect(p.contextTokens()).toBe(5250);
+  });
+
+  it("falls back to the last assistant message usage when no result usage", () => {
+    const p = createClaudeStreamParser();
+    p.push(
+      JSON.stringify({
+        type: "assistant",
+        message: {
+          content: [{ type: "text", text: "x" }],
+          usage: { input_tokens: 100, output_tokens: 10 },
+        },
+      }) + "\n",
+    );
+    expect(p.contextTokens()).toBe(110);
+  });
+
+  it("returns null when no usage was seen", () => {
+    const p = createClaudeStreamParser();
+    p.push(JSON.stringify({ type: "result", result: "ok" }) + "\n");
+    expect(p.contextTokens()).toBeNull();
+  });
+});

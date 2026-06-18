@@ -23,6 +23,8 @@ export type StreamJsonParser = {
   push(chunk: string): string;
   /** Authoritative final text: the `result` field if seen, else the deltas. */
   finalText(): string;
+  /** Total context tokens of the last/terminal usage, or null if unseen. */
+  contextTokens(): number | null;
 };
 
 type LineKind =
@@ -30,6 +32,18 @@ type LineKind =
   | { kind: "assistant"; text: string } // full (cumulative) message block
   | { kind: "result"; result: string } // terminal authoritative answer
   | { kind: "none" };
+
+function usageTokens(u: unknown): number | null {
+  if (!u || typeof u !== "object") return null;
+  const o = u as Record<string, unknown>;
+  const n = (k: string) => (typeof o[k] === "number" ? (o[k] as number) : 0);
+  const total =
+    n("input_tokens") +
+    n("output_tokens") +
+    n("cache_read_input_tokens") +
+    n("cache_creation_input_tokens");
+  return total > 0 ? total : null;
+}
 
 function contentBlockDeltaText(o: Record<string, unknown>): string | null {
   if (
@@ -94,6 +108,7 @@ export function createClaudeStreamParser(): StreamJsonParser {
   // message is just their cumulative duplicate — skip it so the live stream
   // and the delta fallback don't double-count the answer.
   let sawPartial = false;
+  let context: number | null = null;
 
   function consumeLine(line: string): string {
     const trimmed = line.trim();
@@ -105,6 +120,14 @@ export function createClaudeStreamParser(): StreamJsonParser {
       return ""; // not a JSON line (banner, blank, partial) — ignore
     }
     const parsed = classifyLine(obj);
+    const o = obj as Record<string, unknown>;
+    if (o.type === "result") {
+      const u = usageTokens(o.usage);
+      if (u !== null) context = u;
+    } else if (o.type === "assistant" && o.message && typeof o.message === "object") {
+      const u = usageTokens((o.message as Record<string, unknown>).usage);
+      if (u !== null) context = u;
+    }
     switch (parsed.kind) {
       case "result":
         result = parsed.result;
@@ -141,6 +164,9 @@ export function createClaudeStreamParser(): StreamJsonParser {
         buffer = "";
       }
       return result ?? streamed;
+    },
+    contextTokens(): number | null {
+      return context;
     },
   };
 }
