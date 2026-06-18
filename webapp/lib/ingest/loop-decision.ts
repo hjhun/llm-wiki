@@ -305,7 +305,7 @@ export function buildLoopContinuationPrompt(input: {
   ];
   if (rawScope) {
     lines.push(
-      `Original /ingest-loop target scope: ${rawScope}. Continue processing exactly this scope; do not pick pending leaves outside it unless the merge parent is needed for this scope.`,
+      `Original /ingest-loop target scope: ${rawScope}. Process exactly this scope; do not pick pending leaves outside it unless a merge parent is needed for this scope.`,
     );
   }
   if (input.progressRef) lines.push(input.progressRef);
@@ -313,7 +313,7 @@ export function buildLoopContinuationPrompt(input: {
   if (input.sourcePageStatusRef) lines.push(input.sourcePageStatusRef);
   if (input.codeWikiStatusRef) lines.push(input.codeWikiStatusRef);
   lines.push(
-    `This is /ingest-loop iteration ${input.iteration}. Pick the next pending sub-chunk, merge-pass parent, or missing direct-file pseudo-leaf enumeration from progress/ingest/.state.json${rawScope ? ` within ${rawScope}` : ""} and process exactly one unit per the wiki-ingest skill, then exit. Do not loop yourself — the backend will spawn the next iteration. For code/mixed leaves, do not create mirrored wiki/code file pages as a repair task; graphify runs separately after ingest progress is complete.`,
+    `This is /ingest-loop iteration ${input.iteration}. Drive the wiki-ingest leaf-first + merge work yourself in THIS session: read progress/ingest/.state.json${rawScope ? ` (within ${rawScope})` : ""} and keep processing pending sub-chunks, merge-pass parents, and missing direct-file pseudo-leaf enumerations — each sub-chunk still bounded by the chunking caps — per the configured chunking.unitPerCall contract. Continue until the scope's pending/in_progress/partial work reaches zero (then run the merge pass), or until context grows large enough that a fresh session would be cleaner; then exit. The backend only re-invokes you to resume if work remains — you own the loop within a session. For code/mixed leaves, do not create mirrored wiki/code file pages as a repair task; graphify runs separately after ingest progress is complete.`,
     "",
     "===== CONVERSATION =====",
     rawScope ? `User: /ingest-loop ${rawScope}` : "User: /ingest",
