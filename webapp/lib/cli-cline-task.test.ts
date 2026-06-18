@@ -34,3 +34,26 @@ describe("createClineTaskParser", () => {
     expect(p.taskId()).toBe("first");
   });
 });
+
+describe("cline contextTokens from -v summary line", () => {
+  it("parses `[Ns | IN in, OUT out]` into in+out", () => {
+    const p = createClineTaskParser();
+    p.push("Task started: abc123\n");
+    p.push("...work...\n");
+    p.push("[12s | 3500 in, 420 out]\n");
+    expect(p.taskId()).toBe("abc123");
+    expect(p.contextTokens()).toBe(3920);
+  });
+
+  it("parses the summary line even on a resume round with no Task banner", () => {
+    const p = createClineTaskParser();
+    p.push("[5s | 1000 in, 200 out]\n");
+    expect(p.contextTokens()).toBe(1200);
+  });
+
+  it("returns null when no summary line is seen", () => {
+    const p = createClineTaskParser();
+    p.push("Task started: x\n");
+    expect(p.contextTokens()).toBeNull();
+  });
+});

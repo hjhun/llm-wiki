@@ -21,34 +21,52 @@
 // eslint-disable-next-line no-control-regex
 const ANSI_RE = /\x1b\[[0-9;]*[A-Za-z]/g;
 const TASK_RE = /Task started:\s*(\S+)/;
+// cline -v final summary: `[<sec>s | <in> in, <out> out]` (whitespace-tolerant).
+const VERBOSE_RE = /\[\s*\d+s\s*\|\s*(\d+)\s*in,\s*(\d+)\s*out\s*\]/;
 
 export type ClineTaskParser = {
   /** Feed a raw stdout chunk (plain text). */
   push(chunk: string): void;
   /** Captured task id from the `Task started:` banner, or null if not seen. */
   taskId(): string | null;
+  /** in+out tokens from the latest `-v` summary line, or null. */
+  contextTokens(): number | null;
 };
 
 export function createClineTaskParser(): ClineTaskParser {
-  let buffer = "";
+  let idBuffer = "";
+  let verboseBuffer = "";
   let taskId: string | null = null;
+  let context: number | null = null;
 
   return {
     push(chunk: string): void {
-      if (taskId) return;
-      buffer += chunk.replace(ANSI_RE, "");
-      const m = TASK_RE.exec(buffer);
-      if (m) {
-        taskId = m[1];
-        buffer = "";
-        return;
+      const clean = chunk.replace(ANSI_RE, "");
+      // Task-id sniff: stop buffering once captured.
+      if (!taskId) {
+        idBuffer += clean;
+        const m = TASK_RE.exec(idBuffer);
+        if (m) {
+          taskId = m[1];
+          idBuffer = "";
+        } else if (idBuffer.length > 4096) {
+          idBuffer = idBuffer.slice(-256);
+        }
       }
-      // The marker is short; keep only a tail long enough to span a split
-      // banner so the buffer cannot grow without bound on large output.
-      if (buffer.length > 4096) buffer = buffer.slice(-256);
+      // Summary-line sniff: keep scanning to the end of the stream; keep the
+      // latest match so a resume round's line wins.
+      verboseBuffer += clean;
+      const v = VERBOSE_RE.exec(verboseBuffer);
+      if (v) {
+        context = Number(v[1]) + Number(v[2]);
+      }
+      if (verboseBuffer.length > 8192) verboseBuffer = verboseBuffer.slice(-512);
     },
     taskId(): string | null {
       return taskId;
+    },
+    contextTokens(): number | null {
+      return context;
     },
   };
 }
