@@ -22,7 +22,9 @@
 const ANSI_RE = /\x1b\[[0-9;]*[A-Za-z]/g;
 const TASK_RE = /Task started:\s*(\S+)/;
 // cline -v final summary: `[<sec>s | <in> in, <out> out]` (whitespace-tolerant).
-const VERBOSE_RE = /\[\s*\d+s\s*\|\s*(\d+)\s*in,\s*(\d+)\s*out\s*\]/;
+// Global so we can scan every occurrence and keep the LAST one — cline may
+// print interim summary lines before the final one.
+const VERBOSE_RE = /\[\s*\d+s\s*\|\s*(\d+)\s*in,\s*(\d+)\s*out\s*\]/g;
 
 export type ClineTaskParser = {
   /** Feed a raw stdout chunk (plain text). */
@@ -53,11 +55,12 @@ export function createClineTaskParser(): ClineTaskParser {
           idBuffer = idBuffer.slice(-256);
         }
       }
-      // Summary-line sniff: keep scanning to the end of the stream; keep the
-      // latest match so a resume round's line wins.
+      // Summary-line sniff: keep scanning to the end of the stream; the LAST
+      // match wins so the final summary beats any interim lines.
       verboseBuffer += clean;
-      const v = VERBOSE_RE.exec(verboseBuffer);
-      if (v) {
+      VERBOSE_RE.lastIndex = 0;
+      let v: RegExpExecArray | null;
+      while ((v = VERBOSE_RE.exec(verboseBuffer)) !== null) {
         context = Number(v[1]) + Number(v[2]);
       }
       if (verboseBuffer.length > 8192) verboseBuffer = verboseBuffer.slice(-512);

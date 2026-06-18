@@ -56,4 +56,18 @@ describe("cline contextTokens from -v summary line", () => {
     p.push("Task started: x\n");
     expect(p.contextTokens()).toBeNull();
   });
+
+  it("keeps the last summary line when several are printed", () => {
+    const p = createClineTaskParser();
+    p.push("[3s | 100 in, 10 out]\n");
+    p.push("more work\n");
+    p.push("[9s | 5000 in, 600 out]\n");
+    expect(p.contextTokens()).toBe(5600);
+  });
+
+  it("keeps the last summary line even within a single chunk", () => {
+    const p = createClineTaskParser();
+    p.push("[3s | 100 in, 10 out]\n[9s | 5000 in, 600 out]\n");
+    expect(p.contextTokens()).toBe(5600);
+  });
 });
