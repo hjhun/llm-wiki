@@ -81,14 +81,14 @@
       "maxStagnantRounds": 10,
       "maxRetryAttempts": 3,
       "retryBackoffMs": [5000, 30000],
-      "resumeSessions": true,
+      "resumeSessions": false,
       "compaction": {
         "enabled": true,
         "ratio": 0.9,
         "contextWindowTokens": {
           "claude": 200000,
           "codex": 272000,
-          "cline": 200000,
+          "cline": 0,
           "agy": 0
         }
       }

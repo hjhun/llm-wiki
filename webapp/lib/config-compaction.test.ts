@@ -25,7 +25,9 @@ describe("cli.ingestLoop.compaction config", () => {
     expect(c.ratio).toBeCloseTo(0.9);
     expect(c.contextWindowTokens.claude).toBe(200000);
     expect(c.contextWindowTokens.codex).toBe(272000);
-    expect(c.contextWindowTokens.cline).toBe(200000);
+    // cline defaults to 0 (compaction + `-v` measurement disabled) because the
+    // `-v` summary line corrupts cline's non-interactive output over long loops.
+    expect(c.contextWindowTokens.cline).toBe(0);
     expect(c.contextWindowTokens.agy).toBe(0);
   });
 

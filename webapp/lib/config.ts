@@ -365,9 +365,12 @@ export const ConfigSchema = z.object({
          * id; later iterations resume it and receive a compact delta prompt
          * instead of a full context re-injection. CLIs without resume support
          * (agy) transparently fall back to the legacy fresh-process + full-prompt
-         * path. Set false to force the legacy path for every iteration.
+         * path. Defaults to false: warm-session resume tends to bloat context and
+         * corrupt output over long loops, so each iteration starts fresh and
+         * re-reads on-disk progress (progress/ingest/DASHBOARD.md + .state.json).
+         * Set true to opt back into the warm-resume path.
          */
-        resumeSessions: z.boolean().default(true),
+        resumeSessions: z.boolean().default(false),
         /**
          * Context-window compaction. When a host CLI's measured context usage
          * (RunResult.contextTokens) reaches `ratio` of its
@@ -385,13 +388,13 @@ export const ConfigSchema = z.object({
               .object({
                 claude: z.number().int().min(0).default(200000),
                 codex: z.number().int().min(0).default(272000),
-                cline: z.number().int().min(0).default(200000),
+                cline: z.number().int().min(0).default(0),
                 agy: z.number().int().min(0).default(0),
               })
               .default({
                 claude: 200000,
                 codex: 272000,
-                cline: 200000,
+                cline: 0,
                 agy: 0,
               }),
           })
@@ -411,14 +414,14 @@ export const ConfigSchema = z.object({
         maxStagnantRounds: 10,
         maxRetryAttempts: 3,
         retryBackoffMs: [5000, 30_000],
-        resumeSessions: true,
+        resumeSessions: false,
         compaction: {
           enabled: true,
           ratio: 0.9,
           contextWindowTokens: {
             claude: 200000,
             codex: 272000,
-            cline: 200000,
+            cline: 0,
             agy: 0,
           },
         },
