@@ -25,7 +25,11 @@ export async function POST(req: Request) {
   if (!job) return jsonError("job not found", 404);
 
   try {
-    if (job.kind === "ingest-loop") {
+    // Both /ingest and /ingest-loop run through the runIngestLoop backend loop,
+    // so both need the stop flag: it halts the loop at the next boundary and,
+    // crucially, stops the per-iteration retry from re-spawning the CLI after
+    // the SIGTERM lands. (job.cancel() SIGTERMs the live child immediately.)
+    if (job.kind === "ingest" || job.kind === "ingest-loop") {
       await requestStopFlag(job.sessionPath);
     }
     job.cancel();

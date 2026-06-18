@@ -134,6 +134,14 @@ describe("runCliWithIngestLoopRetries", () => {
     expect(opts.session).toEqual(session);
   });
 
+  it("always hard-kills the child on abort so the Stop button works without a timeout", async () => {
+    const deps = makeDeps([result(0)]);
+    // No timeout configured (the ingest/ingest-loop default).
+    await runCliWithIngestLoopRetries({ ...input, timeoutMs: undefined }, deps);
+    const opts = (deps.runCli as ReturnType<typeof vi.fn>).mock.calls[0][2];
+    expect(opts.killOnAbort).toBe(true);
+  });
+
   it("treats a thrown runCli as a failed attempt", async () => {
     const deps = makeDeps([], {
       runCli: vi.fn(async () => {

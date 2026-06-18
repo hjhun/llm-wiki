@@ -124,7 +124,16 @@ export async function runCliWithIngestLoopRetries(
         safeMode: input.cfg.agent.safeMode,
         timeoutMs: input.timeoutMs,
         signal: input.signal,
-        killOnAbort: input.timeoutMs != null,
+        // Always hard-kill on abort. `input.signal` here is the job's
+        // AbortController, which fires ONLY on an explicit Stop (it is kept
+        // separate from the HTTP req.signal so a dropped stream never kills the
+        // CLI — see chat-jobs.ts). Gating this on a configured timeout meant
+        // ingest (timeout=null) ignored the Stop button entirely: the abort
+        // never SIGTERM'd the child, and since the agent now drives the whole
+        // scope in one warm session, the between-iteration stop-flag check was
+        // never reached until the run finished. Stop must interrupt the live
+        // child immediately regardless of timeout config.
+        killOnAbort: true,
         session: input.session,
         onStdout: (chunk) => {
           input.onChunk?.(chunk);
