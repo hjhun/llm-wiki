@@ -45,6 +45,7 @@ import {
   ingestFinalMaintenanceDecision,
 } from "./ingest/graphify-decision";
 import { bootstrapIngestProgress } from "./ingest/bootstrap";
+import { reconcileWikiIndex } from "./ingest/index-reconcile";
 import { runCliWithIngestLoopRetries } from "./ingest/cli-retry";
 import {
   FINAL_GRAPH_SKIPPED_NOTE,
@@ -1616,6 +1617,15 @@ export async function runIngestLoop(
     if (final.note) finalReply += final.note;
   } else if (finalize.graphSkipped) {
     finalReply += FINAL_GRAPH_SKIPPED_NOTE;
+  }
+  // Deterministically catalog every managed synthesis page into wiki/index.md
+  // before the closing lint. The agent often finishes the merge pass with index
+  // entries missing (index.md is the concept's query retrieval backbone, so a
+  // missing page is undiscoverable); this fills the gap with no extra LLM call
+  // and is a byte-for-byte no-op when nothing is missing.
+  if (haltKind !== "error" && ingestMadeProgress(loopBefore, loopAfter)) {
+    const reconcile = await reconcileWikiIndex();
+    if (reconcile.note) finalReply += reconcile.note;
   }
   // Final post-merge mini-lint at loop exit. The per-iteration call only fires
   // on the merge-just-done transition; single-leaf runs or scopes that never
