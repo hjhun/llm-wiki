@@ -1408,7 +1408,6 @@ export async function runIngestLoop(
 
   const loopBefore = await readProgressSnapshot({ rawScope });
   let prevSnap: ProgressSnapshot = loopBefore;
-  let lastMergedSnap: ProgressSnapshot | null = null;
   let iteration = 0;
   let idleRounds = 0;
   let lastExitCode = 0;
@@ -1537,31 +1536,12 @@ export async function runIngestLoop(
       ? 0
       : idleRounds + 1;
 
-    if (result.exitCode === 0) {
-      const incr = await maybeAutoRunGraphify({
-        cfg,
-        agent,
-        sessionPath,
-        signal,
-        lastExitCode: result.exitCode,
-        before: prevSnap,
-        after: snap,
-        mode: "incremental",
-        onChunk,
-      });
-      if (incr.note) aggregateReply += incr.note;
-      if (incr.action === "update") {
-        lastMergedSnap = snap;
-      }
-      // Run the deterministic post-merge mini-lint exactly when the merge
-      // pass just completed. It is cheap (sub-second on typical wikis) and
-      // catches duplicate concept/entity titles, broken wikilinks, and
-      // orphan synthesis pages that parallel ingest workers can introduce.
-      if (snap.mergeDone && !prevSnap.mergeDone) {
-        const lint = await runPostMergeMiniLint({ signal });
-        if (lint.note) aggregateReply += lint.note;
-      }
-    }
+    // No per-iteration graphify or mini-lint. The agent drives the whole
+    // leaf-first + merge pass within one warm session, so spawning a graphify
+    // CLI between iterations just adds redundant agent calls that the single
+    // final graphify (and the closing mini-lint) already cover. Keeping graph
+    // sync to loop exit is the simplification that matches the warm-session
+    // model — the backend stops micro-managing the agent mid-loop.
     prevSnap = snap;
 
     const decision = decideLoopHalt({
@@ -1605,10 +1585,9 @@ export async function runIngestLoop(
     // Unused by the "single" branch (which never gates on full completion); the
     // single-agent path historically finalized on progress, not completeness.
     workComplete: false,
-    graphAlreadyCoversLatest:
-      lastMergedSnap !== null &&
-      loopAfter.leavesDone <= lastMergedSnap.leavesDone &&
-      loopAfter.mergeDone === lastMergedSnap.mergeDone,
+    // No incremental graphify runs during the loop anymore, so the final
+    // graphify is never redundant — always run it once at loop exit.
+    graphAlreadyCoversLatest: false,
     finalMaintenanceEnabled: finalMaintenance.enabled,
   });
   if (
