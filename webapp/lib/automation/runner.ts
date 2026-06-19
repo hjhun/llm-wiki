@@ -4,6 +4,7 @@ import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { loadConfig } from "../config";
 import { runCli, type CliName } from "../cli";
+import { cleanCliText } from "../cli-output";
 import { PROJECT_ROOT } from "../paths";
 import { slugify } from "../sessions";
 import {
@@ -127,7 +128,10 @@ async function runAgent(input: {
       },
     });
     const durationMs = result.durationMs || Date.now() - started;
-    const body = result.stdout.trim() || result.stderr.trim() || "(empty result)";
+    const body =
+      cleanCliText(result.stdout).trim() ||
+      cleanCliText(result.stderr).trim() ||
+      "(empty result)";
     const fileName = input.mode === "plan" ? "plan.md" : "result.md";
     await fs.writeFile(path.join(cliArtifactAbs, fileName), body + "\n", "utf8");
     await fs.writeFile(path.join(cliArtifactAbs, "stdout.log"), result.stdout, "utf8");

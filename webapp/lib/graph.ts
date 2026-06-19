@@ -7,7 +7,7 @@ import { loadConfig } from "./config";
 import { runCli } from "./cli";
 import { resolveAgentForRole } from "./agent-roles";
 import { createChatJob, type ChatJob } from "./chat-jobs";
-import { displayChunk } from "./cli-output";
+import { cleanCliText, displayChunk } from "./cli-output";
 import {
   isLikelyText,
   resolveEntry,
@@ -644,8 +644,8 @@ export async function startGraphifyJob(
         },
       });
       let reply =
-        result.stdout.trim() ||
-        result.stderr.trim() ||
+        cleanCliText(result.stdout).trim() ||
+        cleanCliText(result.stderr).trim() ||
         `(에이전트가 빈 응답을 반환했습니다. exitCode=${result.exitCode})`;
       if (job.cancelled) {
         reply = [

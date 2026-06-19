@@ -16,6 +16,7 @@ import {
   WIKI_GRAPH_PATH,
 } from "./paths";
 import { appendMessage } from "./sessions";
+import { cleanCliText } from "./cli-output";
 import { errorMessage } from "./api";
 import {
   mergeParentBlocksScopeCompletion,
@@ -1295,8 +1296,8 @@ export async function maybeAutoRunGraphify(
       },
     });
     const graphReply =
-      graphResult.stdout.trim() ||
-      graphResult.stderr.trim() ||
+      cleanCliText(graphResult.stdout).trim() ||
+      cleanCliText(graphResult.stderr).trim() ||
       `(그래프 업데이트가 빈 응답을 반환했습니다. exitCode=${graphResult.exitCode})`;
     if (graphResult.exitCode !== 0) {
       return {
@@ -1551,8 +1552,8 @@ export async function runIngestLoop(
     }
     lastExitCode = result.exitCode;
     const iterReply =
-      result.stdout.trim() ||
-      result.stderr.trim() ||
+      cleanCliText(result.stdout).trim() ||
+      cleanCliText(result.stderr).trim() ||
       `(에이전트가 빈 응답을 반환했습니다. exitCode=${result.exitCode})`;
     await appendMessage(sessionPath, "assistant", iterReply, agent).catch(
       () => undefined,

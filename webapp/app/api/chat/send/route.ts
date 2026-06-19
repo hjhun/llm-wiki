@@ -2,7 +2,7 @@ import { z } from "zod";
 import { requireSession, errorMessage, jsonError } from "@/lib/api";
 import { createChatJob, createChatJobStream } from "@/lib/chat-jobs";
 import type { ChatSendEvent } from "@/lib/chat-events";
-import { displayChunk } from "@/lib/cli-output";
+import { cleanCliText, displayChunk } from "@/lib/cli-output";
 import { loadConfig } from "@/lib/config";
 import { CLI_NAMES, runCli, type CliName } from "@/lib/cli";
 import { resolveAgentForKind } from "@/lib/agent-roles";
@@ -256,8 +256,8 @@ export async function POST(req: Request) {
           onStdout: (chunk) => emitChunk(chunk),
         });
         let reply =
-          result.stdout.trim() ||
-          result.stderr.trim() ||
+          cleanCliText(result.stdout).trim() ||
+          cleanCliText(result.stderr).trim() ||
           `(에이전트가 빈 응답을 반환했습니다. exitCode=${result.exitCode})`;
         // When the user stopped the run, save only the stopped-result report
         // instead of preserving a partial CLI tail as an assistant answer.

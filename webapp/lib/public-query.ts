@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { loadConfig } from "./config";
 import { runCli, type CliName } from "./cli";
+import { cleanCliText } from "./cli-output";
 import { resolveAgentForRole } from "./agent-roles";
 import { CONFIG_ROOT } from "./paths";
 import { listWikiMarkdownDocs } from "./wiki-docs";
@@ -420,9 +421,10 @@ export async function runPublicQuery(
         `[public-query] ${agent} exited with ${result.exitCode}: ${summarizeAgentStderr(result.stderr)}`,
       );
     }
+    const cleanedStdout = cleanCliText(result.stdout).trim();
     const answer =
-      result.exitCode === 0 && result.stdout.trim()
-        ? result.stdout.trim()
+      result.exitCode === 0 && cleanedStdout
+        ? cleanedStdout
         : formatFallbackAnswer(question, sources, allowExternalLookup);
     return {
       mode: "query",
