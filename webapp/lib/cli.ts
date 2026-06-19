@@ -277,6 +277,57 @@ export async function detectAllCli(
   return Promise.all(CLI_NAMES.map((n) => detectCli(n, opts)));
 }
 
+/** UTF-8 byte length — what the kernel argv ceiling (MAX_ARG_STRLEN) counts. */
+export function promptByteLength(prompt: string): number {
+  return Buffer.byteLength(prompt, "utf8");
+}
+
+/** Directory, relative to the child's cwd, where spilled prompts are written. */
+export const PROMPT_SPILL_DIR = ".run";
+
+export type PromptSpillPlan =
+  | { spilled: false; promptForArgs: string }
+  | {
+      spilled: true;
+      /** Tiny stub passed in argv that points the agent at the file. */
+      promptForArgs: string;
+      /** Basename written under `<cwd>/.run/`. */
+      fileName: string;
+      /** Full original prompt, written verbatim to the spill file. */
+      content: string;
+    };
+
+/**
+ * Passing a long prompt as a single argv element fails with E2BIG: the Linux
+ * kernel caps any one argument at MAX_ARG_STRLEN (128 KB), independent of the
+ * larger total ARG_MAX. Once the prompt's UTF-8 byte length crosses the spill
+ * threshold we write it to a file under the child's cwd (which is bind-mounted
+ * read-write even in the bubblewrap sandbox) and pass only a small stub in
+ * argv telling the agent to read that file first. The threshold is in bytes,
+ * not `String.length`, because Korean and other multi-byte text encodes to
+ * more bytes than code units.
+ */
+export function planPromptSpill(
+  prompt: string,
+  spillBytes: number,
+  id: string,
+): PromptSpillPlan {
+  if (promptByteLength(prompt) <= spillBytes) {
+    return { spilled: false, promptForArgs: prompt };
+  }
+  const fileName = `clio-prompt-${id}.md`;
+  const relPath = `./${PROMPT_SPILL_DIR}/${fileName}`;
+  const promptForArgs = [
+    "Your full instructions and context for this task are too large to pass",
+    "inline, so they were written to a file in your current working directory.",
+    "Read that ENTIRE file FIRST, then follow it exactly as if its contents had",
+    "been given to you directly here. Do not skip, summarize, or ignore it.",
+    "",
+    `Prompt file: ${relPath}`,
+  ].join("\n");
+  return { spilled: true, promptForArgs, fileName, content: prompt };
+}
+
 function buildArgs(
   cli: CliName,
   prompt: string,
@@ -1122,27 +1173,42 @@ export async function runCli(
   const stdoutCap = opts.maxStdoutBytes ?? cfg.cli.maxStdoutBytes;
   const stderrCap = opts.maxStderrBytes ?? cfg.cli.maxStderrBytes;
   const promptWarnCap = cfg.cli.promptWarnBytes;
-
-  if (prompt.length > promptWarnCap) {
-    // We do not truncate here — the slim prompt builder is the primary
-    // defense. But once the prompt exceeds the OS argv ceiling (typically
-    // 128 KB to 2 MB) spawn itself fails with E2BIG, so surface a warning
-    // and let the caller shrink the prompt.
-    console.warn(
-      `[runCli] prompt is ${prompt.length} chars (cap ~${promptWarnCap}). ` +
-        `Reduce contextTurns or move shared context into progress/.`,
-    );
-  }
+  const promptBytes = promptByteLength(prompt);
 
   const measureContext = compactionEnabledFor(cfg, cli);
   const cwd = opts.cwd ?? PROJECT_ROOT;
   const projectRoot = opts.projectRoot ?? cwd;
+
+  // Spill an oversized prompt to a file under the child's cwd and pass only a
+  // small stub in argv. Without this, a long prompt as a single argv element
+  // makes spawn fail with E2BIG (kernel MAX_ARG_STRLEN, ~128 KB per argument).
+  const spill = planPromptSpill(prompt, cfg.cli.promptSpillBytes, randomUUID());
+  let spillFilePath: string | null = null;
+  if (spill.spilled) {
+    const dir = path.join(cwd, PROMPT_SPILL_DIR);
+    await fs.mkdir(dir, { recursive: true });
+    spillFilePath = path.join(dir, spill.fileName);
+    await fs.writeFile(spillFilePath, spill.content, "utf8");
+    console.warn(
+      `[runCli] prompt is ${promptBytes} bytes (spill cap ${cfg.cli.promptSpillBytes}); ` +
+        `spilled to ${spillFilePath} to avoid E2BIG.`,
+    );
+  } else if (promptBytes > promptWarnCap) {
+    console.warn(
+      `[runCli] prompt is ${promptBytes} bytes (cap ~${promptWarnCap}). ` +
+        `Reduce contextTurns or move shared context into progress/.`,
+    );
+  }
+  const promptForArgs = spill.promptForArgs;
+  const cleanupSpill = () => {
+    if (spillFilePath) fs.unlink(spillFilePath).catch(() => undefined);
+  };
   // Token streaming is opt-in and currently claude-only; other CLIs ignore it.
   const streamTokens = (cfg.cli.streamTokens ?? false) && cli === "claude";
   const sessionPlan = planSession(cli, opts.session, { measureContext });
   const args = buildArgs(
     cli,
-    prompt,
+    promptForArgs,
     opts.safeMode ?? false,
     projectRoot,
     opts.skipGitRepoCheck ?? false,
@@ -1258,6 +1324,7 @@ export async function runCli(
       if (timeoutKillTimer) clearTimeout(timeoutKillTimer);
       if (abortKillTimer) clearTimeout(abortKillTimer);
       if (killOnAbort) opts.signal?.removeEventListener("abort", onAbort);
+      cleanupSpill();
       reject(err);
     });
     child.on("close", (code) => {
@@ -1266,6 +1333,7 @@ export async function runCli(
       if (timeoutKillTimer) clearTimeout(timeoutKillTimer);
       if (abortKillTimer) clearTimeout(abortKillTimer);
       if (killOnAbort) opts.signal?.removeEventListener("abort", onAbort);
+      cleanupSpill();
       if (streamParser) {
         // Authoritative plain-text answer (result field, else accumulated deltas).
         stdoutBuf.push(streamParser.finalText());

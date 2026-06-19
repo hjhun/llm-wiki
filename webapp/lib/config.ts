@@ -251,6 +251,19 @@ export const ConfigSchema = z.object({
       .min(8 * 1024)
       .default(128 * 1024),
     /**
+     * When the argv-passed prompt's UTF-8 byte length exceeds this, runCli
+     * spills the full prompt to `<cwd>/.run/clio-prompt-<id>.md` and passes a
+     * small stub in argv instead. This keeps the single prompt argument under
+     * the kernel's per-argument ceiling (MAX_ARG_STRLEN, ~128 KB), which would
+     * otherwise make spawn fail with E2BIG on long contexts. Keep it safely
+     * below promptWarnBytes to leave headroom for other argv elements.
+     */
+    promptSpillBytes: z
+      .number()
+      .int()
+      .min(8 * 1024)
+      .default(120 * 1024),
+    /**
      * Per-operation timeouts (ms) applied to the host coding-agent CLI run.
      * `null` disables the timeout entirely for that kind. `ingest` defaults to
      * null because a single ingest pass can legitimately run for tens of

@@ -73,3 +73,6 @@ coverage/
 
 # ── Brainstorming visual companion ────────────────────────────
 .superpowers/
+
+# ── runCli transient prompt spill (E2BIG guard) ───────────────
+.run/

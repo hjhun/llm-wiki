@@ -66,6 +66,7 @@
     "maxStdoutBytes": 1048576,
     "maxStderrBytes": 262144,
     "promptWarnBytes": 131072,
+    "promptSpillBytes": 122880,
     "timeouts": {
       "chat": null,
       "ingest": null,
