@@ -1522,6 +1522,7 @@ export async function runIngestLoop(
         onChunk,
         session,
         compact: pendingClineCompaction,
+        assistantTextOnly: agent === "cline",
       },
       {
         runCli,

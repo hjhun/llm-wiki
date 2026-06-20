@@ -412,6 +412,7 @@ export async function runPublicQuery(
               readOnlyPaths: cfg.publicQuery.sandboxReadOnlyHomePaths,
             }
           : undefined,
+        assistantTextOnly: agent === "cline",
         maxStdoutBytes: 512 * 1024,
         maxStderrBytes: 64 * 1024,
       }),

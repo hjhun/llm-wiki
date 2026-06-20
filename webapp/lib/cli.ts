@@ -7,6 +7,7 @@ import path from "node:path";
 import { loadConfig } from "./config";
 import { createClaudeStreamParser } from "./cli-stream-json";
 import { createCodexJsonParser } from "./cli-codex-json";
+import { createClineJsonParser } from "./cli-cline-json";
 import { createClineTaskParser } from "./cli-cline-task";
 import { compactionEnabledFor } from "./ingest/compaction";
 import {
@@ -339,6 +340,7 @@ export function buildArgs(
   codexResumeId: string | null = null,
   measureContext: boolean = false,
   compact: boolean = false,
+  assistantTextOnly: boolean = false,
 ): string[] {
   switch (cli) {
     case "codex": {
@@ -391,10 +393,11 @@ export function buildArgs(
       // Cline CLI 0.6 uses a positional prompt. `-p` means --plan, so never use
       // it here or ingest-loop starts in Plan mode and cannot mutate the wiki.
       // sessionArgs carries `--id <id>` on resume.
+      const json = assistantTextOnly ? ["--json"] : [];
       const approval = ["--auto-approve", safeMode ? "false" : "true"];
       const measure = measureContext ? ["-v"] : [];
       const comp = compact ? ["--compaction", "basic"] : [];
-      return [...approval, ...measure, ...comp, ...sessionArgs, prompt];
+      return [...json, ...approval, ...measure, ...comp, ...sessionArgs, prompt];
     }
   }
 }
@@ -1160,6 +1163,12 @@ export async function runCli(
     session?: SessionOption;
     /** Request the CLI's native history compaction this run (cline only). */
     compact?: boolean;
+    /**
+     * Keep only assistant answer text when the CLI offers structured output.
+     * Currently used for Cline Chat operations via `--json`, suppressing
+     * tool-call and status events while preserving the final assistant text.
+     */
+    assistantTextOnly?: boolean;
   } = {},
 ): Promise<RunResult> {
   const info = await detectCli(cli);
@@ -1216,6 +1225,7 @@ export async function runCli(
     sessionPlan.resumeId,
     measureContext,
     opts.compact ?? false,
+    opts.assistantTextOnly ?? false,
   );
   const spawnPlan = opts.sandbox
     ? await buildBubblewrapSpawnPlan({
@@ -1258,6 +1268,10 @@ export async function runCli(
     // buffer and the live stream so RunResult.stdout stays plain text.
     const codexParser =
       sessionPlan.capture && cli === "codex" ? createCodexJsonParser() : null;
+    // Cline assistant-text-only path: stdout is NDJSON. Extract only assistant
+    // text and keep tool/status events out of the live UI and saved message.
+    const clineJsonParser =
+      opts.assistantTextOnly && cli === "cline" ? createClineJsonParser() : null;
     // cline capture round: stdout is plain text we keep verbatim — the parser
     // only sniffs the `Task started: <id>` banner to capture the task id.
     // Also create the parser on measured runs (capture is false on resume rounds).
@@ -1278,6 +1292,11 @@ export async function runCli(
       }
       if (codexParser) {
         codexParser.push(chunk);
+        return;
+      }
+      if (clineJsonParser) {
+        const text = clineJsonParser.push(chunk);
+        if (text) opts.onStdout?.(text);
         return;
       }
       // cline: sniff for the task id but pass output through unchanged.
@@ -1341,6 +1360,10 @@ export async function runCli(
         // Replace the suppressed JSONL with the parsed plain-text answer.
         stdoutBuf.push(codexParser.text());
       }
+      if (clineJsonParser) {
+        // Replace the suppressed NDJSON with the parsed plain-text answer.
+        stdoutBuf.push(clineJsonParser.finalText());
+      }
       resolve({
         stdout: stdoutBuf.toString(),
         stderr: stderrBuf.toString(),
@@ -1355,6 +1378,8 @@ export async function runCli(
         // failed — the orchestrator then falls back to a fresh session next round.
         sessionId: codexParser
           ? codexParser.threadId() ?? sessionPlan.sessionId
+          : clineJsonParser
+            ? clineJsonParser.taskId() ?? sessionPlan.sessionId
           : clineParser
             ? clineParser.taskId() ?? sessionPlan.sessionId
             : sessionPlan.sessionId,

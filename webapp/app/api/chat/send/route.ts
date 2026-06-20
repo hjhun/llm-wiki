@@ -255,10 +255,18 @@ export async function POST(req: Request) {
           // streaming response must not kill the CLI.
           signal: job.abort.signal,
           onStdout: (chunk) => emitChunk(chunk),
+          assistantTextOnly:
+            agent === "cline" && (kind === "query" || kind === "lint"),
         });
+        const cleanedStdout = cleanCliText(result.stdout).trim();
+        const cleanedStderr = cleanCliText(result.stderr).trim();
+        const suppressCleanExitStderr =
+          agent === "cline" && (kind === "query" || kind === "lint");
         let reply =
-          cleanCliText(result.stdout).trim() ||
-          cleanCliText(result.stderr).trim() ||
+          cleanedStdout ||
+          (!suppressCleanExitStderr || result.exitCode !== 0
+            ? cleanedStderr
+            : "") ||
           `(에이전트가 빈 응답을 반환했습니다. exitCode=${result.exitCode})`;
         // When the user stopped the run, save only the stopped-result report
         // instead of preserving a partial CLI tail as an assistant answer.

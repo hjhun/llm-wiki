@@ -160,6 +160,24 @@ describe("buildArgs cline", () => {
       "continue",
     ]);
   });
+
+  it("enables JSON output for assistant-text-only Cline runs", () => {
+    expect(
+      buildArgs(
+        "cline",
+        "answer quietly",
+        false,
+        "/repo",
+        false,
+        false,
+        [],
+        null,
+        false,
+        false,
+        true,
+      ),
+    ).toEqual(["--json", "--auto-approve", "true", "answer quietly"]);
+  });
 });
 
 describe("publicSandboxReadOnlyHomePathsForCli", () => {

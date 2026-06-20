@@ -177,4 +177,32 @@ describe("runCliWithIngestLoopRetries", () => {
 
     expect(seenCompact).toBe(true);
   });
+
+  it("forwards assistantTextOnly into runCli opts", async () => {
+    let seenAssistantTextOnly: boolean | undefined;
+    const runCli = vi.fn(
+      async (
+        _agent: unknown,
+        _prompt: unknown,
+        opts: { assistantTextOnly?: boolean },
+      ) => {
+        seenAssistantTextOnly = opts?.assistantTextOnly;
+        return result(0);
+      },
+    ) as unknown as CliRetryDeps["runCli"];
+
+    await runCliWithIngestLoopRetries(
+      {
+        agent: "cline",
+        prompt: "p",
+        cfg: cfg(1),
+        iteration: 2,
+        sessionPath: "/tmp/s",
+        assistantTextOnly: true,
+      },
+      makeDeps([], { runCli }),
+    );
+
+    expect(seenAssistantTextOnly).toBe(true);
+  });
 });

@@ -96,6 +96,8 @@ export type CliRetryInput = {
   session?: SessionOption;
   /** Request the CLI's native history compaction this iteration (cline). */
   compact?: boolean;
+  /** Parse structured CLI output down to assistant text only when supported. */
+  assistantTextOnly?: boolean;
 };
 
 export async function runCliWithIngestLoopRetries(
@@ -138,6 +140,7 @@ export async function runCliWithIngestLoopRetries(
         killOnAbort: true,
         session: input.session,
         compact: input.compact,
+        assistantTextOnly: input.assistantTextOnly,
         onStdout: (chunk) => {
           input.onChunk?.(chunk);
         },
