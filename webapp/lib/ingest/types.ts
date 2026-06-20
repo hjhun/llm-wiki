@@ -22,15 +22,15 @@ export type ProgressSnapshot = {
   sourcePagesMissing: number;
   missingSourceLeaves: string[];
   codeLeavesTotal: number;
-  /** Legacy name: code/mixed leaves that are represented in ingest progress. */
+  /** Code/mixed leaves whose code files have raw-mirrored source pages. */
   codeLeavesWithOutputs: number;
-  /** Legacy name: kept for compatibility; Code Wiki pages are no longer required. */
+  /** Code/mixed leaves missing raw-mirrored source pages for code files. */
   codeLeavesMissingOutputs: number;
   missingCodeLeaves: string[];
   codeFilePagesTotal: number;
-  /** Legacy name: no longer tracks wiki/code file pages. */
+  /** Code-looking raw files with raw-mirrored source pages. */
   codeFilePagesWithOutputs: number;
-  /** Code-looking raw files that have not been represented in ingest state. */
+  /** Code-looking raw files missing raw-mirrored source pages or ingest state. */
   codeFilePagesMissing: number;
   missingCodeFiles: string[];
   codeDirectoryIndexesTotal: number;
@@ -39,7 +39,7 @@ export type ProgressSnapshot = {
   /** Legacy name: directory wiki/code pages are no longer required. */
   codeDirectoryIndexesMissing: number;
   missingCodeDirectories: string[];
-  /** Legacy wiki/code output counter; graphify is the primary code artifact now. */
+  /** Number of raw-mirrored code source pages written. */
   codeOutputsWritten: number;
   subChunksTotal: number;
   subChunksDone: number;

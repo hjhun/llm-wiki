@@ -311,6 +311,15 @@ async function collectValidSourcePages(
   return valid;
 }
 
+function expectedWikiSourcePageForRawFile(rawFile: string): string | null {
+  const rel = normalizePosixPath(rawFile).replace(/^\/+/, "");
+  if (!rel.startsWith("raw/")) return null;
+  const rawRel = rel.slice("raw/".length);
+  if (!rawRel || rawRel.endsWith("/")) return null;
+  const withoutExt = rawRel.replace(/\.[^./]+$/, "");
+  return `wiki/sources/${withoutExt}.md`;
+}
+
 async function collectValidCodeOutputs(
   leaf: Record<string, unknown>,
 ): Promise<string[]> {
@@ -548,13 +557,13 @@ export async function buildCodeWikiStatusReference(
       return [
         `Code Wiki status${scopeLabel}: ${snap.missingCodeFiles.length} code-looking raw files are not represented in ${PROGRESS_STATE_PATH}.`,
         `Missing state coverage for: ${snap.missingCodeFiles.slice(0, CODE_STATUS_MAX).join(", ")}${snap.missingCodeFiles.length > CODE_STATUS_MAX ? ` … (+${snap.missingCodeFiles.length - CODE_STATUS_MAX} more)` : ""}`,
-        "During enumeration, create leaf units for direct files in non-leaf directories as well as true leaf directories. Do not create per-file wiki/code pages as a completion requirement; code knowledge is materialized by the follow-up `wiki-graphify update` run.",
+        "During enumeration, create leaf units for direct files in non-leaf directories as well as true leaf directories. Code knowledge is materialized by compact file-level wiki/sources cards, then the follow-up `wiki-graphify update` reads wiki/ only.",
       ].join("\n");
     }
     return (
       `Code Wiki status${scopeLabel}: no code/mixed leaves are currently detected in ` +
       `${PROGRESS_STATE_PATH}. During enumeration, classify code leaves by ` +
-      "filename/manifest and record `kind`, `project`, and the logical `raw/...` files or `graph_scope`."
+      "filename/manifest and record `kind`, `project`, and the logical `raw/...` files."
     );
   }
   const missing = snap.missingCodeLeaves.slice(0, CODE_STATUS_MAX);
@@ -564,15 +573,15 @@ export async function buildCodeWikiStatusReference(
       : "";
   const missingLine =
     missing.length > 0
-      ? `Missing code leaf progress entries for: ${missing.join(", ")}${suffix}`
-      : "All detected code/mixed leaves are represented in ingest progress.";
+      ? `Missing file-level source card coverage for code leaves: ${missing.join(", ")}${suffix}`
+      : "All detected code/mixed leaves have file-level source card coverage.";
   return [
-    `Code Wiki status${scopeLabel}: ${snap.codeLeavesWithOutputs}/${snap.codeLeavesTotal} code/mixed leaves are graph-ready after ingest.`,
+    `Code Wiki status${scopeLabel}: ${snap.codeLeavesWithOutputs}/${snap.codeLeavesTotal} code/mixed leaves have file-level source cards after ingest.`,
     missingLine,
     snap.missingCodeFiles.length > 0
-      ? `Code-looking raw files still missing from progress state: ${snap.missingCodeFiles.slice(0, CODE_STATUS_MAX).join(", ")}${snap.missingCodeFiles.length > CODE_STATUS_MAX ? ` … (+${snap.missingCodeFiles.length - CODE_STATUS_MAX} more)` : ""}`
-      : "All detected code files are represented by ingest leaves or sub-chunks.",
-    "For a done code/mixed leaf, do not repair by writing mirrored `wiki/code` file or directory pages. Finish the normal source-summary/merge work and rely on the separate `wiki-graphify update` invocation to create or refresh `wiki/graph/graph.json`, `GRAPH_REPORT.md`, and per-leaf graph parts from the code under `raw/`.",
+      ? `Code-looking raw files still missing file-level source cards or progress state: ${snap.missingCodeFiles.slice(0, CODE_STATUS_MAX).join(", ")}${snap.missingCodeFiles.length > CODE_STATUS_MAX ? ` … (+${snap.missingCodeFiles.length - CODE_STATUS_MAX} more)` : ""}`
+      : "All detected code files are represented by ingest leaves and file-level source cards.",
+    "For a done code/mixed leaf with missing coverage, repair by writing raw-mirrored `wiki/sources/<raw-relative-path>.md` cards and recording them in `source_pages_written`. Do not write mirrored `wiki/code` file pages.",
   ].join("\n");
 }
 
@@ -690,8 +699,8 @@ export async function readProgressSnapshot(
         if (leaf.status === "stale") continue;
         if (!leafMatchesScope(leafPath, leaf, options.rawScope)) continue;
         const leafKind = inferLeafKind(leafPath, leaf);
-        const codeOutputs = await collectValidCodeOutputs(leaf);
         const validSourcePages = await collectValidSourcePages(leaf);
+        const validSourcePageSet = new Set(validSourcePages);
         const leafFiles = collectLeafFiles(leafPath, leaf).filter(
           (file) => !isIgnoredCodePath(file),
         );
@@ -701,22 +710,41 @@ export async function readProgressSnapshot(
         for (const file of codeFiles) stateCodeFiles.add(file);
         snap.sourcePagesWritten += validSourcePages.length;
         const isCodeLeaf = leafKind === "code" || leafKind === "mixed";
+        const coveredCodeFiles = codeFiles.filter((file) => {
+          const expected = expectedWikiSourcePageForRawFile(file);
+          return expected != null && validSourcePageSet.has(expected);
+        });
+        const missingCodeSourceFiles = codeFiles.filter((file) => {
+          const expected = expectedWikiSourcePageForRawFile(file);
+          return expected == null || !validSourcePageSet.has(expected);
+        });
         const sourceCoverageMissing =
           leaf.status === "done" &&
           leafKind !== "ignore" &&
           leafFiles.length > 0 &&
-          validSourcePages.length < leafFiles.length;
+          (validSourcePages.length < leafFiles.length ||
+            (isCodeLeaf && missingCodeSourceFiles.length > 0));
         if (sourceCoverageMissing) {
           snap.sourcePagesMissing += 1;
           snap.missingSourceLeaves.push(leafPath);
         }
         if (isCodeLeaf) {
           snap.codeLeavesTotal += 1;
-          snap.codeOutputsWritten += codeOutputs.length;
+          snap.codeOutputsWritten += coveredCodeFiles.length;
           snap.codeFilePagesTotal += codeFiles.length;
-          snap.codeFilePagesWithOutputs += codeFiles.length;
-          if (leaf.status === "done" || codeOutputs.length > 0) {
+          snap.codeFilePagesWithOutputs += coveredCodeFiles.length;
+          if (leaf.status === "done" && missingCodeSourceFiles.length > 0) {
+            snap.codeFilePagesMissing += missingCodeSourceFiles.length;
+            snap.missingCodeFiles.push(...missingCodeSourceFiles);
+          }
+          if (
+            codeFiles.length === 0 ||
+            coveredCodeFiles.length === codeFiles.length
+          ) {
             snap.codeLeavesWithOutputs += 1;
+          } else if (leaf.status === "done") {
+            snap.codeLeavesMissingOutputs += 1;
+            snap.missingCodeLeaves.push(leafPath);
           }
         }
         snap.leavesTotal += 1;

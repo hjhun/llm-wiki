@@ -92,7 +92,8 @@ Each operation maps to one or more project skills. If these rules conflict with 
 - Treat `raw/` code as immutable source evidence. Do not format, build, patch, delete, or vendor-prune it during Code Wiki operations.
 - Always follow the **leaf-directory chunks + merge pass** principle (Section 7), using the normal `progress/ingest/` state. There is no separate user-facing Code Wiki command.
 - Outputs:
-  - one `wiki/sources/<project>/index.md` provenance stub per code project (not one page per source file)
+  - one compact `wiki/sources/<raw-relative-path>.md` source card per code file
+  - optional `wiki/sources/<project>/index.md` project catalog when useful for navigation
   - optional `wiki/code/<project>.md` detailed project analysis synthesized from source summaries and wiki evidence
   - `wiki/graph/graph.json` and `wiki/graph/GRAPH_REPORT.md` after `wiki-graphify update` connects wiki pages
   - updated `wiki/index.md` and appended `wiki/log.md` entries
@@ -101,7 +102,7 @@ Each operation maps to one or more project skills. If these rules conflict with 
   - [`code-architecture`](.agents/skills/code-architecture/SKILL.md) for architecture synthesis
   - [`code-testing`](.agents/skills/code-testing/SKILL.md) for test inventory and gaps
   - [`code-debug`](.agents/skills/code-debug/SKILL.md) for logs, stack traces, and failure analysis
-- Code Wiki graph nodes should bridge back to the ordinary LLM Wiki with sources and wikilinks when code implements a documented concept.
+- Code Wiki graph nodes should bridge back to the ordinary LLM Wiki through the per-file code source cards and wikilinks when code implements a documented concept.
 
 ### 3.6 Browser Capture (`browser-capture`, [`.agents/skills/browser-capture/SKILL.md`](.agents/skills/browser-capture/SKILL.md))
 - Input: user-approved web pages, CLIO web UI QA observations, browser screenshots, or extracted text.
@@ -336,8 +337,8 @@ Mental checklist for one Code Wiki run:
 - [ ] Did you process only code-looking leaves under `raw/` or the requested target?
 - [ ] Did you include direct source files in non-leaf directories as their own pseudo-leaf chunks?
 - [ ] Did you skip generated/vendor/build directories unless requested?
-- [ ] Did you write one `wiki/sources/<project>/index.md` provenance stub per project (not per file) and record code/mixed leaves in progress state?
-- [ ] Did you avoid per-file code source pages and file-by-file LLM code documentation?
+- [ ] Did you write one compact `wiki/sources/<raw-relative-path>.md` source card per code file and record those pages in progress state?
+- [ ] Did you avoid file-by-file `wiki/code/` pages and long pasted source documentation?
 - [ ] Did `wiki-graphify update` run or remain clearly queued as the follow-up that creates `wiki/graph/graph.json` and `GRAPH_REPORT.md` from `wiki/` pages only?
 - [ ] Did graph nodes/source summaries connect directories/modules/APIs/tests to existing concepts where evidence supports it?
 - [ ] Did you update `wiki/index.md` under the `Code` category?

@@ -178,12 +178,13 @@ ingest flow:
 /ingest-loop raw/repos/<project>
 ```
 
-The agent auto-detects code-heavy leaves and writes `wiki/sources/` provenance
-summaries plus any useful `wiki/code/` analysis pages. `wiki-graphify update`
-then builds `wiki/graph/graph.json` and `wiki/graph/GRAPH_REPORT.md` from the
-compiled Markdown under `wiki/` only; it does not graphify `raw/` source trees.
-Code stays read-only evidence — actual code edits are separate tasks, never
-ingest work.
+The agent auto-detects code-heavy leaves and writes compact file-level
+`wiki/sources/<raw-relative-path>.md` source cards, plus any useful rollups or
+`wiki/code/` analysis pages. `wiki-graphify update` then builds
+`wiki/graph/graph.json` and `wiki/graph/GRAPH_REPORT.md` from the compiled
+Markdown under `wiki/` only; it does not graphify `raw/` source trees. Code
+stays read-only evidence — actual code edits are separate tasks, never ingest
+work.
 
 Run **Build** / **Incremental Update** from the **Graph** tab. The web app never
 calls `graphify` directly; the selected agent reads the `wiki-graphify` skill and
