@@ -90,6 +90,20 @@ type ToolInventory = {
     paths: string[];
     installHint: string | null;
   }>;
+  agents: Array<{
+    name: CliName;
+    status: "ready" | "missing" | "unknown";
+    path: string | null;
+    version: string | null;
+    invocation: string;
+    helpCommands: string[];
+    supportsJson: boolean;
+    supportsStreaming: boolean;
+    supportsSandbox: boolean;
+    supportsResume: boolean;
+    supportsModel: boolean;
+    warning: string | null;
+  }>;
 };
 
 type BuilderProposal = {
@@ -823,22 +837,7 @@ export default function Automations() {
                   ) : null}
 
                   {tools ? (
-                    <div className="mt-4 flex flex-wrap gap-1">
-                      {tools.tools.map((tool) => (
-                        <span
-                          key={tool.name}
-                          className={[
-                            "rounded border px-1.5 py-0.5 font-mono text-[10px]",
-                            tool.status === "ready"
-                              ? "border-emerald-900/60 text-emerald-300"
-                              : "border-line text-ink-faint",
-                          ].join(" ")}
-                          title={tool.path ?? tool.installHint ?? undefined}
-                        >
-                          {tool.name}:{tool.status}
-                        </span>
-                      ))}
-                    </div>
+                    <ToolReadiness tools={tools} />
                   ) : null}
                 </Panel>
 
@@ -1406,6 +1405,78 @@ function Bullets({ title, items }: { title: string; items: string[] }) {
           <li key={idx}>{item}</li>
         ))}
       </ul>
+    </div>
+  );
+}
+
+function ToolReadiness({ tools }: { tools: ToolInventory }) {
+  return (
+    <div className="mt-4 space-y-3">
+      <div>
+        <div className="text-xs uppercase tracking-widest text-ink-faint">
+          agent capabilities
+        </div>
+        <div className="mt-2 grid gap-2">
+          {tools.agents.map((agent) => (
+            <div
+              key={agent.name}
+              className="rounded border border-line bg-bg px-2 py-1.5"
+              title={agent.warning ?? agent.path ?? undefined}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-mono text-xs text-ink-dim">
+                  {agent.name}
+                </span>
+                <span
+                  className={[
+                    "rounded border px-1.5 py-0.5 font-mono text-[10px]",
+                    agent.status === "ready"
+                      ? "border-emerald-900/60 text-emerald-300"
+                      : agent.status === "unknown"
+                        ? "border-amber-900/60 text-amber-300"
+                        : "border-line text-ink-faint",
+                  ].join(" ")}
+                >
+                  {agent.status}
+                </span>
+              </div>
+              <div className="mt-1 truncate font-mono text-[10px] text-ink-faint">
+                {agent.invocation}
+                {agent.supportsJson ? " · json" : ""}
+                {agent.supportsSandbox ? " · sandbox" : ""}
+                {agent.supportsResume ? " · resume" : ""}
+                {agent.supportsModel ? " · model" : ""}
+              </div>
+              {agent.helpCommands.length > 0 ? (
+                <div className="mt-1 truncate font-mono text-[10px] text-ink-faint">
+                  help: {agent.helpCommands.join(", ")}
+                </div>
+              ) : null}
+            </div>
+          ))}
+        </div>
+      </div>
+      <div>
+        <div className="text-xs uppercase tracking-widest text-ink-faint">
+          helper tools
+        </div>
+        <div className="mt-2 flex flex-wrap gap-1">
+          {tools.tools.map((tool) => (
+            <span
+              key={tool.name}
+              className={[
+                "rounded border px-1.5 py-0.5 font-mono text-[10px]",
+                tool.status === "ready"
+                  ? "border-emerald-900/60 text-emerald-300"
+                  : "border-line text-ink-faint",
+              ].join(" ")}
+              title={tool.path ?? tool.installHint ?? undefined}
+            >
+              {tool.name}:{tool.status}
+            </span>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }

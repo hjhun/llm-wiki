@@ -3,6 +3,7 @@ import "server-only";
 import { spawn } from "node:child_process";
 import fs from "node:fs/promises";
 import path from "node:path";
+import { CLI_NAMES, detectCli, type CliName } from "../cli";
 import { PROJECT_ROOT } from "../paths";
 
 export type AutomationToolName =
@@ -33,6 +34,29 @@ export type AutomationSkillStatus = {
 export type AutomationToolInventory = {
   tools: AutomationToolStatus[];
   skills: AutomationSkillStatus[];
+  agents: AutomationAgentCapability[];
+};
+
+export type AutomationAgentInvocation =
+  | "codex-exec"
+  | "claude-print"
+  | "agy-prompt"
+  | "cline-y"
+  | "unknown";
+
+export type AutomationAgentCapability = {
+  name: CliName;
+  status: "ready" | "missing" | "unknown";
+  path: string | null;
+  version: string | null;
+  invocation: AutomationAgentInvocation;
+  helpCommands: string[];
+  supportsJson: boolean;
+  supportsStreaming: boolean;
+  supportsSandbox: boolean;
+  supportsResume: boolean;
+  supportsModel: boolean;
+  warning: string | null;
 };
 
 const TOOL_NAMES: AutomationToolName[] = [
@@ -120,20 +144,164 @@ async function version(absPath: string): Promise<string | null> {
 }
 
 export async function detectAutomationTools(): Promise<AutomationToolInventory> {
-  const tools = await Promise.all(
-    TOOL_NAMES.map(async (name): Promise<AutomationToolStatus> => {
-      const found = (await localToolBin(name)) ?? (await whichBin(name));
-      return {
+  const [tools, skills, agents] = await Promise.all([
+    Promise.all(
+      TOOL_NAMES.map(async (name): Promise<AutomationToolStatus> => {
+        const found = (await localToolBin(name)) ?? (await whichBin(name));
+        return {
+          name,
+          status: found ? "ready" : "missing",
+          path: found,
+          version: found ? await version(found) : null,
+          installHint: found ? null : INSTALL_HINTS[name] ?? null,
+        };
+      }),
+    ),
+    detectSkills(["agent-browser", "find-skills"]),
+    detectAgentCapabilities(),
+  ]);
+  return { tools, skills, agents };
+}
+
+async function detectAgentCapabilities(): Promise<AutomationAgentCapability[]> {
+  return Promise.all(
+    CLI_NAMES.map(async (name): Promise<AutomationAgentCapability> => {
+      const info = await detectCli(name);
+      if (!info.path) {
+        return {
+          name,
+          status: "missing",
+          path: null,
+          version: null,
+          invocation: "unknown",
+          helpCommands: [],
+          supportsJson: false,
+          supportsStreaming: false,
+          supportsSandbox: false,
+          supportsResume: false,
+          supportsModel: false,
+          warning: "CLI not found on PATH or in Settings.",
+        };
+      }
+
+      const help = await readAgentHelp(name, info.path);
+      return parseAgentCapability({
         name,
-        status: found ? "ready" : "missing",
-        path: found,
-        version: found ? await version(found) : null,
-        installHint: found ? null : INSTALL_HINTS[name] ?? null,
-      };
+        path: info.path,
+        version: info.version,
+        help,
+      });
     }),
   );
-  const skills = await detectSkills(["agent-browser", "find-skills"]);
-  return { tools, skills };
+}
+
+async function readAgentHelp(
+  name: CliName,
+  absPath: string,
+): Promise<Array<{ command: string; text: string | null }>> {
+  const argsByCli: Record<CliName, string[][]> = {
+    codex: [["-h"], ["exec", "-h"]],
+    claude: [["-h"], ["-p", "-h"]],
+    agy: [["-h"]],
+    cline: [["-h"]],
+  };
+  return Promise.all(
+    argsByCli[name].map(async (args) => ({
+      command: [path.basename(absPath), ...args].join(" "),
+      text: await helpOutput(absPath, args),
+    })),
+  );
+}
+
+function helpOutput(absPath: string, args: string[]): Promise<string | null> {
+  return new Promise((resolve) => {
+    const child = spawn(absPath, args, {
+      stdio: ["ignore", "pipe", "pipe"],
+      timeout: 5000,
+    });
+    let buf = "";
+    child.stdout?.on("data", (d) => (buf += d.toString()));
+    child.stderr?.on("data", (d) => (buf += d.toString()));
+    child.on("error", () => resolve(null));
+    child.on("close", () => resolve(buf.trim() || null));
+  });
+}
+
+export function parseAgentCapability(input: {
+  name: CliName;
+  path: string;
+  version: string | null;
+  help: Array<{ command: string; text: string | null }>;
+}): AutomationAgentCapability {
+  const combined = input.help
+    .map((item) => item.text ?? "")
+    .join("\n")
+    .toLowerCase();
+  const helpCommands = input.help
+    .filter((item) => item.text)
+    .map((item) => item.command);
+  const invocation = detectInvocation(input.name, combined);
+  const status = invocation === "unknown" ? "unknown" : "ready";
+  return {
+    name: input.name,
+    status,
+    path: input.path,
+    version: input.version,
+    invocation,
+    helpCommands,
+    supportsJson: hasAny(combined, ["--json", "stream-json", "output-format json"]),
+    supportsStreaming: hasAny(combined, ["stream-json", "--stream", "partial"]),
+    supportsSandbox:
+      hasAny(combined, [
+        "--sandbox",
+        "--permission-mode",
+        "--dangerously",
+        "--yolo",
+      ]) ||
+      (input.name === "cline" && hasShortFlag(combined, "y")),
+    supportsResume: hasAny(combined, [
+      "resume",
+      "--resume",
+      "--session-id",
+      "--id",
+      "thread_id",
+    ]),
+    supportsModel: hasAny(combined, ["--model", "--effort", "--reasoning"]),
+    warning:
+      status === "ready"
+        ? null
+        : "Installed CLI was found, but CLIO could not confirm its non-interactive automation shape from help output.",
+  };
+}
+
+function detectInvocation(
+  name: CliName,
+  helpText: string,
+): AutomationAgentInvocation {
+  switch (name) {
+    case "codex":
+      return hasAny(helpText, ["codex exec", "exec [options]", "--json"])
+        ? "codex-exec"
+        : "unknown";
+    case "claude":
+      return hasAny(helpText, ['-p "', "--print", "print response"])
+        ? "claude-print"
+        : "unknown";
+    case "agy":
+      return hasAny(helpText, ["--prompt", "agy --prompt"]) ? "agy-prompt" : "unknown";
+    case "cline":
+      return hasAny(helpText, ["cline -y", "--id"]) || hasShortFlag(helpText, "y")
+        ? "cline-y"
+        : "unknown";
+  }
+}
+
+function hasAny(haystack: string, needles: string[]): boolean {
+  return needles.some((needle) => haystack.includes(needle));
+}
+
+function hasShortFlag(haystack: string, flag: string): boolean {
+  return new RegExp(`(^|\\s)-${flag}(\\s|,|$)`).test(haystack);
 }
 
 async function detectSkills(names: string[]): Promise<AutomationSkillStatus[]> {
