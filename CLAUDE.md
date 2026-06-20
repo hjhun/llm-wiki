@@ -22,7 +22,8 @@
 - The user gathers source material in `raw/`. They decide what to read and what to ask. Source material may be prose, PDFs, web captures, logs, or software codebases.
 - You incrementally **build and maintain** the Markdown wiki under `wiki/`.
   - Create summary pages, update entity/concept pages, fill indexes and logs, and flag contradictions.
-  - For code inputs, preserve source summaries and code analysis pages under `wiki/`; graphify reads those wiki pages, not raw source trees.
+  - Treat source summaries as provenance, not the finish line. Ingest should compile durable takeaways into the existing entity, concept, map, comparison, and synthesis pages so the wiki compounds over time.
+  - For code inputs, preserve source summaries and optional code analysis pages under `wiki/`; graphify reads those wiki pages, not raw source trees.
   - You handle the maintenance work: summarizing, cross-referencing, organizing, and preserving consistency.
 - The wiki should be searchable and understandable as a coherent work that another person can read.
 
@@ -58,10 +59,10 @@ Each operation maps to one or more project skills. If these rules conflict with 
 - Always follow the **leaf-directory chunks + merge pass** principle (Section 7).
 - Trigger: manual (`/ingest`, `/ingest-loop`) or **automatic** via the Settings → Auto Ingest panel (`raw/` file events or interval schedule). Manual Chat/API runs drive the same per-unit `wiki-ingest` contract through the single-agent `runIngestLoop` backend loop (one warm CLI session per iteration, batching sub-chunks per `chunking.unitPerCall`); there is no multi-worker fan-out. Targeted `/ingest-loop <raw-path>` must keep that raw scope across all iterations. The auto trigger is driven by the manager in `webapp/lib/auto-ingest/`, which calls `runIngestLoop()` directly; by default (`skipIfBusy: true`) it is skipped while `.lock` exists.
 - Outputs:
-  - `wiki/sources/<raw-relative-path>.md` summary page with YAML frontmatter, mirroring the logical `raw/` path
+  - `wiki/sources/<raw-relative-path>.md` provenance summary page with YAML frontmatter, mirroring the logical `raw/` path
+  - New or updated related entity/concept/comparison/synthesis pages that integrate durable takeaways into the persistent wiki
   - Updated `wiki/sources/index.md` source catalog when source pages are added or changed
   - Optional `wiki/maps/<topic>.md` associative trail pages when a source belongs to an ongoing research thread
-  - New or updated related entity/concept pages
   - Updated `wiki/index.md` and `wiki/log.md`
   - `wiki-graphify update` when needed
 

@@ -346,6 +346,19 @@ describe("buildLoopContinuationPrompt", () => {
     expect(prompt).toContain("bounded shell query");
     expect(prompt).not.toContain("read progress/ingest/.state.json");
   });
+
+  it("frames ingest as persistent wiki synthesis, not source-card filing", () => {
+    const prompt = buildLoopContinuationPrompt({
+      sessionPath: "s.md",
+      iteration: 1,
+      progressRef: null,
+      rawScope: "raw/articles",
+    });
+
+    expect(prompt).toContain("persistent, compounding wiki");
+    expect(prompt).toContain("Source cards are provenance");
+    expect(prompt).toContain("update entity, concept, map, index, and log pages");
+  });
 });
 
 describe("buildIngestLoopDeltaPrompt", () => {

@@ -19,9 +19,22 @@ Code Wiki source cards, wiki-only graph updates, and Korean wiki writing.
 
 Read material newly dropped by the user into `raw/` and perform the following.
 
-1. Write one `wiki/sources/<raw-relative-path>.md` summary page per original source, including code files, mirroring the logical `raw/` directory structure instead of filing sources by ingest/source date.
-2. Create or update related entity/concept pages, reusing existing pages instead of creating near-duplicates (see Step 2.3).
-3. If a leaf is code-heavy, keep the normal LLM Wiki ingest contract: write compact per-file code source cards and progress state, then let the separate `wiki-graphify update` workflow build the graph from the compiled Markdown under `wiki/`.
+0. Preserve Karpathy's core `llm-wiki.md` idea: ingest is not a file-indexing
+   job. The LLM compiles raw sources into a persistent, compounding wiki so
+   future queries read accumulated synthesis instead of re-deriving knowledge
+   from raw documents.
+1. Write `wiki/sources/<raw-relative-path>.md` source cards as provenance for
+   original sources, including code files, mirroring the logical `raw/`
+   directory structure instead of filing sources by ingest/source date. These
+   cards are evidence anchors, **not** the finish line.
+2. Create or update related entity, concept, comparison, map, and synthesis
+   pages, reusing existing pages instead of creating near-duplicates (see Step
+   2.4). A single source may legitimately touch many wiki pages.
+3. If a leaf is code-heavy, keep the normal LLM Wiki ingest contract: write
+   compact per-file code source cards and progress state, then integrate the
+   code's durable ideas into ordinary wiki pages. The separate
+   `wiki-graphify update` workflow builds the graph from compiled Markdown
+   under `wiki/`.
 4. Refresh `wiki/sources/index.md` as a compact source catalog organized by metadata facets such as topic, entity, source kind, source date, raw path prefix, status, and recent updates.
 5. Create or update `wiki/maps/<topic>.md` associative trail pages when a source belongs to an ongoing research thread that benefits from a navigable source/concept/entity map.
 6. Keep `wiki/index.md` and `wiki/log.md` consistent.
@@ -73,7 +86,9 @@ externalized to `progress/ingest/`.
 ## Output
 
 - List of new/updated `wiki/**` Markdown files.
-- For code-heavy inputs, one compact code source card per code file plus ingest progress; the Code Wiki graph itself is produced by the separate `wiki-graphify update` invocation over `wiki/`.
+- For code-heavy inputs, compact code source cards plus integration into the
+  ordinary wiki; the Code Wiki graph itself is produced by the separate
+  `wiki-graphify update` invocation over `wiki/`.
 - Session Markdown with chat log: `sessions/<date>/<time>_ingest.md` (conversation only).
 - Externalized progress: `progress/ingest/.state.json` + `progress/ingest/leaves/<hash>.json` + human-readable `progress/ingest/DASHBOARD.md`.
 - `wiki/sources/index.md` refreshed during the merge pass when source pages changed.
@@ -211,9 +226,14 @@ enumeration worker.
    test, route, schema, and config files in the same sub-chunk if it does not
    exceed limits. Do not group generated/vendor files.
 
-### Step 2 — Process **One** Sub-Chunk Per Invocation (the hard rule)
+### Step 2 — Process Bounded Sub-Chunks
 
-For exactly **one** sub-chunk whose `status === "pending"`:
+Process pending sub-chunks according to `chunking.unitPerCall`. With
+`one_subchunk`, process exactly one pending sub-chunk and return. With
+`session_batch`, keep processing bounded pending sub-chunks in this warm session
+until the assigned scope is complete or a natural stop is needed.
+
+For each sub-chunk whose `status === "pending"`:
 
 1. Mark the sub-chunk `status: "in_progress"`, set `started_at`, increment `leaves[<leafPath>].attempts`. Persist immediately.
 2. Open files **one at a time**, in the order recorded in the sub-chunk:
@@ -257,7 +277,11 @@ For exactly **one** sub-chunk whose `status === "pending"`:
      or debug synthesis, answer from source summaries and targeted read-only
      raw evidence when needed, and optionally save that synthesis as ordinary
      wiki pages.
-4. Update entity/concept pages **from the takeaways only** (the per-leaf JSON), not by re-opening the raw files. If a raw file truly must be re-read, open it, read just the needed span, and close it before moving on.
+4. Update entity/concept/map/synthesis pages **from the takeaways only** (the
+   per-leaf JSON), not by re-opening the raw files. If a raw file truly must be
+   re-read, open it, read just the needed span, and close it before moving on.
+   This integration is the main ingest output: source cards only prove where
+   the knowledge came from.
    - **Reuse before creating.** Before adding a new `wiki/entities/` or `wiki/concepts/` page, check `wiki/index.md` for an existing page naming the same target — including case, spacing, punctuation, and English/Korean variants (`Transformer` ≈ `트랜스포머` ≈ `transformer-model`). If one exists, update it and link with the index's exact `[[Page Name]]`. Create a new page only when no existing page covers the target. Parallel workers each see only part of the input, so this is the main safeguard against near-duplicate pages — and therefore against duplicate, disconnected graph nodes.
 5. **Contradictions**: if a new claim disagrees with an existing wiki page, add a block quote on that page:
    ```markdown
@@ -269,9 +293,23 @@ For exactly **one** sub-chunk whose `status === "pending"`:
    - Changed files: `wiki/sources/articles/foo.md`, `wiki/entities/bar.md`
    - Notes: <files done>/<files total> in leaf
    ```
-7. Mark the sub-chunk `status: "done"`, set `ended_at`, and record `source_pages_written`. For code/mixed leaves, do not block completion on `wiki/code` page creation. If this was the leaf's last sub-chunk, set `leaves[<leafPath>].status = "done"` **and queue the merge pass**: add the leaf's immediate parent directory (a POSIX path ending in `/`; use `raw/` for a leaf sitting directly under `raw/`) to `merge_pass.pending_parents` unless it is already listed. This is the only place `pending_parents` is filled — Step 3 and the `/ingest-loop` backend driver both rely on it to know merge work is outstanding, so skipping it leaves the loop unable to detect completion. Persist `.state.json`.
+7. Mark the sub-chunk `status: "done"`, set `ended_at`, and record
+   `source_pages_written` plus the synthesis pages touched when known. For
+   code/mixed leaves, do not block completion on `wiki/code` page creation. If
+   this was the leaf's last sub-chunk, set `leaves[<leafPath>].status = "done"`
+   **and queue the merge pass**: add the leaf's immediate parent directory (a
+   POSIX path ending in `/`; use `raw/` for a leaf sitting directly under
+   `raw/`) to `merge_pass.pending_parents` unless it is already listed. This is
+   the only place `pending_parents` is filled — Step 3 and the `/ingest-loop`
+   backend driver both rely on it to know merge work is outstanding, so
+   skipping it leaves the loop unable to detect completion. Persist
+   `.state.json`.
 8. **Regenerate `progress/ingest/DASHBOARD.md`** from `.state.json` (idempotent — overwrite, do not append).
-9. **Release the per-leaf lock (and the global state mutex if still held) and return.** Do **not** start the next sub-chunk in the same call. The next `/ingest` invocation will read `.state.json` and pick up the next `pending` sub-chunk.
+9. **Release the per-leaf lock (and the global state mutex if still held).** If
+   `chunking.unitPerCall === "session_batch"` and context is still healthy,
+   continue with the next pending sub-chunk in the assigned scope. Otherwise
+   return; the next `/ingest` or `/ingest-loop` invocation will read
+   `.state.json` and resume from the next pending unit.
 
 If an exception is raised during this step:
 - Set the sub-chunk `status: "error"`, store the error message in `leaves[<leafPath>].last_error`.
@@ -284,7 +322,9 @@ Only run when **every** leaf in the input scope has `status === "done"` and `mer
 
 1. Acquire the same lock with mode `merge`.
 2. If `merge_pass.pending_parents` is empty there is nothing to merge: set `merge_pass.status = "done"`, regenerate `DASHBOARD.md`, release the lock, and return. Otherwise pick **one** parent directory from `merge_pass.pending_parents`. For that parent:
-   - Combine child-leaf summaries into or onto `wiki/concepts/<topic>.md` (or wherever appropriate).
+   - Combine child-leaf summaries into or onto the relevant
+     entity/concept/comparison/synthesis pages. This is where batch ingest turns
+     many source cards into one coherent wiki layer.
    - If useful, write/append the root synthesis note at `wiki/synthesis/<batch>.md`.
    - Refresh `wiki/sources/index.md` by running the deterministic generator: `node scripts/build-sources-index.mjs`. The script walks `wiki/sources/`, parses each source page's frontmatter, and rewrites the header section (faceted by recently-updated, topic, entity, source_kind, source_date, project, status, plus a full alphabetical list). Any LLM-authored prose past the `<!-- clio:sources-index:custom -->` marker is preserved verbatim. Do **not** hand-edit the generated header; if a facet is missing, fix the script. If the script is unavailable, fall back to writing a compact, facet-oriented index by hand using the same fields.
    - Create or update `wiki/maps/<topic>.md` only when there is a durable research thread or associative trail worth navigating. Map pages should link to source summaries, entity/concept pages, answers, contradictions, and open questions; they should not duplicate every source summary.
@@ -494,13 +534,13 @@ in `CLAUDE.md`/`AGENTS.md` is a summary of it.
 
 Per sub-chunk (Step 2):
 
-- [ ] Processed exactly one `pending` sub-chunk; read its files one at a time (never two file bodies in memory).
+- [ ] Processed pending sub-chunks according to `chunking.unitPerCall`; read files one at a time (never two file bodies in memory).
 - [ ] Wrote `wiki/sources/<raw-relative-path>.md` with required frontmatter for each source file, including compact file-level cards for code files.
-- [ ] Updated entity/concept pages from takeaways only, reusing existing pages (checked `wiki/index.md` for case/spacing/EN-KO variants; no near-duplicates).
+- [ ] Updated entity/concept/map/synthesis pages from takeaways only, reusing existing pages (checked `wiki/index.md` for case/spacing/EN-KO variants; no near-duplicates).
 - [ ] Recorded any contradiction as a block quote on the affected page.
 - [ ] Appended one `wiki/log.md` entry for this sub-chunk.
 - [ ] Marked sub-chunk `done`; if leaf finished, set leaf `done` and queued its parent into `merge_pass.pending_parents`; persisted `.state.json`.
-- [ ] Regenerated `DASHBOARD.md`; released per-leaf lock (and global mutex); returned without starting another sub-chunk.
+- [ ] Regenerated `DASHBOARD.md`; released per-leaf lock (and global mutex); either continued under `session_batch` or returned under `one_subchunk`/natural stop.
 
 Per merge pass (Step 3):
 

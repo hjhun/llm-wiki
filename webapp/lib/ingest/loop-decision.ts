@@ -316,6 +316,9 @@ export function buildLoopContinuationPrompt(input: {
   if (input.sourcePageStatusRef) lines.push(input.sourcePageStatusRef);
   if (input.codeWikiStatusRef) lines.push(input.codeWikiStatusRef);
   lines.push(
+    "Karpathy llm-wiki mode: ingest is not a file-indexing job. Build and maintain a persistent, compounding wiki that sits between the user and raw sources. Source cards are provenance for later checking; the real output is integrated wiki knowledge.",
+    "For each processed source, extract durable takeaways, update or create the relevant entity, concept, comparison, map, index, and log pages, flag contradictions against existing wiki claims, and preserve wikilinks so future queries read the compiled wiki before raw files.",
+    "Do not report the ingest unit complete just because wiki/sources cards exist. They are necessary evidence, but the merge/synthesis work must update entity, concept, map, index, and log pages when the source contains reusable knowledge.",
     "Progress files can be very large. Do not call file-reading tools on progress/ingest/.state.json or progress/ingest/DASHBOARD.md, and do not print either whole file into the conversation. Use the compact references in this prompt first. If a progress detail is required, use a bounded shell query that prints only the scoped leaf or sub-chunk you need.",
     `This is ingest-loop iteration ${input.iteration}. Drive the wiki-ingest leaf-first + merge work yourself in THIS session for ${operationScope}: keep processing pending sub-chunks, merge-pass parents, and missing direct-file pseudo-leaf enumerations — each sub-chunk still bounded by the chunking caps — per the configured chunking.unitPerCall contract. Continue until the scope's pending/in_progress/partial work reaches zero (then run the merge pass), or until context grows large enough that a fresh session would be cleaner; then exit. The backend only re-invokes you to resume if work remains — you own the loop within a session. For code/mixed leaves, create raw-mirrored wiki/sources file cards; do not create mirrored wiki/code file pages as a repair task. Graphify runs separately after ingest progress is complete.`,
     "",
@@ -344,6 +347,7 @@ export function buildIngestLoopDeltaPrompt(input: {
   ];
   if (input.actionableLeafRef) lines.push(input.actionableLeafRef);
   lines.push(
+    "Karpathy llm-wiki mode still applies: source cards are provenance, not the finish line. Keep integrating durable takeaways into entity, concept, map, index, and log pages so the wiki compounds instead of re-deriving knowledge from raw files later.",
     "Progress files can be very large. Do not call file-reading tools on progress/ingest/.state.json or progress/ingest/DASHBOARD.md, and do not print either whole file into the conversation. Use bounded shell queries when you need one scoped leaf/sub-chunk detail.",
     `Process the next pending sub-chunks for ${scope} per the configured chunking.unitPerCall contract, persisting each source page + state as you go. When the scope's pending/in_progress/partial work reaches zero or you hit a natural stopping point, exit — the backend loop resumes you if anything remains.`,
   );
