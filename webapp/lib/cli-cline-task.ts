@@ -3,9 +3,10 @@
  *
  * Used by the multi-agent resume path: to continue a worker's own cline
  * conversation across ingest rounds we need its task id, but cline does not let
- * us assign one up front (unlike claude `--session-id`). Running a fresh round
- * with `-y -p <prompt>` makes cline print a `Task started: <task id>` line to
- * stdout; later rounds resume that task with `cline -T <task id>`.
+ * us assign one up front (unlike claude `--session-id`). Running a fresh
+ * non-interactive round with a positional prompt may print a
+ * `Task started: <task id>` line to stdout; later rounds resume that task with
+ * `cline --id <task id>`.
  *
  * Unlike the codex JSON parser, cline stdout is ordinary plain text we want to
  * keep verbatim in RunResult.stdout — this sniffer only *observes* the stream

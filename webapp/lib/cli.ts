@@ -53,8 +53,8 @@ const RESUME_SUPPORT: Record<
   // structured output to capture that id from, so it stays on the safe
   // fresh-process fallback until a capture path exists.
   agy: { assignsId: false, capturesId: false },
-  // cline prints `Task started: <task id>` on a fresh `-y -p` run and resumes
-  // that task with `-T <task id>`, so it captures the id from stdout.
+  // cline prints a task/session id on a fresh non-interactive run and resumes
+  // that task with `--id <task id>`, so it captures the id from stdout.
   cline: { assignsId: false, capturesId: true },
 };
 
@@ -140,8 +140,8 @@ export function planSession(
     case "cline": {
       if (session.resume && session.id) {
         // Resume by task id: the id is already known, so no capture is needed.
-        // `-T <id>` rides in args next to the prompt (like claude `--resume`).
-        return { ...noop, args: ["-T", session.id], sessionId: session.id };
+        // `--id <id>` rides in args next to the prompt (like claude `--resume`).
+        return { ...noop, args: ["--id", session.id], sessionId: session.id };
       }
       // Fresh round: sniff the `Task started: <id>` banner from stdout.
       return { ...noop, capture: true };
@@ -328,7 +328,7 @@ export function planPromptSpill(
   return { spilled: true, promptForArgs, fileName, content: prompt };
 }
 
-function buildArgs(
+export function buildArgs(
   cli: CliName,
   prompt: string,
   safeMode: boolean,
@@ -388,14 +388,13 @@ function buildArgs(
             projectRoot,
           ];
     case "cline": {
-      // `-p <prompt>` runs non-interactively and prints the `Task started: <id>`
-      // banner; `-y` adds auto-approval. sessionArgs carries `-T <id>` on resume.
-      // IMPORTANT: `-v`/`--compaction` are ONLY valid combined with `-p <prompt>`,
-      // so they must come AFTER `base` (which always contains `-p <prompt>`).
-      const base = safeMode ? ["-p", prompt] : ["-y", "-p", prompt];
+      // Cline CLI 0.6 uses a positional prompt. `-p` means --plan, so never use
+      // it here or ingest-loop starts in Plan mode and cannot mutate the wiki.
+      // sessionArgs carries `--id <id>` on resume.
+      const approval = ["--auto-approve", safeMode ? "false" : "true"];
       const measure = measureContext ? ["-v"] : [];
-      const comp = compact ? ["--compaction"] : [];
-      return [...base, ...measure, ...comp, ...sessionArgs];
+      const comp = compact ? ["--compaction", "basic"] : [];
+      return [...approval, ...measure, ...comp, ...sessionArgs, prompt];
     }
   }
 }

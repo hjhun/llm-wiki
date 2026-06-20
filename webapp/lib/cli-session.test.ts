@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildArgs,
   cliSupportsResume,
   planSession,
   publicSandboxReadOnlyHomePathsForCli,
@@ -89,10 +90,10 @@ describe("planSession", () => {
     });
   });
 
-  it("resumes cline by task id with -T and no capture", () => {
+  it("resumes cline by task id with --id and no capture", () => {
     const id = "task-12345";
     expect(planSession("cline", { id, resume: true })).toEqual({
-      args: ["-T", id],
+      args: ["--id", id],
       resumeId: null,
       sessionId: id,
       capture: false,
@@ -118,6 +119,46 @@ describe("planSession codex resume with measurement", () => {
     const p = planSession("codex", { id: "t1", resume: true });
     expect(p.args).not.toContain("--json");
     expect(p.capture).toBe(false);
+  });
+});
+
+describe("buildArgs cline", () => {
+  it("passes the prompt positionally instead of using -p plan mode", () => {
+    expect(
+      buildArgs("cline", "do ingest", false, "/repo", false, false),
+    ).toEqual(["--auto-approve", "true", "do ingest"]);
+  });
+
+  it("disables auto-approval in safe mode", () => {
+    expect(
+      buildArgs("cline", "inspect only", true, "/repo", false, false),
+    ).toEqual(["--auto-approve", "false", "inspect only"]);
+  });
+
+  it("places resume, verbose, and compaction options before the positional prompt", () => {
+    expect(
+      buildArgs(
+        "cline",
+        "continue",
+        false,
+        "/repo",
+        false,
+        false,
+        ["--id", "task-12345"],
+        null,
+        true,
+        true,
+      ),
+    ).toEqual([
+      "--auto-approve",
+      "true",
+      "-v",
+      "--compaction",
+      "basic",
+      "--id",
+      "task-12345",
+      "continue",
+    ]);
   });
 });
 
