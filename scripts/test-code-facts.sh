@@ -16,7 +16,9 @@ mkdir -p \
   "${TMP_ROOT}/raw/repos/demo/python" \
   "${TMP_ROOT}/raw/repos/demo/rust" \
   "${TMP_ROOT}/raw/repos/demo/bad" \
-  "${TMP_ROOT}/raw/repos/demo/tests"
+  "${TMP_ROOT}/raw/repos/demo/tests" \
+  "${TMP_ROOT}/wiki/concepts" \
+  "${TMP_ROOT}/wiki/sources/articles"
 cp "${ROOT_DIR}/scripts/code-facts.mjs" "${TMP_ROOT}/scripts/code-facts.mjs"
 cp "${ROOT_DIR}/scripts/merge-graph-parts.mjs" "${TMP_ROOT}/scripts/merge-graph-parts.mjs"
 
@@ -197,6 +199,7 @@ JSON
   --out wiki/graph/graph.json \
   --report wiki/graph/GRAPH_REPORT.md \
   --min-confidence 0.65 \
+  --profile code-facts \
   --state wiki/graph/.state.json >/dev/null)
 
 node - \
@@ -377,6 +380,133 @@ assert(report.includes("## New Nodes"), "graph report new nodes section missing"
 assert(state.version === 1, "graph state version missing");
 assert(state.leaves["raw/repos/demo/"].part_file === "wiki/graph/parts/demo.json", "graph state leaf entry missing");
 assert(state.leaves["raw/repos/demo/"].node_count === part.nodes.length, "graph state node count mismatch");
+NODE
+
+cat > "${TMP_ROOT}/wiki/concepts/topic.md" <<'MD'
+---
+title: Topic
+type: concept
+---
+
+# Topic
+MD
+
+cat > "${TMP_ROOT}/wiki/sources/articles/source.md" <<'MD'
+---
+title: Source
+type: source
+---
+
+# Source
+
+See [[Topic]].
+MD
+
+cat > "${TMP_ROOT}/wiki/graph/parts/page-title.json" <<'JSON'
+{
+  "version": 1,
+  "built_at": "2026-05-30T00:00:00.000Z",
+  "leaf_path": "wiki/sources/articles/",
+  "leaf_hash": "page-title",
+  "source": "test-fixture",
+  "nodes": [
+    {
+      "id": "source-node-alias",
+      "label": "Source",
+      "type": "source",
+      "page_path": "wiki/sources/articles/source.md",
+      "sources": ["wiki/sources/articles/source.md"]
+    },
+    {
+      "id": "concepts/topic",
+      "label": "Topic",
+      "type": "concept",
+      "sources": ["wiki/concepts/topic.md"]
+    },
+    {
+      "id": "heading:source:overview",
+      "label": "Overview",
+      "type": "heading",
+      "sources": ["wiki/sources/articles/source.md"]
+    },
+    {
+      "id": "concept:incidental",
+      "label": "Incidental extracted concept",
+      "type": "concept"
+    }
+  ],
+  "edges": [
+    {
+      "src": "source-node-alias",
+      "dst": "concepts/topic",
+      "type": "links_to",
+      "weight": 1
+    },
+    {
+      "src": "source-node-alias",
+      "dst": "heading:source:overview",
+      "type": "mentions",
+      "weight": 1
+    },
+    {
+      "src": "concepts/topic",
+      "dst": "concept:incidental",
+      "type": "related_to",
+      "confidence": 0.99,
+      "weight": 0.99
+    },
+    {
+      "src": "source-node-alias",
+      "dst": "concepts/topic",
+      "type": "related_to",
+      "confidence": 0.6,
+      "weight": 0.6
+    }
+  ]
+}
+JSON
+
+(cd "${TMP_ROOT}" && node scripts/merge-graph-parts.mjs \
+  --parts wiki/graph/parts \
+  --out wiki/graph/page-title-graph.json \
+  --report wiki/graph/PAGE_TITLE_REPORT.md \
+  --min-confidence 0.65 \
+  --semantic-min-confidence 0.72 \
+  --state wiki/graph/page-title-state.json >/dev/null)
+
+node - \
+  "${TMP_ROOT}/wiki/graph/page-title-graph.json" \
+  "${TMP_ROOT}/wiki/graph/PAGE_TITLE_REPORT.md" \
+  "${TMP_ROOT}/wiki/graph/page-title-state.json" <<'NODE'
+const fs = require("node:fs");
+const graph = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
+const report = fs.readFileSync(process.argv[3], "utf8");
+const state = JSON.parse(fs.readFileSync(process.argv[4], "utf8"));
+
+function assert(condition, message) {
+  if (!condition) {
+    console.error(message);
+    process.exit(1);
+  }
+}
+
+const ids = new Set(graph.nodes.map((node) => node.id));
+const edgeKeys = new Set(graph.edges.map((edge) => `${edge.src}->${edge.dst}:${edge.type}`));
+
+assert(ids.has("sources/articles/source"), "source page node should be kept");
+assert(ids.has("concepts/topic"), "concept page node should be kept");
+assert(!ids.has("source-node-alias"), "alias node should be canonicalized to page id");
+assert(!ids.has("heading:source:overview"), "heading node should be pruned");
+assert(!ids.has("concept:incidental"), "incidental concept node should be pruned");
+assert(edgeKeys.has("sources/articles/source->concepts/topic:links_to"), "explicit page link should be kept");
+assert(![...edgeKeys].some((key) => key.includes("mentions")), "facet/mention edge should be pruned");
+assert(![...edgeKeys].some((key) => key.includes("related_to")), "below-threshold/non-page semantic edges should be pruned");
+assert(report.includes("Profile: page-title"), "report should mention page-title profile");
+const dropped = Number((report.match(/Non-page nodes dropped: (\d+)/) ?? [])[1]);
+assert(dropped > 0, "report should count dropped non-page nodes");
+assert(report.includes("Non-page edges dropped:"), "report should count dropped non-page edges");
+assert(state.leaves["wiki/sources/articles/"].node_count === 2, "state should record kept page nodes");
+assert(state.leaves["wiki/sources/articles/"].raw_node_count === 4, "state should record raw part node count");
 NODE
 
 printf '[code-facts] ok\n'

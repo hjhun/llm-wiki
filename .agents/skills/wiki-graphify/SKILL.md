@@ -247,6 +247,11 @@ for graph generation.
    - Options: use supported graphify CLI commands where they fit, or call
      installed `graphify` Python package modules directly. Choose the narrowest
      input shape supported by the selected executable/package.
+   - The connected merge must use
+     `node scripts/merge-graph-parts.mjs --profile page-title` (the default)
+     or an equivalent stricter filter. This merge boundary prunes any
+     over-extracted heading, paragraph, incidental concept, symbol, rationale,
+     or facet nodes before `graph.json` reaches the Graph tab.
 3. **Record state**: update `wiki/graph/.state.json` with wiki `leaf path ->
    {built_at, content_hash, part_file}`.
 4. **Connect pass**: combine all wiki partials into the final `graph.json`. See
@@ -289,8 +294,11 @@ relationships between wiki pages.
    edge only when no canonical node can be found.
 6. **Apply graph budget**: after dedupe, prune low-confidence inferred edges,
    isolated derived nodes, and over-budget per-source/per-leaf nodes according
-   to `graph.extraction`. Never prune the last provenance anchor for a source
-   page.
+   to `graph.extraction`. The default `page-title` merge profile keeps only
+   page-backed wiki nodes plus explicit page links and thresholded
+   `related_to` edges; it drops facet-only, heading, paragraph, symbol,
+   rationale, and incidental concept nodes. Never prune the last provenance
+   anchor for a source page.
 7. **Recompute communities**: run the selected graphify community algorithm once more on the merged graph. Absorb communities that are too small (`size < minCommunitySize`) into adjacent communities.
 8. **Output**: standard `wiki/graph/graph.json` schema below plus
    `GRAPH_REPORT.md`. Enforce the invariant that every `edges[].src`/`dst`
