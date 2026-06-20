@@ -34,10 +34,7 @@
       "proseEdges": "explicit+semantic",
       "facetEdges": false,
       "includeSemanticSimilarity": true,
-      "semanticMinConfidence": 0.72,
-      "codeModel": "per-project-graphify-out",
-      "projectsDir": "wiki/graph/projects",
-      "projectAnalysisDir": "wiki/code"
+      "semanticMinConfidence": 0.72
     },
     "autoUpdateOnIngest": true,
     "autoUpdateStrategy": "auto",

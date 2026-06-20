@@ -99,8 +99,8 @@ export type SettingsConfig = {
   graph: {
     minCommunitySize: number;
     extraction: {
-      profile: "wiki" | "code" | "deep";
-      scope: "wiki" | "wiki+raw";
+      profile: "wiki" | "deep";
+      scope: "wiki";
       maxNodesPerLeaf: number;
       maxConceptsPerSource: number;
       minConfidence: number;
@@ -111,9 +111,6 @@ export type SettingsConfig = {
       proseEdges: "explicit" | "explicit+semantic";
       facetEdges: boolean;
       semanticMinConfidence: number;
-      codeModel: "per-project-graphify-out";
-      projectsDir: string;
-      projectAnalysisDir: string;
     };
     autoUpdateOnIngest: boolean;
     autoUpdateStrategy: "auto" | "finalOnly" | "partialAndFinal";

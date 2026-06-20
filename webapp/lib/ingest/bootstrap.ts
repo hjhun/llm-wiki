@@ -257,9 +257,6 @@ function buildLeafState(leaf: ScannedLeaf, cfg: Config): JsonRecord {
     part_file: leafPartFile(leaf.leafPath),
   };
   if (leaf.project) state.project = leaf.project;
-  if (leaf.kind === "code" || leaf.kind === "mixed") {
-    state.graph_scope = leaf.leafPath;
-  }
   return state;
 }
 

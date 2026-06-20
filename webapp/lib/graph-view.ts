@@ -2,9 +2,9 @@ import type { GraphData, GraphNode } from "@/components/graph/types";
 
 /**
  * Which slice of the merged knowledge graph the Graph tab is showing.
- * The wiki and code subgraphs live in one `graph.json` (prose pages plus the
- * per-project graphify-out, bridged by `implements`/`documented_by` edges); the
- * Graph tab lets the user view them separately.
+ * The wiki graph is built only from Markdown under `wiki/`. The Graph tab still
+ * lets users focus synthesized code-analysis pages separately when `wiki/code/`
+ * pages exist.
  */
 export type GraphViewMode = "all" | "wiki" | "code";
 
@@ -14,10 +14,10 @@ export type GraphViewCounts = {
   code: number;
 };
 
-// A node belongs to the Code Wiki when its provenance points at source code
-// (`raw/...`) or a synthesized code-analysis page (`wiki/code/...`). Everything
-// else — sources, concepts, entities, answers, maps — is prose ("wiki").
-const CODE_SOURCE = /^(raw\/|wiki\/code\/)/;
+// A node belongs to the Code Wiki only when its provenance points at a
+// synthesized code-analysis page under `wiki/code/`. Raw sources are not graph
+// inputs.
+const CODE_SOURCE = /^wiki\/code\//;
 
 function isCodeSource(source: string): boolean {
   return CODE_SOURCE.test(source.trim().replace(/^\.?\//, ""));
@@ -25,15 +25,14 @@ function isCodeSource(source: string): boolean {
 
 /**
  * Classify a node as belonging to the code or prose subgraph. Provenance is the
- * signal: any `raw/` or `wiki/code/` source (string or resolved document) marks
- * a code node; nodes with no code provenance default to prose.
+ * signal: any `wiki/code/` source (string or resolved document) marks a code
+ * node; nodes with no code provenance default to prose.
  */
 export function nodeKind(node: GraphNode): "code" | "wiki" {
   for (const source of node.sources) {
     if (isCodeSource(source)) return "code";
   }
   for (const doc of node.documents) {
-    if (doc.ws === "raw") return "code";
     if (doc.path && isCodeSource(`wiki/${doc.path}`) && doc.ws === "wiki") {
       return "code";
     }

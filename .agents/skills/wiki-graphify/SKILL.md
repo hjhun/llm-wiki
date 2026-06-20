@@ -1,6 +1,6 @@
 ---
 name: wiki-graphify
-description: Use the global graphify command from PATH to build and update the knowledge graph for wiki/ and raw/ with a leaf-first workflow, and provide optional graph context to wiki-query.
+description: Use the global graphify command from PATH to build and update the knowledge graph for wiki/ only with a leaf-first workflow, and provide optional graph context to wiki-query.
 allowed-cli: [codex, claude, gemini, cline]
 ---
 
@@ -10,21 +10,21 @@ allowed-cli: [codex, claude, gemini, cline]
 
 This skill supports the persistent, interlinked wiki described in
 [`llm-wiki.md`](../../../llm-wiki.md) by materializing graph artifacts from
-`wiki/` and optionally `raw/`. Graph output is auxiliary navigation/context:
+`wiki/` only. Graph output is auxiliary navigation/context:
 it helps agents find relationships, but final answers and wiki updates still
 ground claims in wiki pages, source summaries, and read-only raw sources.
 
 ## Purpose
 
-Use the wiki and original sources as input to produce an Obsidian-like page
-graph first, then enrich it with bounded graphify extraction when useful.
+Use the compiled wiki as input to produce an Obsidian-like page graph first,
+then enrich it with bounded graphify extraction when useful. Graph generation
+must read Markdown under `wiki/` only; `raw/` remains ingest/query evidence and
+is not a graphify input.
 
-- `wiki/graph/graph.json` — final connected node/edge graph (prose pages + code projects).
+- `wiki/graph/graph.json` — final connected node/edge graph over `wiki/` pages.
 - `wiki/graph/GRAPH_REPORT.md` — summary of god nodes, community structure, and key paths.
-- `wiki/graph/parts/<path-hash>.json` — partial **page-title** graph per prose leaf directory before merge.
-- `wiki/graph/projects/<project>/` — the real per-project **graphify-out** for one code project (`graph.json`, `GRAPH_REPORT.md`, and graphify's native artifacts). This is the canonical code graph unit and replaces the old per-file Code Facts (`facts/`) path.
-- `wiki/code/<project>.md` — one detailed project-analysis page synthesized from that project's `wiki/graph/projects/<project>/` graphify-out. Replaces per-file `wiki/sources/<...>/file.md` code summaries.
-- `wiki/graph/.state.json` — leaf path / project -> last build time/hash.
+- `wiki/graph/parts/<path-hash>.json` — partial **page-title** graph per wiki leaf directory before merge.
+- `wiki/graph/.state.json` — wiki leaf path -> last build time/hash.
 
 Knowledge graph work must **always go through this skill**. The web app does not execute graphify directly. It sends `wiki-graphify build/update/query` requests to the coding agent CLI selected in Settings. The coding agent reads this skill and handles execution path selection, leaf-first chunk processing, the merge pass, and logging.
 
@@ -70,8 +70,8 @@ such as `graphify.detect`, `graphify.extract`, `graphify.build`,
 
 | Command | Input | Output |
 |---|---|---|
-| `build` | Optional: `--scope=wiki|raw|wiki+raw` (default from `graph.extraction.scope`, normally `wiki`) | Agent-level full refresh of `graph.json`, `GRAPH_REPORT.md`, prose `parts/*`, per-project `projects/<project>/` graphify-out, `wiki/code/<project>.md`, `.state.json`; do not call a literal `graphify build` command |
-| `update` | Optional: `--since=<date>`, automatic change detection, or scoped `<leafPath>`/project list supplied by the webapp | Agent-level incremental rebuild of changed/scoped prose leaves and code projects -> rerun connect pass across **all** valid `parts/*.json` and `projects/*/graph.json` so the changed target is connected into `graph.json` |
+| `build` | Optional: `--scope=wiki` (fixed default from `graph.extraction.scope`) | Agent-level full refresh of `graph.json`, `GRAPH_REPORT.md`, wiki page `parts/*`, and `.state.json`; do not call a literal `graphify build` command |
+| `update` | Optional: `--since=<date>`, automatic change detection, or scoped `wiki/` `<leafPath>` list supplied by the webapp | Agent-level incremental rebuild of changed/scoped wiki leaves -> rerun connect pass across **all** valid `parts/*.json` so the changed target is connected into `graph.json` |
 | `update-partial` | One or more `<leafPath>` (POSIX, trailing `/`) | Cache-only operation: build per-leaf partials in `wiki/graph/parts/<sha1(leafPath)>.json` for the listed leaves only. **Skip the merge pass.** Do NOT touch `graph.json`, `GRAPH_REPORT.md`, or rerun community clustering. Use only when the caller explicitly wants a cache refresh without a connected final graph. |
 | `query` | One natural-language question, optional `--k=<neighbor-count>` | Graph candidate/context notes, cited nodes, and optional Markdown answer when invoked directly |
 
@@ -178,10 +178,7 @@ Default policy comes from `graph.extraction`:
   "proseEdges": "explicit+semantic",
   "facetEdges": false,
   "includeSemanticSimilarity": true,
-  "semanticMinConfidence": 0.72,
-  "codeModel": "per-project-graphify-out",
-  "projectsDir": "wiki/graph/projects",
-  "projectAnalysisDir": "wiki/code"
+  "semanticMinConfidence": 0.72
 }
 ```
 
@@ -194,23 +191,10 @@ Profiles:
   facets stay as node metadata; they are **not** auto-converted to edges. Do not
   create nodes for headings, paragraphs, individual claims, rationale snippets,
   or every mentioned noun.
-- `code` (per-project graphify-out): the code graph unit is a **whole project**,
-  not a leaf or a file. For each code project under `raw/`, run the real
-  `graphify` pipeline once over the project's code and keep its native
-  `graphify-out` under `wiki/graph/projects/<project>/`. Base this on the global
-  `~/.claude/skills/graphify` skill (detect -> AST + semantic extract -> build ->
-  cluster -> report), but only the parts needed here: write the output into
-  `wiki/graph/projects/<project>/` instead of the package default `graphify-out/`,
-  and feed its `graph.json`/`GRAPH_REPORT.md` into the connect pass and the
-  `wiki/code/<project>.md` analysis page. Do **not** run the old per-file Code
-  Facts extractor (`scripts/code-facts.mjs`) or write one graph node per source
-  file by hand; graphify owns code node/edge extraction. The CLIO budget applies
-  to how project graphs are *connected* into the final graph, not to graphify's
-  internal per-project extraction.
 - `deep`: allow richer global graphify behavior for deliberate investigations.
-  Even in this profile, preserve the per-project output layout under
-  `wiki/graph/projects/` and the prose part layout under `wiki/graph/parts/`,
-  and enforce provenance, confidence, and merge invariants.
+  Even in this profile, preserve the wiki-only input rule and the partial layout
+  under `wiki/graph/parts/`, and enforce provenance, confidence, and merge
+  invariants.
 
 Filtering rules after extraction:
 
@@ -232,11 +216,9 @@ Filtering rules after extraction:
 6. Drop rationale/claim-snippet nodes unless `includeRationaleNodes=true`; keep
    the important claim text on the source node's metadata instead.
 7. Drop hyperedges unless `includeHyperedges=true`.
-8. Enforce `maxConceptsPerSource` and `maxNodesPerLeaf` on prose leaves by
-   keeping cited, linked, high-centrality, and page-backed nodes first. These
-   per-leaf budgets do **not** apply inside a per-project code graphify-out;
-   they apply to how project subgraphs connect into the final graph. Record any
-   truncation count in the partial graph and `GRAPH_REPORT.md`.
+8. Enforce `maxConceptsPerSource` and `maxNodesPerLeaf` on wiki leaves by
+   keeping cited, linked, high-centrality, and page-backed nodes first. Record
+   any truncation count in the partial graph and `GRAPH_REPORT.md`.
 9. If `dropIsolatedDerivedNodes=true`, remove isolated prose nodes that are not
    backed by a wiki/source page. Isolated page-backed source/entity/concept
    nodes may stay because they are useful retrieval anchors.
@@ -249,10 +231,10 @@ nodes, not one node per heading, claim, function, or incidental concept.
 
 This follows the same principle as `wiki-ingest`.
 
-Two unit kinds: **prose leaves** (page-title partials) and **code projects**
-(per-project graphify-out).
+The unit kind is a **wiki leaf** (page-title partial). Do not enumerate `raw/`
+for graph generation.
 
-1. **Find prose leaf directories**: list directories with no child directories in
+1. **Find wiki leaf directories**: list directories with no child directories in
    `wiki/`. Also treat files that live directly inside a non-leaf directory as a
    small pseudo-leaf for that directory, so root files such as `wiki/index.md`
    and `wiki/log.md` are not skipped.
@@ -265,40 +247,23 @@ Two unit kinds: **prose leaves** (page-title partials) and **code projects**
    - Options: use supported graphify CLI commands where they fit, or call
      installed `graphify` Python package modules directly. Choose the narrowest
      input shape supported by the selected executable/package.
-3. **Find code projects** under `raw/`: group code leaves by project (nearest
-   manifest such as `package.json`/`Cargo.toml`/`pyproject.toml`, else the first
-   directory under `raw/`). The unit is the whole project, not each leaf.
-4. **Build per-project graphify-out**: for each code project, run the real
-   `graphify` pipeline once over the project's code, writing its native output to
-   `wiki/graph/projects/<project>/` (e.g. `graphify update raw/<project> --out
-   wiki/graph/projects/<project>`, or the global graphify skill's
-   detect/extract/build/cluster/report steps with that output dir). Then
-   synthesize `wiki/code/<project>.md` from that graphify-out (see §Code Project
-   Analysis Page). Never run `scripts/code-facts.mjs` and never hand-write a node
-   per source file.
-5. **Record state**: update `wiki/graph/.state.json` with prose `leaf path ->
-   {built_at, content_hash, part_file}` and code `project -> {built_at,
-   content_hash, project_dir, analysis_page}`.
-6. **Connect pass**: combine all prose partials and all per-project graphify-out
-   graphs into the final `graph.json`. See merge algorithm below.
-7. **Resume**: if interrupted, compare hashes recorded in `.state.json` with disk
-   state and continue from unbuilt/changed prose leaves and code projects.
+3. **Record state**: update `wiki/graph/.state.json` with wiki `leaf path ->
+   {built_at, content_hash, part_file}`.
+4. **Connect pass**: combine all wiki partials into the final `graph.json`. See
+   merge algorithm below.
+5. **Resume**: if interrupted, compare hashes recorded in `.state.json` with disk
+   state and continue from unbuilt/changed wiki leaves.
 
 ## Merge / Connect Algorithm
 
-Inputs are independent: prose page-title partials (`wiki/graph/parts/*.json`)
-and per-project graphify-out graphs (`wiki/graph/projects/*/graph.json`). The
-connect pass must preserve page-backed node identity, keep each project's
-internal graph intact, and add bridge edges between them.
+Inputs are wiki page-title partials (`wiki/graph/parts/*.json`). The connect
+pass must preserve page-backed node identity and merge explicit/semantic
+relationships between wiki pages.
 
-1. **Collect nodes**: read every `wiki/graph/parts/*.json` **and** every
-   `wiki/graph/projects/*/graph.json`, and collect nodes/edges into one
-   collection. Namespace each project's node ids (e.g. prefix `proj:<project>/`)
-   so two projects can't collide, and keep `project` + `source_file` on each code
-   node. Ignore any extracted prose node that violates the active
-   `graph.extraction` profile unless it is already present in an existing
-   `graph.json` with valid provenance. Per-project code graphs are kept as
-   graphify produced them — the prose budget is not applied inside them.
+1. **Collect nodes**: read every `wiki/graph/parts/*.json` and collect
+   nodes/edges into one collection. Ignore any extracted node that violates the
+   active `graph.extraction` profile unless it is already present in an
+   existing `graph.json` with valid provenance.
 2. **Anchor page nodes first**: page-backed nodes keep canonical ids derived
    from their wiki path. If multiple nodes point at the same `page_path`, merge
    them into that page node and union aliases/metadata.
@@ -315,27 +280,19 @@ internal graph intact, and add bridge edges between them.
      node's `aliases` (keep original English/Korean text).
    - Build an alias table `surface form -> canonical id`, then **rewrite every
      edge endpoint** (`src`/`dst`) from a member id to its canonical id.
-4. **Merge node properties**: merge nodes that share the canonical `id`. Conflict
-   priority: `wiki/` source > `raw/` source. If source grade is equal, the more
-   recently updated value wins. Union `tags`, `sources`, and `aliases`.
+4. **Merge node properties**: merge nodes that share the canonical `id`. Prefer
+   page-backed `wiki/` metadata when values conflict, then the more recently
+   updated value. Union `tags`, `sources`, and `aliases`.
 5. **Normalize edges**: deduplicate by `(src, dst, type)`. Accumulate weight by
    occurrence count. If an endpoint is still missing from the node set, resolve
    it through the step-3 alias table before considering it dangling; drop an
    edge only when no canonical node can be found.
-6. **Bridge code projects to the wiki**: connect each per-project subgraph back
-   to the prose graph instead of leaving it as an island. Add a `wiki/code/<project>.md`
-   analysis-page node and an `analyzes` edge from it to the project root node.
-   Then add bridge edges (`implements` / `documented_by` / `related_to`) from a
-   project node to a wiki concept/source node when the project's
-   `wiki/code/<project>.md` cites it, when a source page's `raw_path` points into
-   the project, or when the relationship clears `semanticMinConfidence`. Do not
-   collapse the project's internal nodes into wiki nodes; only add cross edges.
-7. **Apply graph budget**: after dedupe, prune low-confidence inferred edges,
-   isolated derived prose nodes, and over-budget per-source/per-leaf prose nodes
-   according to `graph.extraction`. Never prune the last provenance anchor for a
-   source page, and never prune a project's internal nodes here.
-8. **Recompute communities**: run the selected graphify community algorithm once more on the merged graph. Absorb communities that are too small (`size < minCommunitySize`) into adjacent communities.
-9. **Output**: standard `wiki/graph/graph.json` schema below plus
+6. **Apply graph budget**: after dedupe, prune low-confidence inferred edges,
+   isolated derived nodes, and over-budget per-source/per-leaf nodes according
+   to `graph.extraction`. Never prune the last provenance anchor for a source
+   page.
+7. **Recompute communities**: run the selected graphify community algorithm once more on the merged graph. Absorb communities that are too small (`size < minCommunitySize`) into adjacent communities.
+8. **Output**: standard `wiki/graph/graph.json` schema below plus
    `GRAPH_REPORT.md`. Enforce the invariant that every `edges[].src`/`dst`
    exists in `nodes[].id`, and report how many dangling edges were resolved or
    dropped in `GRAPH_REPORT.md`. Also report nodes/edges pruned by the CLIO
@@ -384,66 +341,22 @@ internal graph intact, and add bridge edges between them.
 - **New Nodes** for incremental updates: nodes added since the previous build.
 - **Extraction Budget**: active profile, scope, nodes/edges kept, nodes/edges
   pruned, and any per-leaf truncation.
-- **Code Projects**: one line per project — name, `wiki/graph/projects/<project>/`,
-  node/edge counts, and `wiki/code/<project>.md`.
 - **Isolated Nodes**: nodes with zero inbound edges; recommend cross-checking with wiki-lint.
-
-## Code Project Analysis Page (`wiki/code/<project>.md`)
-
-For each code project, write **one** detailed analysis page synthesized from
-that project's `wiki/graph/projects/<project>/` graphify-out
-(`GRAPH_REPORT.md` + `graph.json`). This single page replaces the old per-file
-`wiki/sources/<...>/file.md` code summaries — do not generate a Markdown page
-per source file.
-
-Source the content from the graph, not from re-reading every file:
-
-- Read the project's `GRAPH_REPORT.md` (god nodes, communities, key paths) and
-  `graph.json` (modules, public APIs, entry points, dependencies).
-- Read at most a few key files (entry points, top god nodes) only to ground the
-  prose; do not file-by-file document the codebase.
-
-Required frontmatter and structure:
-
-```yaml
----
-title: <project> 코드 분석
-type: code
-tags: [code, <project>]
-sources: [wiki/sources/<project>/index.md]
-projects: [<project>]
-graph: wiki/graph/projects/<project>/graph.json
-updated: YYYY-MM-DD
----
-```
-
-Body (Korean, per §11 of CLAUDE.md), derived from graphify-out:
-
-1. **개요** — what the project is, language/stack, entry points.
-2. **아키텍처** — top communities/modules and how they connect (cite god nodes).
-3. **핵심 컴포넌트** — key modules/public APIs with `raw/...:Lnn` locations from
-   graph `source_file`/`source_location`. Do not invent line numbers.
-4. **의존성 / 데이터 흐름** — important imports/calls/edges from the project graph.
-5. **위키 연결** — `[[concept]]`/`[[wiki/sources/...]]` links the project
-   implements or documents (these mirror the bridge edges in the final graph).
-
-Keep it grounded in graph evidence; mark anything graphify could not resolve as
-unknown rather than guessing.
 
 ## Workflow
 
 ### `build`
-1. Preflight -> tell the user "full build is expected to use N prose leaves + M code projects".
-2. List prose leaves and code projects -> write a checklist to session Markdown (`sessions/<date>/<time>_graph_build.md`).
-3. Build a page-title partial per prose leaf; build per-project graphify-out for each code project under `wiki/graph/projects/<project>/` and write its `wiki/code/<project>.md`. Update `.state.json`.
+1. Preflight -> tell the user "full build is expected to use N wiki leaves".
+2. List wiki leaves -> write a checklist to session Markdown (`sessions/<date>/<time>_graph_build.md`).
+3. Build a page-title partial per wiki leaf and update `.state.json`.
 4. Connect pass -> write final `graph.json` and `GRAPH_REPORT.md`.
-5. Update the `Graph` and `Code` sections of `wiki/index.md` and append a graph entry to `wiki/log.md`.
-6. Show a chat card: "N nodes, E edges, C communities, P code projects. View report ->".
+5. Update the `Graph` section of `wiki/index.md` and append a graph entry to `wiki/log.md`.
+6. Show a chat card: "N nodes, E edges, C communities. View report ->".
 
 ### `update`
-1. Compute current content hashes for all prose leaves and code projects and compare them with previous hashes in `.state.json`.
-2. If the webapp supplied scoped leaves/projects, rebuild exactly those (prose partials and/or per-project graphify-out + `wiki/code/<project>.md`) plus any missing/corrupt artifacts needed for consistency. Otherwise rebuild all changed/missing ones. Remove `parts/*.json` and `projects/<project>/` for deleted units and delete them from `.state.json`.
-3. Rerun the connect pass across **all** valid `wiki/graph/parts/*.json` and `wiki/graph/projects/*/graph.json`, not only the scoped units.
+1. Compute current content hashes for all wiki leaves and compare them with previous hashes in `.state.json`.
+2. If the webapp supplied scoped wiki leaves, rebuild exactly those plus any missing/corrupt artifacts needed for consistency. Ignore non-wiki scoped leaves. Otherwise rebuild all changed/missing wiki leaves. Remove `parts/*.json` for deleted units and delete them from `.state.json`.
+3. Rerun the connect pass across **all** valid `wiki/graph/parts/*.json`, not only the scoped units.
 4. Update `GRAPH_REPORT.md` with a section for nodes added/removed/changed in this increment.
 5. Update log and index.
 
@@ -481,12 +394,13 @@ When called from `wiki-query`, return graph candidates and context first. Do not
 
 - Do not clone the GitHub repository into `tools/graphify/` or prefer a project-local graphify executable.
 - Do not modify `raw/`.
+- Do not read, hash, enumerate, or graphify `raw/` as part of graph generation.
 - Do not overwrite `wiki/graph/graph.json` with partial results. Replace the final graph only once during the connect pass.
-- Do not write graphify-out to the package default `graphify-out/` at the repo root. Per-project code output must go under `wiki/graph/projects/<project>/`; the webapp's Graph tab only reads `wiki/graph/graph.json`.
-- Do not run `scripts/code-facts.mjs` or write `wiki/graph/facts/*.json` for new code units; the per-project graphify-out replaces the old Code Facts path. Do not write a Markdown page per source file — one `wiki/code/<project>.md` per project.
-- For `update-partial`: do not touch `wiki/graph/graph.json`, `wiki/graph/GRAPH_REPORT.md`, or rerun clustering. This command is cache-only. Normal ingest synchronization should use scoped `update`, which refreshes target partials/projects and then connects the full set.
+- Do not write graphify-out to the package default `graphify-out/` at the repo root. The webapp's Graph tab only reads `wiki/graph/graph.json`, so any other final path is invisible to the user.
+- Do not run `scripts/code-facts.mjs`, write `wiki/graph/facts/*.json`, write `wiki/graph/projects/<project>/`, or synthesize `wiki/code/<project>.md` as part of graph generation. Existing `wiki/code/` pages are ordinary wiki Markdown inputs.
+- For `update-partial`: do not touch `wiki/graph/graph.json`, `wiki/graph/GRAPH_REPORT.md`, or rerun clustering. This command is cache-only. Normal ingest synchronization should use scoped `update`, which refreshes target wiki partials and then connects the full set.
 - Do not leave API keys or credentials in plaintext in `GRAPH_REPORT.md` or wiki pages.
-- Do not pass all of `wiki/` + `raw/` to graphify in one call. Always use prose leaf chunks and per-project code units.
+- Do not pass `raw/` to graphify. Always use wiki leaf chunks.
 
 ## Minimal Scenario: First Build
 
@@ -495,12 +409,12 @@ User:
 
 Skill behavior:
 1. Check graphify execution path -> global `graphify` or `python3 -m graphify` works.
-2. Find prose leaves: `wiki/sources/articles/karpathy/`, `wiki/entities/`, `wiki/concepts/`, `wiki/answers/` -> 4 page-title partials. Find code projects under `raw/`: `foo` -> 1 project.
+2. Find wiki leaves: `wiki/sources/articles/karpathy/`, `wiki/entities/`, `wiki/concepts/`, `wiki/answers/` -> 4 page-title partials.
 3. Create session Markdown and unit checklist.
-4. Build 4 `parts/<hash>.json` page-title partials; run real graphify for project `foo` into `wiki/graph/projects/foo/` and write `wiki/code/foo.md`.
-5. Connect -> `graph.json` with 38 nodes, 64 edges, 5 communities, plus `GRAPH_REPORT.md`. The `foo` subgraph stays intact and bridges to `wiki/code/foo.md` and the concepts it implements.
-6. Activate the `Graph` and `Code` items in `wiki/index.md` and append a `graph | build` entry to `wiki/log.md`.
-7. Chat card: "38 nodes / 64 edges / 5 communities / 1 code project. View in Graph tab ->".
+4. Build 4 `parts/<hash>.json` page-title partials.
+5. Connect -> `graph.json` with 38 nodes, 64 edges, 5 communities, plus `GRAPH_REPORT.md`.
+6. Activate the `Graph` item in `wiki/index.md` and append a `graph | build` entry to `wiki/log.md`.
+7. Chat card: "38 nodes / 64 edges / 5 communities. View in Graph tab ->".
 
 ## Completion Checklist
 
@@ -513,11 +427,11 @@ remains.
 For `build` / `update` (connected graph):
 
 - [ ] Confirmed graphify execution path (global `graphify`, else `python3 -m graphify`).
-- [ ] Built/refreshed page-title partials for changed or scoped prose leaves — explicit links + thresholded `related_to` edges only, no facet edges, one node per page.
-- [ ] Built/refreshed per-project graphify-out under `wiki/graph/projects/<project>/` for changed code projects, and wrote/updated `wiki/code/<project>.md` from it (no per-file code pages, no `code-facts.mjs`).
-- [ ] Ran the connect pass across ALL valid `parts/*.json` + `projects/*/graph.json`; added project↔wiki bridge edges; verified every `edges[].src`/`dst` exists in `nodes[].id`.
-- [ ] Wrote `wiki/graph/graph.json` once (not overwritten with partial results) and `GRAPH_REPORT.md` with Extraction Budget + Code Projects sections.
-- [ ] Updated `wiki/graph/.state.json`, the `Graph` and `Code` sections of `wiki/index.md`, and appended the `wiki/log.md` entry.
+- [ ] Built/refreshed page-title partials for changed or scoped wiki leaves — explicit links + thresholded `related_to` edges only, no facet edges, one node per page.
+- [ ] Confirmed `raw/` was not read, hashed, enumerated, or graphified.
+- [ ] Ran the connect pass across ALL valid `parts/*.json`; verified every `edges[].src`/`dst` exists in `nodes[].id`.
+- [ ] Wrote `wiki/graph/graph.json` once (not overwritten with partial results) and `GRAPH_REPORT.md` with Extraction Budget sections.
+- [ ] Updated `wiki/graph/.state.json`, the `Graph` section of `wiki/index.md`, and appended the `wiki/log.md` entry.
 
 For `update-partial` (cache-only):
 

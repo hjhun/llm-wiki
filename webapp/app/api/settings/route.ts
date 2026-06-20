@@ -57,8 +57,8 @@ const Body = z.object({
       extraction: z
         .object({
           primaryNodeModel: z.enum(["page-title"]).optional(),
-          profile: z.enum(["wiki", "code", "deep"]).optional(),
-          scope: z.enum(["wiki", "wiki+raw"]).optional(),
+          profile: z.enum(["wiki", "deep"]).optional(),
+          scope: z.enum(["wiki"]).optional(),
           maxNodesPerLeaf: z.number().int().min(1).max(100_000).optional(),
           maxConceptsPerSource: z.number().int().min(1).max(10_000).optional(),
           minConfidence: z.number().min(0).max(1).optional(),
@@ -69,9 +69,6 @@ const Body = z.object({
           proseEdges: z.enum(["explicit", "explicit+semantic"]).optional(),
           facetEdges: z.boolean().optional(),
           semanticMinConfidence: z.number().min(0).max(1).optional(),
-          codeModel: z.enum(["per-project-graphify-out"]).optional(),
-          projectsDir: z.string().optional(),
-          projectAnalysisDir: z.string().optional(),
         })
         .optional(),
       autoUpdateOnIngest: z.boolean(),

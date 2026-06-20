@@ -12,8 +12,8 @@
 > specializing it for CLIO's web UI, resumable ingest loop, graph tooling, and
 > Code Wiki workflows.
 > CLIO also supports a **Code Wiki** mode: source code stored under `raw/` (or
-> approved `raw/` symlinks) can be turned into a graphify-backed knowledge graph
-> under `wiki/graph/` and connected to the same Markdown wiki.
+> approved `raw/` symlinks) is summarized into Markdown under `wiki/`; graphify
+> then builds the knowledge graph from the compiled `wiki/` data only.
 
 ---
 
@@ -22,7 +22,7 @@
 - The user gathers source material in `raw/`. They decide what to read and what to ask. Source material may be prose, PDFs, web captures, logs, or software codebases.
 - You incrementally **build and maintain** the Markdown wiki under `wiki/`.
   - Create summary pages, update entity/concept pages, fill indexes and logs, and flag contradictions.
-  - For code inputs, preserve source summaries and let graphify create or update the Code Wiki graph under `wiki/graph/`.
+  - For code inputs, preserve source summaries and code analysis pages under `wiki/`; graphify reads those wiki pages, not raw source trees.
   - You handle the maintenance work: summarizing, cross-referencing, organizing, and preserving consistency.
 - The wiki should be searchable and understandable as a coherent work that another person can read.
 
@@ -36,10 +36,10 @@
 | `wiki/` | LLM | LLM may freely write/update | Main wiki body. All generated artifacts go here. |
 | `wiki/sources/` | LLM | LLM | Provenance ledger: one summary page per original `raw/` source, mirroring the logical `raw/` directory structure, plus a generated `wiki/sources/index.md` catalog for topic/entity/source-kind/date lookup. |
 | `wiki/maps/` | LLM | LLM | Optional associative trails and topic maps that connect sources, entities, concepts, answers, and open questions. |
-| `wiki/code/` | LLM (graphify) | LLM | One detailed `wiki/code/<project>.md` analysis per code project, synthesized by `wiki-graphify` from that project's graphify-out. Replaces per-file code source pages. Source-code structure itself lives in the graph under `wiki/graph/`. |
+| `wiki/code/` | LLM | LLM | Code analysis pages synthesized from source summaries and other wiki evidence. Graphify treats these as ordinary wiki Markdown pages. |
 | `wiki/answers/` | LLM | LLM | Pages fed back from query answers. |
 | `wiki/lint/` | LLM | LLM | Lint reports (`<date>.md`). |
-| `wiki/graph/` | LLM (graphify) | LLM | Knowledge graph artifacts: `graph.json`, `GRAPH_REPORT.md`, prose page-title partials in `parts/`, per-project code graphify-out in `projects/<project>/`, `.state.json`. |
+| `wiki/graph/` | LLM (graphify) | LLM | Knowledge graph artifacts generated from `wiki/` only: `graph.json`, `GRAPH_REPORT.md`, page-title partials in `parts/`, `.state.json`. |
 | `wiki/archive/` | LLM | LLM | Old pages moved here instead of being deleted. |
 | `wiki/index.md` | LLM | LLM | Category catalog. |
 | `wiki/log.md` | LLM | append-only | Chronological operation log. |
@@ -93,9 +93,8 @@ Each operation maps to one or more project skills. If these rules conflict with 
 - Always follow the **leaf-directory chunks + merge pass** principle (Section 7), using the normal `progress/ingest/` state. There is no separate user-facing Code Wiki command.
 - Outputs:
   - one `wiki/sources/<project>/index.md` provenance stub per code project (not one page per source file)
-  - `wiki/graph/projects/<project>/` per-project graphify-out (real graphify output), produced by `wiki-graphify`
-  - `wiki/code/<project>.md` detailed project analysis synthesized from the graphify-out
-  - `wiki/graph/graph.json` and `wiki/graph/GRAPH_REPORT.md` after `wiki-graphify update` connects projects + prose
+  - optional `wiki/code/<project>.md` detailed project analysis synthesized from source summaries and wiki evidence
+  - `wiki/graph/graph.json` and `wiki/graph/GRAPH_REPORT.md` after `wiki-graphify update` connects wiki pages
   - updated `wiki/index.md` and appended `wiki/log.md` entries
 - Use specialized Code Wiki skills only for optional synthesis after graph/source evidence exists:
   - [`code-documentation`](.agents/skills/code-documentation/SKILL.md) for module/API/runbook docs
@@ -235,10 +234,10 @@ This applies to ingest, Code Wiki ingest, preprocess planning, and graphify. Nev
 2. **Process by chunk**: group only the files in each leaf and process them once.
 3. **Preserve partial outputs**:
    - ingest: immediately save chunk-level summaries/entity pages.
-   - graphify: save prose page-title partials to `wiki/graph/parts/<path-hash>.json`, and per-project code graphify-out to `wiki/graph/projects/<project>/`.
+   - graphify: save wiki page-title partials to `wiki/graph/parts/<path-hash>.json`.
 4. **Merge pass as a separate step**:
    - ingest: update parent-level pages -> root synthesis page -> refresh `wiki/sources/index.md` and useful `wiki/maps/` pages -> reorder `index.md`.
-   - graphify: connect all prose partials and per-project graphify-out graphs with node normalization, project-to-wiki bridge edges, and community recomputation, then finalize `wiki/graph/graph.json`.
+   - graphify: connect all wiki partials with node normalization and community recomputation, then finalize `wiki/graph/graph.json`.
 5. **Persist state**:
    - ingest: record chunk checklists in `sessions/<date>/<time>_ingest.md`.
    - graphify: record last build time and hash per leaf in `wiki/graph/.state.json`.
@@ -258,11 +257,9 @@ This applies to ingest, Code Wiki ingest, preprocess planning, and graphify. Nev
   explicit + thresholded-semantic edges only, not one node per heading,
   paragraph, rationale snippet, helper function, or incidental noun, and not a
   dense facet mesh.
-- Code Wiki is graph-first and **per-project**: for each code project under
-  `raw/`, graphify produces a real graphify-out under
-  `wiki/graph/projects/<project>/`, a detailed `wiki/code/<project>.md` analysis
-  is synthesized from it, and the connect pass bridges each project subgraph to
-  the prose concepts/sources it implements or documents.
+- Code Wiki pages under `wiki/code/` are graph inputs like any other wiki
+  Markdown page. `wiki-graphify` must not read or graphify `raw/` source trees,
+  and must not generate per-project graphify-out under `wiki/graph/projects/`.
 - The web app Graph tab does not execute graphify directly. It sends `wiki-graphify build/update` requests to the coding agent CLI selected in Settings, and the coding agent follows this repository's rules and skills to run graphify, chunk processing, and the merge pass.
 - Wiki pages must not call the `graphify` binary directly. The coding agent running `wiki-graphify` chooses the execution path: global `graphify`, or `python3 -m graphify` when needed.
 - `wiki-query` may optionally use graph context from `wiki/graph/GRAPH_REPORT.md`, node adjacency, or `wiki-graphify query` as an auxiliary candidate/context source; it must still ground final answers in wiki/source pages.
@@ -341,7 +338,7 @@ Mental checklist for one Code Wiki run:
 - [ ] Did you skip generated/vendor/build directories unless requested?
 - [ ] Did you write one `wiki/sources/<project>/index.md` provenance stub per project (not per file) and record code/mixed leaves in progress state?
 - [ ] Did you avoid per-file code source pages and file-by-file LLM code documentation?
-- [ ] Did `wiki-graphify update` run or remain clearly queued as the follow-up that creates `wiki/graph/projects/<project>/`, `wiki/code/<project>.md`, `wiki/graph/graph.json`, and `GRAPH_REPORT.md`?
+- [ ] Did `wiki-graphify update` run or remain clearly queued as the follow-up that creates `wiki/graph/graph.json` and `GRAPH_REPORT.md` from `wiki/` pages only?
 - [ ] Did graph nodes/source summaries connect directories/modules/APIs/tests to existing concepts where evidence supports it?
 - [ ] Did you update `wiki/index.md` under the `Code` category?
 - [ ] Did you update `wiki/sources/index.md` and any relevant `wiki/maps/` trails?

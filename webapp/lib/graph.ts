@@ -101,13 +101,19 @@ export function buildGraphifyPrompt(
   sessionPath: string,
   opts: BuildGraphifyPromptOptions = {},
 ): string {
-  const leafList = (opts.leafPaths ?? []).filter(
+  const requestedLeaves = (opts.leafPaths ?? []).filter(
     (p): p is string => typeof p === "string" && p.length > 0,
   );
+  const leafList = requestedLeaves.filter((p) => p === "wiki" || p.startsWith("wiki/"));
+  const ignoredLeaves = requestedLeaves.filter((p) => !leafList.includes(p));
   const commandLabel =
     leafList.length > 0
       ? `wiki-graphify ${action} (leaves: ${leafList.join(", ")})`
       : `wiki-graphify ${action}`;
+  const ignoredLeafGuidance =
+    ignoredLeaves.length > 0
+      ? `\n- Ignore non-wiki scoped leaves from the caller: ${ignoredLeaves.map((p) => `\`${p}\``).join(", ")}. Graph generation reads wiki/ only.`
+      : "";
 
   const actionGuidance: string =
     action === "update-partial"
@@ -115,7 +121,8 @@ export function buildGraphifyPrompt(
           "For this `update-partial` run, build ONLY per-leaf partial graphs and SKIP the merge pass:",
           leafList.length > 0
             ? `- Target leaves (process exactly these, nothing else): ${leafList.map((p) => `\`${p}\``).join(", ")}.`
-            : "- Target leaves: auto-detect from progress/ingest/.state.json (leaves whose status just turned `done`).",
+            : "- Target leaves: auto-detect changed/missing leaf directories under `wiki/` only.",
+          ignoredLeafGuidance.trim(),
           "- Output: write or overwrite wiki/graph/parts/<sha1(leafPath)>.json for those leaves only.",
           "- Update wiki/graph/.state.json entries for those leaves with `built_at` + `content_hash`.",
           "- Do NOT touch wiki/graph/graph.json, wiki/graph/GRAPH_REPORT.md, or rerun community clustering. The merge pass runs as a separate `wiki-graphify update` call later (typically at /ingest-loop end).",
@@ -124,16 +131,17 @@ export function buildGraphifyPrompt(
         ].join("\n")
       : action === "update"
         ? [
-            "For this `update` run, rebuild per-leaf partial graphs only for the scoped leaves when a leaf list is supplied, or for changed/missing leaves discovered from progress/ingest/.state.json and wiki/graph/.state.json when no leaf list is supplied.",
+            "For this `update` run, rebuild per-leaf partial graphs only for scoped `wiki/` leaves when a wiki leaf list is supplied, or for changed/missing leaf directories discovered under `wiki/` and wiki/graph/.state.json when no leaf list is supplied.",
             leafList.length > 0
               ? `- Scoped leaves to refresh before merge: ${leafList.map((p) => `\`${p}\``).join(", ")}.`
               : "- Scoped leaves: auto-detect changed/missing leaves.",
-            "- If a scoped leaf is under `raw/` and contains code, rebuild its whole project's graphify-out under wiki/graph/projects/<project>/ and re-synthesize wiki/code/<project>.md from it. Do not rebuild per file.",
-            "- After refreshing those partials/projects, ALWAYS run the connect pass across ALL valid wiki/graph/parts/*.json and wiki/graph/projects/*/graph.json so the target is connected back into the existing graph.",
+            ignoredLeafGuidance.trim(),
+            "- Do not read, hash, enumerate, or graphify `raw/` files or directories. Code knowledge is represented only by Markdown pages that already exist under `wiki/`.",
+            "- After refreshing those partials, ALWAYS run the connect pass across ALL valid wiki/graph/parts/*.json so the target is connected back into the existing graph.",
             "- Output connected artifacts: wiki/graph/graph.json and wiki/graph/GRAPH_REPORT.md.",
             "- Do not treat a scoped partial refresh as complete until graph.json has been rewritten from the full parts set.",
           ].join("\n")
-        : "For this `build` run, enumerate all leaves under wiki/ (and raw/ if relevant), build per-leaf partials, then run the merge pass.";
+        : "For this `build` run, enumerate all leaves under wiki/ only, build per-leaf partials, then run the merge pass. Do not enumerate or graphify raw/.";
 
   return [
     "You are operating an LLM Wiki repository.",
@@ -144,26 +152,24 @@ export function buildGraphifyPrompt(
     "Output path is fixed by this repository (see paths.ts and the wiki-graphify SKILL):",
     "- wiki/graph/graph.json (final connected graph; `edges` is preferred; `links` from graphify's native exporter is accepted for compatibility)",
     "- wiki/graph/GRAPH_REPORT.md",
-    "- wiki/graph/parts/<sha1(leafPath)>.json (prose page-title partials, one per wiki leaf)",
-    "- wiki/graph/projects/<project>/ (real per-project graphify-out for each code project: graph.json, GRAPH_REPORT.md, native artifacts)",
-    "- wiki/code/<project>.md (one detailed project analysis synthesized from that project's graphify-out; replaces per-file code source pages)",
-    "- wiki/graph/.state.json (prose leaf / code project -> built_at/content_hash)",
-    "Do NOT write outputs to graphify-out/ at the repo root (the package default). Per-project code output goes under wiki/graph/projects/<project>/. The webapp's Graph tab and lib/graph.ts only read wiki/graph/graph.json, so any other final path is invisible to the user.",
+    "- wiki/graph/parts/<sha1(leafPath)>.json (page-title partials, one per wiki leaf)",
+    "- wiki/graph/.state.json (wiki leaf -> built_at/content_hash)",
+    "Do NOT write outputs to graphify-out/ at the repo root (the package default). The webapp's Graph tab and lib/graph.ts only read wiki/graph/graph.json, so any other final path is invisible to the user.",
     "",
     "Execution path (from the SKILL):",
     "1. Prefer the global `graphify` command from PATH; fall back to `python3 -m graphify` only if the script is missing.",
     "2. For graphifyy 0.4.x the installed CLI exposes only code-oriented commands (`graphify update <path>` calls `_rebuild_code`, which by default writes to <path>/graphify-out/). Therefore:",
-    "   - For code under raw/, `graphify update raw/<scope> --out wiki/graph` is the preferred no-LLM extraction path when a whole connected code graph is appropriate.",
+    "   - Do not run `graphify update raw/<scope>` or otherwise point graphify at `raw/`; graph generation reads the compiled Markdown under `wiki/` only.",
     "   - For wiki/ Markdown content, if you do invoke `graphify update`, pass `--out wiki/graph` so output lands in the correct directory: `graphify update wiki/ --out wiki/graph`.",
-    "   - For Markdown wiki content (the common case here), `graphify update` alone will NOT extract entities/concepts — it is code-only. Use the Python package modules `graphify.detect`, `graphify.extract`, `graphify.build`, `graphify.cluster`, `graphify.report`, and `graphify.export` to assemble per-leaf partials in wiki/graph/parts/, then (for `update`/`build` only) merge into wiki/graph/graph.json. Follow the leaf-first chunk policy in §Chunk Policy of the SKILL.",
+    "   - For Markdown wiki content (the common case here), `graphify update` alone may not extract entities/concepts — use the Python package modules `graphify.detect`, `graphify.extract`, `graphify.build`, `graphify.cluster`, `graphify.report`, and `graphify.export` to assemble per-leaf partials in wiki/graph/parts/, then (for `update`/`build` only) merge into wiki/graph/graph.json. Follow the leaf-first chunk policy in §Chunk Policy of the SKILL.",
+    "   - When partials are already available, scripts/merge-graph-parts.mjs can perform the final connected merge into wiki/graph/graph.json and wiki/graph/GRAPH_REPORT.md.",
     "3. There is no literal `graphify build` subcommand; `wiki-graphify build` is an agent-level operation name, not a CLI command.",
     "4. During `/ingest-loop`, the webapp may skip scoped incremental updates for small workloads when `graph.autoUpdateStrategy` is `auto`; whenever an incremental update does run, it is `wiki-graphify update` with scoped leaves and MUST still merge all existing parts into graph.json.",
     "5. Build the Obsidian-like page-title graph first: one node per Markdown page. Connect prose pages with two edge classes only — explicit links (wikilinks, Markdown links, frontmatter sources, raw_path) and high-confidence semantic relatedness (`related_to`) at/above `graph.extraction.semanticMinConfidence`. Frontmatter facets stay as node metadata; do NOT auto-convert facets to edges (`graph.extraction.facetEdges=false`).",
-    "6. Use graphify's global extraction style only as a bounded enrichment layer for prose, applying the merged config (`config/default.json` plus `config/local.json`): `graph.extraction.primaryNodeModel`, `profile`, `scope`, `maxNodesPerLeaf`, `maxConceptsPerSource`, `minConfidence`, `semanticMinConfidence`, and the include/drop toggles.",
-    "7. Code is per-project: the graph unit is a whole project, not a leaf or file. Group code under raw/ by nearest manifest (package.json/Cargo.toml/pyproject.toml, else first dir under raw/). For each project run the REAL graphify pipeline once, writing its native graphify-out to wiki/graph/projects/<project>/ (e.g. `graphify update raw/<project> --out wiki/graph/projects/<project>`, or the global ~/.claude/skills/graphify detect/extract/build/cluster/report steps with that output dir). Then synthesize wiki/code/<project>.md from that graphify-out (GRAPH_REPORT.md + graph.json).",
-    "   Do NOT run scripts/code-facts.mjs, write wiki/graph/facts/*.json, or hand-write one graph node per source file — graphify owns code extraction. The connect pass combines all prose parts/*.json and all projects/*/graph.json into wiki/graph/graph.json, keeping each project subgraph intact and adding bridge edges (implements/documented_by/related_to) to the wiki concepts/sources it implements.",
-    "8. Default profile is `wiki`: keep page-backed source/entity/concept/project/map nodes and explicit link/citation edges plus thresholded `related_to` edges. Do not create one node per heading, paragraph, rationale snippet, incidental noun, or facet edge unless the profile is explicitly `deep`.",
-    "9. After prose extraction, prune low-confidence inferred edges, below-threshold semantic edges, auto facet edges, rationale nodes, hyperedges, isolated derived prose nodes, and over-budget prose nodes according to `graph.extraction`. Do NOT prune a project's internal graphify nodes. Record kept/pruned counts in GRAPH_REPORT.md.",
+    "6. Use graphify's global extraction style only as a bounded enrichment layer for wiki Markdown, applying the merged config (`config/default.json` plus `config/local.json`): `graph.extraction.primaryNodeModel`, `profile`, `scope`, `maxNodesPerLeaf`, `maxConceptsPerSource`, `minConfidence`, `semanticMinConfidence`, and the include/drop toggles. `scope` is fixed to `wiki`.",
+    "7. Do not build per-project graphify-out from `raw/`, do not write wiki/graph/projects/<project>/, and do not synthesize wiki/code/<project>.md as part of graph generation. If `wiki/code/` pages already exist, treat them like ordinary wiki Markdown pages.",
+    "8. Default profile is `wiki`: keep page-backed source/entity/concept/code/project/map nodes and explicit link/citation edges plus thresholded `related_to` edges. Do not create one node per heading, paragraph, rationale snippet, incidental noun, or facet edge unless the profile is explicitly `deep`.",
+    "9. After extraction, prune low-confidence inferred edges, below-threshold semantic edges, auto facet edges, rationale nodes, hyperedges, isolated derived nodes, and over-budget nodes according to `graph.extraction`. Record kept/pruned counts in GRAPH_REPORT.md.",
     "",
     actionGuidance,
     "",

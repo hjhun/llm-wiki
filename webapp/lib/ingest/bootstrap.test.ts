@@ -63,7 +63,6 @@ describe("bootstrapIngestProgress", () => {
       status: "pending",
       kind: "code",
       project: "project",
-      graph_scope: "raw/project/src/",
     });
     await expect(
       fs.readFile(path.join(root, "progress/ingest/DASHBOARD.md"), "utf8"),

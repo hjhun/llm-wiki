@@ -74,7 +74,7 @@ catalog, and the log.
 | **Plain files, no lock-in** | Every artifact is Markdown or JSON under `wiki/`. Read it, grep it, commit it, throw it in Obsidian. |
 | **Your sources stay immutable** | Originals live in `raw/` and agents treat them as read-only evidence — never rewritten behind your back. |
 | **Bring your own agent** | Works with `codex`, `claude`, `agy` (Antigravity), or `cline`. CLIO orchestrates; the CLI you trust does the reasoning. |
-| **Code Wiki** | Point it at a repo and get a graphify knowledge graph of the codebase under `wiki/graph/`, bridged to the prose wiki. |
+| **Code Wiki** | Point it at a repo and compile source summaries/code analysis into `wiki/`; graphify builds the knowledge graph from those wiki pages only. |
 | **Incremental & resumable** | Big folders are processed leaf-first in small chunks and merged. Interrupted runs resume from saved progress. |
 | **Browser + CLI + Telegram** | A Next.js UI (Chat, Explorer, Graph, Automations, Settings), a native `clio` CLI, and a `/query` Telegram bot. |
 | **Reviewable automation** | Auto Ingest, Auto Lint, and draft-only scheduled jobs keep the wiki moving without hiding what they did. |
@@ -178,12 +178,12 @@ ingest flow:
 /ingest-loop raw/repos/<project>
 ```
 
-The agent auto-detects code-heavy leaves, writes `wiki/sources/` provenance
-summaries, then relies on `wiki-graphify update` to materialize source-code
-structure as a knowledge graph under `wiki/graph/` (`graph.json`,
-`GRAPH_REPORT.md`, per-project parts). Code stays read-only evidence — actual
-code edits are separate tasks, never ingest work. Graph nodes bridge back to the
-prose wiki where code implements a documented concept.
+The agent auto-detects code-heavy leaves and writes `wiki/sources/` provenance
+summaries plus any useful `wiki/code/` analysis pages. `wiki-graphify update`
+then builds `wiki/graph/graph.json` and `wiki/graph/GRAPH_REPORT.md` from the
+compiled Markdown under `wiki/` only; it does not graphify `raw/` source trees.
+Code stays read-only evidence — actual code edits are separate tasks, never
+ingest work.
 
 Run **Build** / **Incremental Update** from the **Graph** tab. The web app never
 calls `graphify` directly; the selected agent reads the `wiki-graphify` skill and

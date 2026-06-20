@@ -157,8 +157,7 @@ Record the classification in `progress/ingest/.state.json` per leaf:
   "leaves": {
     "raw/repos/foo/src/": {
       "kind": "code",
-      "project": "foo",
-      "graph_scope": "raw/repos/foo/src/"
+      "project": "foo"
     }
   }
 }
@@ -233,32 +232,32 @@ For exactly **one** sub-chunk whose `status === "pending"`:
      ensure exactly **one provenance stub per project** exists at
      `wiki/sources/<project>/index.md` (create it on first encounter, append the
      file to its `raw_path`/file list on later encounters). The stub is
-     lightweight: project name, language/stack, the `raw/...` root, and a pointer
-     to the detailed `wiki/code/<project>.md` analysis that `wiki-graphify`
-     produces from the per-project graphify-out. Defer all symbols,
-     dependencies, and line-level structure to graphify.
+    lightweight: project name, language/stack, the `raw/...` root, and links to
+    any human-written or later synthesized `wiki/code/` pages. Keep symbols,
+    dependencies, and line-level structure out of ingest unless a separate Code
+    Wiki synthesis skill is explicitly requested.
    - Update the per-leaf JSON entry: `processed: true`, `summary_page: "wiki/sources/<raw-relative-path>.md"`.
    - **Discard the file body from working memory** before opening the next file. Do not keep two file bodies in context simultaneously.
-3. If the sub-chunk is code-heavy, keep Code Wiki work graph-first:
+3. If the sub-chunk is code-heavy, keep Code Wiki work wiki-first:
    - Do **not** create per-file `wiki/sources/<...>/file.md` pages or mirrored
      `wiki/code/<project>/<relative-file>.md` pages. The only code page ingest
      writes is the one project provenance stub `wiki/sources/<project>/index.md`.
-   - Do **not** write `wiki/code/<project>.md` here. That detailed analysis page
-     is synthesized by `wiki-graphify` from the per-project graphify-out, not by
-     re-reading code files during ingest.
+   - Do **not** write `wiki/code/<project>.md` here as a required ingest output.
+     Detailed code analysis pages are optional wiki synthesis artifacts, not
+     graphify side effects.
    - Do **not** run `scripts/code-index.mjs` or `scripts/code-facts.mjs` as the
      normal path. They are legacy fallback/debug helpers only.
    - Record enough progress state for the backend to know which logical
      `raw/...` leaf, project, and files were processed. `source_pages_written`
      (the project stub) remains the provenance contract; `code_outputs` is
      legacy compatibility and may be omitted for new code ingests.
-   - The Code Wiki artifacts for source code are produced by a later
-     `wiki-graphify update`: per-project `wiki/graph/projects/<project>/`
-     graphify-out, `wiki/code/<project>.md`, the connected `wiki/graph/graph.json`,
-     and `wiki/graph/GRAPH_REPORT.md`.
+   - A later `wiki-graphify update` reads the compiled wiki pages only and
+     produces `wiki/graph/graph.json` plus `wiki/graph/GRAPH_REPORT.md`. It must
+     not graphify `raw/` source trees.
    - If a user explicitly asks for a human-readable architecture, testing, API,
-     or debug synthesis after the graph exists, answer from the graph and
-     source summaries and optionally save that synthesis as ordinary wiki pages.
+     or debug synthesis, answer from source summaries and targeted read-only
+     raw evidence when needed, and optionally save that synthesis as ordinary
+     wiki pages.
 4. Update entity/concept pages **from the takeaways only** (the per-leaf JSON), not by re-opening the raw files. If a raw file truly must be re-read, open it, read just the needed span, and close it before moving on.
    - **Reuse before creating.** Before adding a new `wiki/entities/` or `wiki/concepts/` page, check `wiki/index.md` for an existing page naming the same target — including case, spacing, punctuation, and English/Korean variants (`Transformer` ≈ `트랜스포머` ≈ `transformer-model`). If one exists, update it and link with the index's exact `[[Page Name]]`. Create a new page only when no existing page covers the target. Parallel workers each see only part of the input, so this is the main safeguard against near-duplicate pages — and therefore against duplicate, disconnected graph nodes.
 5. **Contradictions**: if a new claim disagrees with an existing wiki page, add a block quote on that page:
@@ -335,20 +334,14 @@ stale graph artifacts.
 
 Code Wiki follows the root `llm-wiki.md` pattern: raw code remains immutable
 source material, and the LLM-maintained wiki accumulates summaries,
-cross-references, and answers. Source-code structure itself is represented by
-the graphify knowledge graph, not by forcing the LLM to write one Markdown page
-per source file.
+cross-references, and answers. Source-code knowledge is represented by source
+stubs, optional `wiki/code/` analysis pages, and the wiki-only graph over those
+Markdown pages.
 
-Primary Code Wiki graph artifacts (the code graph unit is a **whole project**):
+Primary Code Wiki graph artifacts:
 
-- `wiki/graph/projects/<project>/` — the real per-project graphify-out
-  (`graph.json`, `GRAPH_REPORT.md`, native artifacts), produced by
-  `wiki-graphify`. Replaces the old per-leaf `parts/`/`facts/` code path.
-- `wiki/code/<project>.md` — one detailed project analysis synthesized by
-  `wiki-graphify` from that project's graphify-out. Replaces per-file code
-  source pages.
-- `wiki/graph/graph.json` — final connected graph across prose pages and code
-  projects.
+- `wiki/graph/graph.json` — final connected graph across `wiki/` pages only,
+  including `wiki/code/` pages when they exist.
 - `wiki/graph/GRAPH_REPORT.md` — human-readable graph report.
 - `wiki/sources/<project>/index.md` — one lightweight provenance stub per code
   project (the only code page ingest writes). For logs, tests, or runtime
@@ -356,18 +349,17 @@ Primary Code Wiki graph artifacts (the code graph unit is a **whole project**):
   summary is still appropriate.
 
 Do not create per-file code source pages or file-by-file `wiki/code` pages.
-Detailed code synthesis is derived from the graphify-out by `wiki-graphify`,
-not by ad hoc file-by-file code reading during ingest.
+Detailed code synthesis is an ordinary wiki synthesis step, not a graphify
+side effect and not ad hoc file-by-file code reading during ingest.
 
-For code locations, prefer graph nodes and edges containing `source_file` and
-`source_location`. Use logical `raw/...` paths in any saved wiki page:
+For code locations, use logical `raw/...` paths in any saved wiki page:
 
 ```markdown
 - `runIngestLoop` — `raw/repos/foo/webapp/lib/ingest-loop.ts:L940`
   ([open](/explorer?ws=raw&path=repos/foo/webapp/lib/ingest-loop.ts&line=940))
 ```
 
-If graphify misses a language feature, mark the location as unknown or run a
+If a language feature is hard to resolve, mark the location as unknown or run a
 targeted read-only `rg` search. Do not invent line numbers.
 
 ## Prohibited (hard rules)

@@ -44,12 +44,6 @@ function graph(nodes: GraphNode[], edges: GraphEdge[] = []): GraphData {
 }
 
 describe("nodeKind", () => {
-  it("classifies raw/ sources as code", () => {
-    expect(nodeKind(node("a", { sources: ["raw/proj/src/main.rs"] }))).toBe(
-      "code",
-    );
-  });
-
   it("classifies wiki/code/ sources as code", () => {
     expect(nodeKind(node("a", { sources: ["wiki/code/proj.md"] }))).toBe(
       "code",
@@ -71,15 +65,21 @@ describe("nodeKind", () => {
 
   it("falls back to resolved documents when sources are bare", () => {
     expect(
-      nodeKind(node("a", { documents: [doc({ ws: "raw", source: "raw/x" })] })),
+      nodeKind(
+        node("a", {
+          documents: [
+            doc({ ws: "wiki", path: "code/proj.md", source: "wiki/code/proj.md" }),
+          ],
+        }),
+      ),
     ).toBe("code");
   });
 });
 
 describe("filterGraph", () => {
   const nodes = [
-    node("c1", { sources: ["raw/proj/a.rs"], community: 0 }),
-    node("c2", { sources: ["wiki/code/proj.md"], community: 0 }),
+    node("c1", { sources: ["wiki/code/proj.md"], community: 0 }),
+    node("c2", { sources: ["wiki/code/proj-architecture.md"], community: 0 }),
     node("w1", { sources: ["wiki/sources/foo.md"], community: 1 }),
     node("w2", { sources: ["wiki/concepts/bar.md"], community: 1 }),
   ];
@@ -113,7 +113,7 @@ describe("filterGraph", () => {
 describe("graphCounts", () => {
   it("counts code and wiki nodes", () => {
     const g = graph([
-      node("c1", { sources: ["raw/x.rs"] }),
+      node("c1", { sources: ["wiki/code/x.md"] }),
       node("w1", { sources: ["wiki/sources/a.md"] }),
       node("w2"),
     ]);

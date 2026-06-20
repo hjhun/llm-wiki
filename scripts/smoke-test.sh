@@ -66,8 +66,8 @@ node --check "${ROOT_DIR}/scripts/code-facts.mjs"
 node --check "${ROOT_DIR}/scripts/merge-graph-parts.mjs"
 bash -n "${ROOT_DIR}/scripts/test-code-facts.sh"
 "${ROOT_DIR}/scripts/test-code-facts.sh" >/dev/null
-grep -q 'scripts/code-facts.mjs' "${ROOT_DIR}/webapp/lib/graph.ts" || fail "graph prompt does not mention Code Facts"
 grep -q 'scripts/merge-graph-parts.mjs' "${ROOT_DIR}/webapp/lib/graph.ts" || fail "graph prompt does not mention graph merge helper"
+grep -q 'graph generation reads the compiled Markdown under `wiki/` only' "${ROOT_DIR}/webapp/lib/graph.ts" || fail "graph prompt does not enforce wiki-only scope"
 
 log "checking clio-skill installer syntax"
 bash -n "${ROOT_DIR}/clio-skill/skills.sh"

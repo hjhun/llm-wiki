@@ -93,8 +93,8 @@ export const ConfigSchema = z.object({
          * has stable provenance.
          */
         primaryNodeModel: z.enum(["page-title"]).default("page-title"),
-        profile: z.enum(["wiki", "code", "deep"]).default("wiki"),
-        scope: z.enum(["wiki", "wiki+raw"]).default("wiki"),
+        profile: z.enum(["wiki", "deep"]).default("wiki"),
+        scope: z.enum(["wiki"]).default("wiki"),
         maxNodesPerLeaf: z.number().int().min(1).default(40),
         maxConceptsPerSource: z.number().int().min(1).default(8),
         minConfidence: z.number().min(0).max(1).default(0.65),
@@ -111,16 +111,6 @@ export const ConfigSchema = z.object({
         facetEdges: z.boolean().default(false),
         includeSemanticSimilarity: z.boolean().default(true),
         semanticMinConfidence: z.number().min(0).max(1).default(0.72),
-        /**
-         * Code graph unit is a whole project: graphify produces a real
-         * graphify-out per project under projectsDir, and a detailed
-         * <project>.md analysis under projectAnalysisDir.
-         */
-        codeModel: z
-          .enum(["per-project-graphify-out"])
-          .default("per-project-graphify-out"),
-        projectsDir: z.string().default("wiki/graph/projects"),
-        projectAnalysisDir: z.string().default("wiki/code"),
       })
       .default({
         primaryNodeModel: "page-title",
@@ -136,9 +126,6 @@ export const ConfigSchema = z.object({
         facetEdges: false,
         includeSemanticSimilarity: true,
         semanticMinConfidence: 0.72,
-        codeModel: "per-project-graphify-out",
-        projectsDir: "wiki/graph/projects",
-        projectAnalysisDir: "wiki/code",
       }),
     autoUpdateOnIngest: z.boolean().default(true),
     /**
@@ -907,6 +894,39 @@ function normalizeLegacyGeminiCli(value: unknown): unknown {
   return out;
 }
 
+function normalizeLegacyGraphExtraction(value: unknown): unknown {
+  if (value == null || typeof value !== "object" || Array.isArray(value)) {
+    return value;
+  }
+
+  const out: Record<string, unknown> = { ...(value as Record<string, unknown>) };
+  const graph = out.graph;
+  if (graph && typeof graph === "object" && !Array.isArray(graph)) {
+    const nextGraph: Record<string, unknown> = {
+      ...(graph as Record<string, unknown>),
+    };
+    const extraction = nextGraph.extraction;
+    if (
+      extraction &&
+      typeof extraction === "object" &&
+      !Array.isArray(extraction)
+    ) {
+      const nextExtraction: Record<string, unknown> = {
+        ...(extraction as Record<string, unknown>),
+      };
+      if (nextExtraction.scope === "wiki+raw") nextExtraction.scope = "wiki";
+      if (nextExtraction.profile === "code") nextExtraction.profile = "wiki";
+      delete nextExtraction.codeModel;
+      delete nextExtraction.projectsDir;
+      delete nextExtraction.projectAnalysisDir;
+      nextGraph.extraction = nextExtraction;
+    }
+    out.graph = nextGraph;
+  }
+
+  return out;
+}
+
 async function readJsonIfExists<T>(p: string): Promise<Partial<T> | null> {
   try {
     const raw = await fs.readFile(p, "utf8");
@@ -959,8 +979,8 @@ export async function loadConfig(force = false): Promise<Config> {
     );
   }
   const local = await readJsonIfExists<Config>(CONFIG_LOCAL_PATH);
-  const merged = normalizeLegacyGeminiCli(
-    deepMerge(deepMerge(DEFAULT_CONFIG, def), local),
+  const merged = normalizeLegacyGraphExtraction(
+    normalizeLegacyGeminiCli(deepMerge(deepMerge(DEFAULT_CONFIG, def), local)),
   );
   cached = ConfigSchema.parse(merged);
   return cached;
@@ -975,7 +995,9 @@ export async function patchLocalConfig(
   await fs.mkdir(CONFIG_ROOT, { recursive: true });
   const current =
     (await readJsonIfExists<Config>(CONFIG_LOCAL_PATH)) ?? {};
-  const merged = deepMerge(current as Config, patch);
+  const merged = normalizeLegacyGraphExtraction(
+    deepMerge(current as Config, patch),
+  ) as Config;
   await fs.writeFile(
     CONFIG_LOCAL_PATH,
     JSON.stringify(merged, null, 2) + "\n",
