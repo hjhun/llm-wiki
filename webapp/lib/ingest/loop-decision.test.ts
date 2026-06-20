@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildIngestLoopDeltaPrompt,
   buildLoopContinuationPrompt,
   decideIngestLoopFinalize,
   decideLoopHalt,
@@ -296,7 +297,7 @@ describe("newlyDoneLeaves", () => {
 });
 
 describe("buildLoopContinuationPrompt", () => {
-  it("includes the scope line and scoped conversation when a raw scope is set", () => {
+  it("includes the scope line and scoped operation request when a raw scope is set", () => {
     const prompt = buildLoopContinuationPrompt({
       sessionPath: "2026-06-01/x_ingest.md",
       iteration: 2,
@@ -304,17 +305,19 @@ describe("buildLoopContinuationPrompt", () => {
       rawScope: "raw/articles",
     });
     expect(prompt).toContain("target scope: raw/articles");
-    expect(prompt).toContain("User: /ingest-loop raw/articles");
+    expect(prompt).toContain("continue ingest-loop for raw/articles");
+    expect(prompt).not.toContain("User: /ingest-loop raw/articles");
     expect(prompt).toContain("iteration 2");
   });
 
-  it("falls back to a plain /ingest conversation without a scope", () => {
+  it("falls back to an unscoped operation request without a scope", () => {
     const prompt = buildLoopContinuationPrompt({
       sessionPath: "s.md",
       iteration: 1,
       progressRef: null,
     });
-    expect(prompt).toContain("User: /ingest");
+    expect(prompt).toContain("continue ingest-loop for raw/");
+    expect(prompt).not.toContain("User: /ingest");
     expect(prompt).not.toContain("target scope:");
   });
 
@@ -327,6 +330,37 @@ describe("buildLoopContinuationPrompt", () => {
     });
     expect(prompt).toContain("PROGRESS-REF");
     expect(prompt).toContain("ENTITY-REF");
+  });
+
+  it("tells agents to query only bounded progress details", () => {
+    const prompt = buildLoopContinuationPrompt({
+      sessionPath: "s.md",
+      iteration: 3,
+      progressRef: "PROGRESS-REF",
+      actionableLeafRef: "ACTIONABLE-LEAVES",
+      rawScope: "raw/articles",
+    });
+
+    expect(prompt).toContain("ACTIONABLE-LEAVES");
+    expect(prompt).toContain("Do not call file-reading tools");
+    expect(prompt).toContain("bounded shell query");
+    expect(prompt).not.toContain("read progress/ingest/.state.json");
+  });
+});
+
+describe("buildIngestLoopDeltaPrompt", () => {
+  it("keeps resumed-session progress checks bounded", () => {
+    const prompt = buildIngestLoopDeltaPrompt({
+      iteration: 4,
+      rawScope: "raw/articles",
+      actionableLeafRef: "ACTIONABLE-LEAVES",
+    });
+
+    expect(prompt).toContain("ACTIONABLE-LEAVES");
+    expect(prompt).toContain("Do not call file-reading tools");
+    expect(prompt).toContain("bounded shell queries");
+    expect(prompt).toContain("raw/articles");
+    expect(prompt).not.toContain("re-read the latest on disk");
   });
 });
 

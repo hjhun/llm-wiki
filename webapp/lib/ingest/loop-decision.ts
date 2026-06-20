@@ -292,12 +292,14 @@ export function buildLoopContinuationPrompt(input: {
   sessionPath: string;
   iteration: number;
   progressRef: string | null;
+  actionableLeafRef?: string | null;
   entityRegistryRef?: string | null;
   sourcePageStatusRef?: string | null;
   codeWikiStatusRef?: string | null;
   rawScope?: string | null;
 }): string {
   const rawScope = normalizeRawScope(input.rawScope);
+  const operationScope = rawScope ?? "raw/";
   const lines: string[] = [
     "You are operating an LLM Wiki repository.",
     "Read CLAUDE.md/AGENTS.md in this repository and follow .agents/skills/wiki-ingest/SKILL.md. If additional skills are needed, project .agents/skills takes priority, then ~/.agents/skills, then host-specific global skill directories such as ~/.codex/skills or ~/.claude/skills.",
@@ -309,16 +311,41 @@ export function buildLoopContinuationPrompt(input: {
     );
   }
   if (input.progressRef) lines.push(input.progressRef);
+  if (input.actionableLeafRef) lines.push(input.actionableLeafRef);
   if (input.entityRegistryRef) lines.push(input.entityRegistryRef);
   if (input.sourcePageStatusRef) lines.push(input.sourcePageStatusRef);
   if (input.codeWikiStatusRef) lines.push(input.codeWikiStatusRef);
   lines.push(
-    `This is /ingest-loop iteration ${input.iteration}. Drive the wiki-ingest leaf-first + merge work yourself in THIS session: read progress/ingest/.state.json${rawScope ? ` (within ${rawScope})` : ""} and keep processing pending sub-chunks, merge-pass parents, and missing direct-file pseudo-leaf enumerations — each sub-chunk still bounded by the chunking caps — per the configured chunking.unitPerCall contract. Continue until the scope's pending/in_progress/partial work reaches zero (then run the merge pass), or until context grows large enough that a fresh session would be cleaner; then exit. The backend only re-invokes you to resume if work remains — you own the loop within a session. For code/mixed leaves, do not create mirrored wiki/code file pages as a repair task; graphify runs separately after ingest progress is complete.`,
+    "Progress files can be very large. Do not call file-reading tools on progress/ingest/.state.json or progress/ingest/DASHBOARD.md, and do not print either whole file into the conversation. Use the compact references in this prompt first. If a progress detail is required, use a bounded shell query that prints only the scoped leaf or sub-chunk you need.",
+    `This is ingest-loop iteration ${input.iteration}. Drive the wiki-ingest leaf-first + merge work yourself in THIS session for ${operationScope}: keep processing pending sub-chunks, merge-pass parents, and missing direct-file pseudo-leaf enumerations — each sub-chunk still bounded by the chunking caps — per the configured chunking.unitPerCall contract. Continue until the scope's pending/in_progress/partial work reaches zero (then run the merge pass), or until context grows large enough that a fresh session would be cleaner; then exit. The backend only re-invokes you to resume if work remains — you own the loop within a session. For code/mixed leaves, do not create mirrored wiki/code file pages as a repair task; graphify runs separately after ingest progress is complete.`,
     "",
     "===== CONVERSATION =====",
-    rawScope ? `User: /ingest-loop ${rawScope}` : "User: /ingest",
+    `Operation request: continue ingest-loop for ${operationScope}.`,
     "",
     "Respond now as the assistant.",
+  );
+  return lines.join("\n");
+}
+
+/**
+ * Compact delta for a resumed warm CLI conversation. It intentionally avoids
+ * asking the agent to load the full progress state; the next full prompt already
+ * carries bounded references, and ad-hoc progress checks must stay scoped.
+ */
+export function buildIngestLoopDeltaPrompt(input: {
+  iteration: number;
+  rawScope: string | null;
+  actionableLeafRef?: string | null;
+}): string {
+  const scope = input.rawScope ?? "raw/";
+  const lines = [
+    `Continue this resumed ingest-loop session — iteration ${input.iteration}.`,
+    "Your earlier operating instructions, the wiki-ingest skill, the operation policy, and the active session log from THIS same conversation still apply. Do not reload or restate them.",
+  ];
+  if (input.actionableLeafRef) lines.push(input.actionableLeafRef);
+  lines.push(
+    "Progress files can be very large. Do not call file-reading tools on progress/ingest/.state.json or progress/ingest/DASHBOARD.md, and do not print either whole file into the conversation. Use bounded shell queries when you need one scoped leaf/sub-chunk detail.",
+    `Process the next pending sub-chunks for ${scope} per the configured chunking.unitPerCall contract, persisting each source page + state as you go. When the scope's pending/in_progress/partial work reaches zero or you hit a natural stopping point, exit — the backend loop resumes you if anything remains.`,
   );
   return lines.join("\n");
 }

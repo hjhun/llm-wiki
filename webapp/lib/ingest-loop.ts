@@ -54,6 +54,7 @@ import {
 } from "./ingest/compaction";
 import {
   FINAL_GRAPH_SKIPPED_NOTE,
+  buildIngestLoopDeltaPrompt,
   LOOP_STAGNATION_LIMIT,
   buildLoopContinuationPrompt,
   decideIngestLoopFinalize,
@@ -1346,6 +1347,8 @@ export type RunIngestLoopInput = {
   sessionPath: string;
   /** Prompt used for the first iteration. Subsequent iterations build their own. */
   initialPrompt: string;
+  /** Slash command kind that entered the backend loop. */
+  operationKind?: "ingest" | "ingest-loop";
   /** Optional pre-built progress reference. The loop reads a fresh one for later iters. */
   progressRef?: string | null;
   /**
@@ -1374,26 +1377,37 @@ export type RunIngestLoopResult = {
   anyProgress: boolean;
 };
 
-/**
- * Compact continuation prompt for the single ingest-loop agent resuming its OWN
- * warm CLI conversation across iterations. The operating instructions, the
- * wiki-ingest skill, and the session log were established earlier in the same
- * conversation, so they are deliberately not repeated — that is the point of
- * resume. Only per-iteration dynamics are sent: re-read the latest on-disk
- * state before acting, since the durable source of truth is the wiki +
- * progress files.
- */
-function buildIngestLoopDeltaPrompt(input: {
-  iteration: number;
-  rawScope: string | null;
-}): string {
-  const scope = input.rawScope ?? "raw/";
+const ACTIONABLE_LEAF_REF_MAX = 20;
+
+async function buildActionableLeafReference(
+  rawScope?: string | null,
+): Promise<string | null> {
+  const leaves = await readActionableLeafPaths(rawScope);
+  const scope = rawScope ?? "raw/";
+  if (leaves == null) {
+    return [
+      "Actionable progress hint (bounded backend scan): no actionable leaf list is available yet.",
+      `Enumerate or rescan only the requested scope (${scope}) and then process the next bounded unit.`,
+    ].join("\n");
+  }
+  if (leaves.length === 0) {
+    return [
+      "Actionable progress hint (bounded backend scan): no pending or partial leaves were found.",
+      `If ${scope} is already complete, run or finish the merge pass for that scope.`,
+    ].join("\n");
+  }
+
+  const shown = leaves.slice(0, ACTIONABLE_LEAF_REF_MAX);
+  const more = leaves.length - shown.length;
   return [
-    `Continue this resumed /ingest-loop session — iteration ${input.iteration}.`,
-    "Your earlier operating instructions, the wiki-ingest skill, the operation policy, and the active session log from THIS same conversation still apply. Do not reload or restate them.",
-    `Before writing, re-read the latest on disk yourself: progress/ingest/.state.json plus the entity registry and any source pages you would touch (scope: ${scope}). Act on the current on-disk state, not on what you remember.`,
-    "Process the next pending sub-chunks for the scope per the configured chunking.unitPerCall contract, persisting each source page + state as you go. When the scope's pending/in_progress/partial work reaches zero or you hit a natural stopping point, exit — the backend loop resumes you if anything remains.",
-  ].join("\n");
+    `Actionable progress hint (bounded backend scan, scope=${scope}):`,
+    ...shown.map((leaf) => `- ${leaf}`),
+    more > 0
+      ? `- ... ${more} more actionable leaves omitted from this prompt`
+      : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
 }
 
 export async function runIngestLoop(
@@ -1441,6 +1455,8 @@ export async function runIngestLoop(
     cfg.cli.ingestLoop.resumeSessions && cliSupportsResume(agent);
   let sessionId: string | null = null;
   let pendingClineCompaction = false;
+  const useBoundedInitialPrompt =
+    input.operationKind === "ingest-loop" && agent === "cline";
 
   while (true) {
     if (await stopFlagExists(sessionPath)) {
@@ -1460,14 +1476,20 @@ export async function runIngestLoop(
     // iteration after an id capture failed — starts/assigns a session with the
     // full prompt; later resumed iterations send a compact delta.
     const resuming = canResume && iteration > 1 && sessionId != null;
+    const actionableLeafRef = await buildActionableLeafReference(rawScope);
     const iterPrompt = resuming
-      ? buildIngestLoopDeltaPrompt({ iteration, rawScope })
-      : iteration === 1
+      ? buildIngestLoopDeltaPrompt({
+          iteration,
+          rawScope,
+          actionableLeafRef,
+        })
+      : iteration === 1 && !useBoundedInitialPrompt
         ? initialPrompt
         : buildLoopContinuationPrompt({
             sessionPath,
             iteration,
             progressRef: progressRef ?? (await buildProgressReference()),
+            actionableLeafRef,
             entityRegistryRef: await buildEntityRegistryReference(),
             sourcePageStatusRef: await buildSourcePageStatusReference({
               rawScope,

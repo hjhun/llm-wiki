@@ -217,6 +217,7 @@ export async function POST(req: Request) {
           agent,
           sessionPath,
           initialPrompt: prompt,
+          operationKind: kind,
           progressRef,
           rawScope: rawScopeFromMessage(parsed.data.message),
           signal: job.abort.signal,
