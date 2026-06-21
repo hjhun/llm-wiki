@@ -31,6 +31,20 @@ export function retryDelayMs(backoffs: number[], attempt: number): number {
   return backoffs[Math.min(attempt - 1, backoffs.length - 1)] ?? 0;
 }
 
+const RATE_LIMIT_MIN_RETRY_MS = 60_000;
+
+export function retryDelayForFailureMs(
+  backoffs: number[],
+  attempt: number,
+  failure: string,
+): number {
+  const configured = retryDelayMs(backoffs, attempt);
+  if (/rate limit exceeded/i.test(failure)) {
+    return Math.max(configured, RATE_LIMIT_MIN_RETRY_MS);
+  }
+  return configured;
+}
+
 /** Abortable sleep. Rejects if `signal` fires while waiting. */
 export function delay(ms: number, signal?: AbortSignal): Promise<void> {
   if (ms <= 0) return Promise.resolve();
@@ -201,7 +215,7 @@ export async function runCliWithIngestLoopRetries(
       };
     }
 
-    const waitMs = retryDelayMs(backoffs, attempt);
+    const waitMs = retryDelayForFailureMs(backoffs, attempt, lastFailure);
     const retryNote =
       `${prefix}: ${lastFailure}\n` +
       `↻ ${Math.round(waitMs / 1000)}초 후 같은 iteration을 재시도합니다.`;

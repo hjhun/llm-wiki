@@ -13,7 +13,6 @@ import { IconButton, PageHeader, StatusBadge } from "../ui";
 import type {
   ChatJobSnapshot,
   ChatKind,
-  ChatSendEvent,
   SequencedChatSendEvent,
 } from "@/lib/chat-events";
 import type {
@@ -194,6 +193,7 @@ export default function Chat() {
   const [prefill, setPrefill] = useState<string | null>(null);
   const streamAbortRef = useRef<AbortController | null>(null);
   const streamTokenRef = useRef(0);
+  const streamSeqRef = useRef<Record<string, number>>({});
 
   async function handleDrop(e: React.DragEvent) {
     e.preventDefault();
@@ -526,11 +526,14 @@ export default function Chat() {
       });
     }
 
-    function handleEvent(event: ChatSendEvent) {
+    function handleEvent(event: SequencedChatSendEvent) {
       if (streamTokenRef.current !== token) return;
-      if ("jobId" in event) {
-        setAttachedJobId((event as SequencedChatSendEvent).jobId);
+      if (typeof event.seq === "number") {
+        const lastSeq = streamSeqRef.current[event.jobId] ?? -1;
+        if (event.seq <= lastSeq) return;
+        streamSeqRef.current[event.jobId] = event.seq;
       }
+      setAttachedJobId(event.jobId);
       if (event.type === "start") {
         sessionPath = event.sessionPath;
         setActive((current) =>
@@ -627,14 +630,14 @@ export default function Chat() {
         buffer = lines.pop() ?? "";
         for (const line of lines) {
           if (!line.trim()) continue;
-          const event = JSON.parse(line) as ChatSendEvent;
+          const event = JSON.parse(line) as SequencedChatSendEvent;
           handleEvent(event);
           if (event.type === "error") failed = true;
         }
       }
       buffer += decoder.decode();
       if (buffer.trim()) {
-        const event = JSON.parse(buffer) as ChatSendEvent;
+        const event = JSON.parse(buffer) as SequencedChatSendEvent;
         handleEvent(event);
         if (event.type === "error") failed = true;
       }
@@ -672,6 +675,7 @@ export default function Chat() {
       const u = new URL("/api/chat/stream", window.location.origin);
       u.searchParams.set("jobId", job.id);
       u.searchParams.set("sessionPath", job.sessionPath);
+      u.searchParams.set("after", String(streamSeqRef.current[job.id] ?? -1));
       const res = await fetch(u, { signal: controller.signal });
       if (!res.ok) throw await asError(res);
       await consumeChatStream(res, job.sessionPath, token);

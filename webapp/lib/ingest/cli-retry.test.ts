@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  retryDelayForFailureMs,
   retryDelayMs,
   resultFailureSummary,
   runCliWithIngestLoopRetries,
@@ -54,6 +55,16 @@ describe("retryDelayMs", () => {
     expect(retryDelayMs([10, 20, 30], 3)).toBe(30);
     expect(retryDelayMs([10, 20], 5)).toBe(20);
     expect(retryDelayMs([], 1)).toBe(0);
+  });
+
+  it("uses a longer delay for provider rate limits", () => {
+    expect(
+      retryDelayForFailureMs([5000, 30_000], 1, "Rate limit exceeded"),
+    ).toBe(60_000);
+    expect(
+      retryDelayForFailureMs([120_000], 1, "Rate limit exceeded"),
+    ).toBe(120_000);
+    expect(retryDelayForFailureMs([5000], 1, "spawn failed")).toBe(5000);
   });
 });
 
