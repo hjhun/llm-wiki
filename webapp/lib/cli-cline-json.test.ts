@@ -60,4 +60,58 @@ describe("createClineJsonParser", () => {
 
     expect(p.finalText()).toBe("ok");
   });
+
+  it("keeps cline 0.6 text deltas and drops the content_end repeat and done summary", () => {
+    const p = createClineJsonParser();
+    p.push(
+      // reasoning (chain-of-thought) — must be excluded
+      line({
+        type: "agent_event",
+        event: {
+          type: "content_start",
+          contentType: "reasoning",
+          reasoning: "The user wants the phrase.",
+        },
+      }) +
+        // streamed answer deltas — kept
+        line({
+          type: "agent_event",
+          event: {
+            type: "content_start",
+            contentType: "text",
+            text: "The quick brown",
+            accumulated: "The quick brown",
+          },
+        }) +
+        line({
+          type: "agent_event",
+          event: {
+            type: "content_start",
+            contentType: "text",
+            text: " fox.",
+            accumulated: "The quick brown fox.",
+          },
+        }) +
+        // content_end repeats the FULL text — must be excluded (was the dup)
+        line({
+          type: "agent_event",
+          event: {
+            type: "content_end",
+            contentType: "text",
+            text: "The quick brown fox.",
+          },
+        }) +
+        // terminal done carries the submit summary — must be excluded
+        line({
+          type: "agent_event",
+          event: {
+            type: "done",
+            reason: "completed",
+            text: "Submission recorded (verified): Task completed.",
+          },
+        }),
+    );
+
+    expect(p.finalText()).toBe("The quick brown fox.");
+  });
 });

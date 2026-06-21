@@ -23,7 +23,24 @@ function eventText(obj: unknown): string | null {
     return null;
   }
   const event = o.event as Record<string, unknown>;
-  return typeof event.text === "string" ? event.text : null;
+  if (typeof event.text !== "string") return null;
+
+  // Cline 0.6 streams the assistant answer as `content_start` events with
+  // contentType "text", whose `text` field is a delta (plus a cumulative
+  // `accumulated`). It then emits a matching `content_end` carrying the FULL
+  // text again, and a terminal `done` event carrying the submit summary.
+  // Concatenating every `event.text` therefore duplicates the whole answer
+  // (delta stream + content_end repeat) and appends the submit summary. Keep
+  // only the streamed text deltas: skip reasoning (chain-of-thought), the
+  // content_end repeat, and the done summary.
+  const innerType = typeof event.type === "string" ? event.type : null;
+  const contentType =
+    typeof event.contentType === "string" ? event.contentType : null;
+
+  if (contentType && contentType !== "text") return null;
+  if (innerType === "content_end" || innerType === "done") return null;
+
+  return event.text;
 }
 
 function taskId(obj: unknown): string | null {
