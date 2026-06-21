@@ -136,6 +136,13 @@ export default function Settings() {
     void load();
   }, [load]);
 
+  // Auto-dismiss notice after 5 seconds
+  useEffect(() => {
+    if (!notice) return;
+    const timer = setTimeout(() => setNotice(null), 5000);
+    return () => clearTimeout(timer);
+  }, [notice]);
+
   const loadReleaseInfo = useCallback(async () => {
     setError(null);
     try {
@@ -442,6 +449,17 @@ export default function Settings() {
                   title={t.settings.codingAgent}
                   eyebrow={t.settings.defaultCli}
                 >
+                  <div className="mb-4 rounded border border-line/50 bg-bg-subtle p-3 text-xs leading-relaxed text-ink-faint">
+                    <p className="font-semibold text-ink-dim">CLI 선택 우선순위:</p>
+                    <ol className="mt-1 ml-4 list-decimal space-y-1">
+                      <li>Chat에서 메시지별로 지정한 에이전트</li>
+                      <li>작업별 역할 설정 (유지보수 CLI / Query CLI)</li>
+                      <li>기본 CLI (아래 선택)</li>
+                    </ol>
+                    <p className="mt-2 text-[11px]">
+                      <strong>현재 설정:</strong> 기본 CLI = <code className="font-mono">{draft.agent.default || "설정 필요"}</code>, 유지보수 = <code className="font-mono">{draft.agent.roles.maintenance || "기본값"}</code>, Query = <code className="font-mono">{draft.agent.roles.query || "기본값"}</code>
+                    </p>
+                  </div>
                   <div className="grid gap-3 lg:grid-cols-2">
                     {CLI_NAMES.map((name) => (
                       <CliCard
@@ -1352,13 +1370,19 @@ function CliCard({
           type="button"
           onClick={onSelect}
           className={[
-            "h-7 rounded px-2 text-[11px] font-medium",
+            "h-7 rounded px-2 text-[11px] font-medium whitespace-nowrap flex items-center gap-1",
             selected
               ? "bg-accent text-bg"
               : "border border-line text-ink-dim hover:bg-bg-panel",
           ].join(" ")}
         >
-          {selected ? t.settings.default : t.settings.use}
+          {selected ? (
+            <>
+              ✓ {t.settings.default}
+            </>
+          ) : (
+            t.settings.use
+          )}
         </button>
       </div>
       <div className="mt-3 flex items-center gap-2">
