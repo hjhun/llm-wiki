@@ -282,6 +282,10 @@ For each sub-chunk whose `status === "pending"`:
    re-read, open it, read just the needed span, and close it before moving on.
    This integration is the main ingest output: source cards only prove where
    the knowledge came from.
+   - **Local entity/concept extraction**: scan the per-leaf JSON takeaways and
+     identify mentions of entities (proper nouns, 3+ mentions) and concepts
+     (abstract patterns, 5+ mentions). Record in leaf-scoped cache for later
+     parent-level aggregation.
    - **Reuse before creating.** Before adding a new `wiki/entities/` or `wiki/concepts/` page, check `wiki/index.md` for an existing page naming the same target — including case, spacing, punctuation, and English/Korean variants (`Transformer` ≈ `트랜스포머` ≈ `transformer-model`). If one exists, update it and link with the index's exact `[[Page Name]]`. Create a new page only when no existing page covers the target. Parallel workers each see only part of the input, so this is the main safeguard against near-duplicate pages — and therefore against duplicate, disconnected graph nodes.
 5. **Contradictions**: if a new claim disagrees with an existing wiki page, add a block quote on that page:
    ```markdown
@@ -316,30 +320,116 @@ If an exception is raised during this step:
 - Set the leaf `status: "partial"` (not `"error"` — other sub-chunks may still succeed).
 - Persist and release the lock.
 
+### Step 2.5 — Chunk-level Synthesis (triggered per completed parent)
+
+When a parent directory's **last leaf completes** (all leaves under `raw/parent/` have `status === "done"`):
+
+1. **Collect all source cards** under `wiki/sources/{parent}/**/`.md
+
+2. **Extract local entities/concepts**:
+   - Read each source card's frontmatter: title, topics, entities, concepts, claims
+   - Aggregate mention frequency from Step 2.4 cache (entities 3+, concepts 5+)
+   - Call LLM (optional, for high-level synthesis):
+     ```
+     "Analyze these wiki/sources/{parent}/** source cards.
+      Identify key entities (proper nouns), concepts (abstract patterns),
+      and associative trail topics. Output: entities[], concepts[], maps[]"
+     ```
+   - Output: parent-scoped list of entities, concepts, maps
+
+3. **Create parent-scoped wiki pages**:
+   - `wiki/entities/<Entity>.md` (marked: parent_scoped, mention_count, key_sources)
+   - `wiki/concepts/<Concept>.md` (marked: parent_scoped, related_entities)
+   - `wiki/maps/<Topic>.md` (marked: parent_scoped, if 10+ related sources)
+   - Example frontmatter:
+     ```yaml
+     ---
+     title: AppEvent
+     type: entity
+     scope: parent  # ← Mark as parent-scoped for later merge
+     parent: "raw/Confluence/Tizen_9.0_AppFW"
+     mentions: 45
+     chunk_sources: [wiki/sources/Confluence/...]
+     ---
+     ```
+
+4. **Append chunk synthesis entry** to `wiki/log.md`:
+   ```markdown
+   ## [YYYY-MM-DD HH:MM] ingest | chunk synthesis | {parent}/
+   - Created: wiki/entities/AppEvent.md, wiki/concepts/EventHandling.md
+   - Entities: 5, Concepts: 3, Maps: 1
+   - From: 150 source cards under {parent}/
+   ```
+
+5. **Mark parent ready for merge**:
+   - If all children `status === "done"`, mark parent for Step 3 processing
+   - Persist state
+
+Note: This step focuses on **local context synthesis** — what entities/concepts
+emerge from THIS parent's sources. Global dedup and unification happen in Step 3.
+
 ### Step 3 — Merge Pass (separate invocation, one parent per call)
 
 Only run when **every** leaf in the input scope has `status === "done"` and `merge_pass.status !== "done"`.
 
 1. Acquire the same lock with mode `merge`.
 2. If `merge_pass.pending_parents` is empty there is nothing to merge: set `merge_pass.status = "done"`, regenerate `DASHBOARD.md`, release the lock, and return. Otherwise pick **one** parent directory from `merge_pass.pending_parents`. For that parent:
-   - Combine child-leaf summaries into or onto the relevant
-     entity/concept/comparison/synthesis pages. This is where batch ingest turns
-     many source cards into one coherent wiki layer.
-   - If useful, write/append the root synthesis note at `wiki/synthesis/<batch>.md`.
-   - Refresh `wiki/sources/index.md` by running the deterministic generator: `node scripts/build-sources-index.mjs`. The script walks `wiki/sources/`, parses each source page's frontmatter, and rewrites the header section (faceted by recently-updated, topic, entity, source_kind, source_date, project, status, plus a full alphabetical list). Any LLM-authored prose past the `<!-- clio:sources-index:custom -->` marker is preserved verbatim. Do **not** hand-edit the generated header; if a facet is missing, fix the script. If the script is unavailable, fall back to writing a compact, facet-oriented index by hand using the same fields.
-   - Create or update `wiki/maps/<topic>.md` only when there is a durable research thread or associative trail worth navigating. Map pages should link to source summaries, entity/concept pages, answers, contradictions, and open questions; they should not duplicate every source summary.
-   - If the parent contains code leaves, do not consolidate `wiki/code/` file
-     pages. The merge pass should keep the normal LLM Wiki pages coherent; the
-     separate `wiki-graphify update` invocation builds the graph from `wiki/`.
+   
+   **2.1 Collect parent-scoped entities/concepts** from Step 2.5 output:
+   - Gather all `wiki/entities/*.md` (scope: parent) created for this parent
+   - Gather all `wiki/concepts/*.md` (scope: parent)
+   - Gather all `wiki/maps/*.md` (scope: parent)
+   
+   **2.2 Deduplicate and merge into global pages**:
+   - For each parent-scoped entity:
+     - Check if `wiki/entities/<Entity>.md` exists in **global scope**
+     - If yes: merge — combine descriptions, sum mention counts, track `chunks: [Confluence, Vault, ...]`
+     - If no: promote parent-scoped to global (remove scope marker)
+   - Same logic for concepts and maps
+   - Example merge:
+     ```
+     Parent Confluence: AppEvent (45 mentions)
+     + Parent Vault: AppEvent (8 mentions)
+     = Global AppEvent (53 mentions, chunks: [Confluence, Vault])
+     ```
+   
+   **2.3 Create/update global wiki pages**:
+   - `wiki/entities/<Entity>.md` (remove parent_scoped marker, add chunks list)
+   - `wiki/concepts/<Concept>.md` (global, unified)
+   - `wiki/maps/<Topic>.md` (global, unified)
+   - Cross-reference related entities/concepts in each page
+   
+   **2.4 Consolidate synthesis summaries**:
+   - If useful, write/append the root synthesis note at `wiki/synthesis/<parent>.md`.
+   
+   **2.5 Refresh source index**:
+   - Run `node scripts/build-sources-index.mjs`. The script walks `wiki/sources/`, parses each source page's frontmatter, and rewrites the header section (faceted by recently-updated, topic, entity, source_kind, source_date, project, status, plus a full alphabetical list). Any LLM-authored prose past the `<!-- clio:sources-index:custom -->` marker is preserved verbatim. Do **not** hand-edit the generated header; if a facet is missing, fix the script. If the script is unavailable, fall back to writing a compact, facet-oriented index by hand using the same fields.
+   
+   **2.6 Code Wiki consolidation**:
+   - If the parent contains code leaves, do not consolidate `wiki/code/` file pages. The merge pass should keep the normal LLM Wiki pages coherent; the separate `wiki-graphify update` invocation builds the graph from `wiki/`.
 3. Append a merge entry to `wiki/log.md`:
    ```markdown
-   ## [YYYY-MM-DD HH:MM] ingest | merge pass | <parent>
-   - Integrated pages: `wiki/concepts/foo.md`
+   ## [YYYY-MM-DD HH:MM] ingest | merge pass | <parent>/
+   - Created/merged: wiki/entities/AppEvent.md, wiki/concepts/EventHandling.md
+   - Deduped: AppEvent (Confluence 45 + Vault 8 = 53 mentions)
+   - Total entities: 5, concepts: 3, maps: 1
+   - Source pages in wiki/sources/{parent}: 150
    ```
-4. Remove that parent from `merge_pass.pending_parents`. If empty, set `merge_pass.status = "done"` and reorder `wiki/index.md` in bulk now:
-   - Category order: Entities → Concepts → Code → Sources → Maps → Answers → Comparisons → Lint Reports → Graph.
-   - Sort alphabetically within each category.
-   - Item format: `- [[Page Name]] — One-line summary`.
+4. Remove that parent from `merge_pass.pending_parents`. If empty, set `merge_pass.status = "done"` and perform **final integration**:
+   
+   **4.1 Reorder wiki/index.md** in bulk (all global pages):
+   - **Entities**: All global entity pages (alphabetical)
+     - Example: `- [[AppEvent]] — Tizen application event system (53 mentions, Confluence+Vault)`
+   - **Concepts**: All global concept pages (alphabetical)
+     - Example: `- [[EventHandling]] — Asynchronous event dispatch patterns (85 mentions)`
+   - **Code**: Code-related pages (if any)
+   - **Sources**: `[[wiki/sources/index]]` only (source catalog, not every source)
+   - **Maps**: All associative trail pages (alphabetical)
+   - **Answers**: Query answers (if any)
+   - **Comparisons**: Comparison/analysis pages (if any)
+   - **Lint Reports**: Recent lint reports (if any)
+   - **Graph**: Graph report (if built)
+   - Format: `- [[Page Name]] — One-line summary`
 5. Regenerate `DASHBOARD.md`. Release lock.
 6. **Post-merge mini-lint gate.** After the merge pass that drained `merge_pass.pending_parents`, run `node scripts/mini-lint.mjs` (deterministic, sub-second). It catches three classes of issues parallel ingest workers tend to introduce — near-duplicate concept/entity titles, broken `[[wiki/...]]` wikilinks, and orphan synthesis pages — and writes a report to `wiki/lint/post-merge-<YYYY-MM-DD>.md`. The webapp's `/ingest-loop` driver runs the same script automatically; for one-shot `/ingest` calls the skill is the trigger. Surface the one-line summary in your reply; the full LLM `wiki-lint` workflow still owns deeper checks. Return.
 
@@ -536,18 +626,29 @@ Per sub-chunk (Step 2):
 
 - [ ] Processed pending sub-chunks according to `chunking.unitPerCall`; read files one at a time (never two file bodies in memory).
 - [ ] Wrote `wiki/sources/<raw-relative-path>.md` with required frontmatter for each source file, including compact file-level cards for code files.
-- [ ] Updated entity/concept/map/synthesis pages from takeaways only, reusing existing pages (checked `wiki/index.md` for case/spacing/EN-KO variants; no near-duplicates).
+- [ ] Extracted local entity/concept mentions from takeaways (3+ mentions for entities, 5+ for concepts); recorded in per-leaf cache.
 - [ ] Recorded any contradiction as a block quote on the affected page.
 - [ ] Appended one `wiki/log.md` entry for this sub-chunk.
 - [ ] Marked sub-chunk `done`; if leaf finished, set leaf `done` and queued its parent into `merge_pass.pending_parents`; persisted `.state.json`.
 - [ ] Regenerated `DASHBOARD.md`; released per-leaf lock (and global mutex); either continued under `session_batch` or returned under `one_subchunk`/natural stop.
 
-Per merge pass (Step 3):
+Per chunk synthesis (Step 2.5, triggered per completed parent):
+
+- [ ] Ran when all leaves under parent were `done`.
+- [ ] Collected all `wiki/sources/{parent}/**/` source cards; aggregated entity/concept mentions from Step 2 cache.
+- [ ] Created `wiki/entities/<Entity>.md` (parent-scoped, with mention counts and key sources).
+- [ ] Created `wiki/concepts/<Concept>.md` (parent-scoped, with related entities).
+- [ ] Created `wiki/maps/<Topic>.md` (parent-scoped, if 10+ related sources).
+- [ ] Appended chunk synthesis entry to `wiki/log.md` (entities/concepts/maps count).
+- [ ] Marked parent ready for Step 3; persisted state.
+
+Per merge pass (Step 3, one parent per invocation):
 
 - [ ] Ran only when every in-scope leaf is `done` and `merge_pass.status !== "done"`.
-- [ ] Integrated child-leaf summaries into the parent concept/synthesis pages.
+- [ ] Collected parent-scoped entities/concepts/maps from Step 2.5.
+- [ ] Deduped and merged into global pages: `wiki/entities/<Entity>.md`, `wiki/concepts/<Concept>.md`, `wiki/maps/<Topic>.md` (removed parent_scoped marker, summed mention counts, tracked chunks list).
 - [ ] Refreshed `wiki/sources/index.md` (via `scripts/build-sources-index.mjs`) and any useful `wiki/maps/` trails.
-- [ ] When `pending_parents` drained: reordered and deduped `wiki/index.md` in bulk.
+- [ ] When `pending_parents` drained: reordered and deduped `wiki/index.md` in bulk (full entity/concept/map listings, no duplicates).
 - [ ] Ran `scripts/mini-lint.mjs` and surfaced the one-line summary.
 - [ ] Appended the merge `wiki/log.md` entry; left `wiki-graphify update` as a separate follow-up invocation (not bundled into this call).
 
