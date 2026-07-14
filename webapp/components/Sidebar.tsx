@@ -11,7 +11,6 @@ import {
   LayoutDashboard,
   LogOut,
   MessageSquareText,
-  Network,
   Settings,
 } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -25,7 +24,7 @@ import type { LucideIcon } from "lucide-react";
 
 type Tab = {
   href: string;
-  key: "dashboard" | "chat" | "explorer" | "graph" | "automations" | "settings";
+  key: "dashboard" | "chat" | "explorer" | "automations" | "settings";
   icon: LucideIcon;
 };
 
@@ -33,7 +32,6 @@ const TABS: Tab[] = [
   { href: "/dashboard", key: "dashboard", icon: LayoutDashboard },
   { href: "/chat", key: "chat", icon: MessageSquareText },
   { href: "/explorer", key: "explorer", icon: FolderTree },
-  { href: "/graph", key: "graph", icon: Network },
   { href: "/automations", key: "automations", icon: Clock3 },
   { href: "/settings", key: "settings", icon: Settings },
 ];

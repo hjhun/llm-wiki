@@ -294,6 +294,7 @@ This repository is operated through one of the coding agent CLIs installed on th
 | `claude` | `claude -p "<prompt>"` | `--dangerously-skip-permissions` |
 | `agy` (Antigravity) | `agy --prompt "<prompt>"` | `--dangerously-skip-permissions` (`--add-dir` helper) |
 | `cline` | `cline -y "<prompt>"` | `-y` (auto-approval) |
+| `gemini` | `gemini "<prompt>"` | `--non-interactive` or `--skip-approval` |
 
 - Any agent entering this repository treats these operating rules as the primary local rules.
 - yolo mode must apply **only inside this repository**. The adapter forces `cwd`, so behavior that leaks outside the wiki path must be rejected, except for read-only traversal of user-approved source symlinks that are located under `raw/` and are being processed through `raw/...` paths.
