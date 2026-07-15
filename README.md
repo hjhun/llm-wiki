@@ -76,8 +76,8 @@ catalog, and the log.
 | **Bring your own agent** | Works with `codex`, `claude`, `agy` (Antigravity), or `cline`. CLIO orchestrates; the CLI you trust does the reasoning. |
 | **Code Wiki** | Point it at a repo and compile source summaries/code analysis into `wiki/`; graphify builds the knowledge graph from those wiki pages only. |
 | **Incremental & resumable** | Big folders are processed leaf-first in small chunks and merged. Interrupted runs resume from saved progress. |
-| **Browser + CLI + Telegram** | A Next.js UI (Chat, Explorer, Graph, Automations, Settings), a native `clio` CLI, and a `/query` Telegram bot. |
-| **Reviewable automation** | Auto Ingest, Auto Lint, and draft-only scheduled jobs keep the wiki moving without hiding what they did. |
+| **Browser + CLI + Telegram** | A Next.js UI (Chat, Explorer, Graph, Settings), a native `clio` CLI, and a `/query` Telegram bot. |
+| **Reviewable automation** | Auto Ingest and Auto Lint keep the wiki moving without hiding what they did. |
 
 ## How it works
 
@@ -100,7 +100,7 @@ The contract is ownership. You own `raw/`; the agent owns `wiki/`:
 |---|---|---|
 | `raw/` | You | Original sources. Immutable to agents except through explicit preprocess. |
 | `raw/chat/` | You | Append-only source captures, ready for later ingest. |
-| `progress/automation/artifacts/` | Automations | Draft job records and per-agent plan/result logs. |
+| `progress/automation/artifacts/` | Agent | Browser-capture QA and automation run records. |
 | `wiki/sources/<raw-path>.md` | Agent | One source summary per original, mirroring the `raw/` path. |
 | `wiki/` (concepts, answers, lint, graph) | Agent | The generated, maintained knowledge base. |
 | `.agents/skills/` | Project | The skills that define every CLIO operation. |
@@ -221,7 +221,6 @@ project via `$CLIO_HOME`, then by walking up from the current directory, then
 | **Chat** | Run `/ingest`, `/query`, `/lint`, `/preprocess`, or natural-language requests. |
 | **Explorer** | Browse `raw/`, `wiki/`, and generated reports. |
 | **Graph** | Build, update, and inspect the Cytoscape knowledge graph. |
-| **Automations** | Schedule draft-only multi-CLI jobs; inspect runs under `progress/automation/artifacts/`. |
 | **Settings** | Agent CLI, host/port, graph behavior, Auto Ingest/Lint, language, theme, password. |
 
 CLIO ships a bilingual Korean/English UI. The `/query` flow is also available
@@ -404,9 +403,9 @@ tag to build and attach the platform CLI assets.
 
 CLIO is a usable local-first workbench: authenticated setup/login, a bilingual
 UI, Chat with external captures, Explorer, Cytoscape graph, ingest/query/lint,
-the native `clio` CLI, Auto Ingest/Lint, draft-only Automations, a Telegram bot,
+the native `clio` CLI, Auto Ingest/Lint, a Telegram bot,
 release/update scripts, and optional systemd install are all implemented. The
-agent skills, graph schema, automation templates, and setup ergonomics are
+agent skills, graph schema, and setup ergonomics are
 active interfaces that may still change between releases.
 
 ## Security notes

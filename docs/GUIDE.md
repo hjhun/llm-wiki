@@ -15,7 +15,6 @@ You collect source material in `raw/`. A coding agent reads that material and ma
 | Chat | Run `/ingest-loop`, `/query`, `/lint`, and other agent requests. |
 | Explorer | Browse and inspect source files, wiki pages, logs, and reports. |
 | Graph | Build or update the knowledge graph. |
-| Automations | Create scheduled multi-CLI jobs and inspect draft records under `progress/automation/artifacts/`. |
 | Settings | Choose the default agent CLI, configure host/port, Auto Ingest, Auto Lint, language/theme, graph options, and password. |
 
 The core idea is simple:
@@ -33,9 +32,9 @@ CLIO is not just a chat interface over documents. The important result is the ge
 
 ### Current Implementation Snapshot
 
-The current CLIO app includes authenticated first-run setup and login, Korean/English language switching, a native `clio` CLI, Chat sessions with optional external captures under `raw/chat/`, Explorer browsing plus upload/rename/delete actions where allowed, a Cytoscape-based graph view, Auto Ingest, Auto Lint, draft-only scheduled Automations, release/update scripts, and optional systemd service installation.
+The current CLIO app includes authenticated first-run setup and login, Korean/English language switching, a native `clio` CLI, Chat sessions with optional external captures under `raw/chat/`, Explorer browsing plus upload/rename/delete actions where allowed, a Cytoscape-based graph view, Auto Ingest, Auto Lint, release/update scripts, and optional systemd service installation.
 
-Some interfaces are still intentionally active areas of development: project skills, graph output shape, automation templates, and setup ergonomics may change between releases.
+Some interfaces are still intentionally active areas of development: project skills, graph output shape, and setup ergonomics may change between releases.
 
 ## 2. Mental Model
 
@@ -118,7 +117,7 @@ The repository includes local instructions in `.agents/skills/`. These tell the 
 
 `setup.sh` attempts to install or upgrade graphify unless you pass `--skip-graphify`. Agent CLIs are detected, but not installed by default. You can request a best-effort install with `--install-cli=codex,claude,agy`.
 
-For automation fetch jobs, the optional fetch tools are opt-in best-effort installs: `--with-agent-browser` (web pages, Confluence via browser), `--with-gh` (GitHub, then run `gh auth login`), `--with-yt-dlp` (YouTube). Install the whole set at once with `./setup.sh --with-automation-tools`. When a tool is missing, the Automations tool panel shows the matching install hint.
+For fetching external sources (e.g. web pages via `browser-capture`), these optional tools are opt-in best-effort installs: `--with-agent-browser` (web pages, Confluence via browser), `--with-gh` (GitHub, then run `gh auth login`), `--with-yt-dlp` (YouTube). Install the whole set at once with `./setup.sh --with-automation-tools`.
 
 ## 4. Install CLIO
 
@@ -657,33 +656,7 @@ Important settings:
 
 Auto Ingest uses the same ingest-loop driver as manual ingest. It does not bypass the project skills.
 
-## 14. Automations
-
-The **Automations** tab creates scheduled jobs that run one or more coding agent CLIs in isolated workspaces.
-
-Each job stores its run record under:
-
-```text
-progress/automation/artifacts/<job>/<run>/
-```
-
-This path is only for scheduled automation artifacts. External findings saved
-from an interactive Chat session are stored separately under `raw/chat/`.
-Older installs may still contain legacy `raw/automation/` records; new runs use
-`progress/automation/artifacts/`.
-
-Use templates for YouTube summaries, GitHub/Gerrit patch review, email sync, or a custom prompt. External writes are draft-only by default: jobs may create review or email drafts, but they should not post comments, send mail, or mutate remote systems automatically.
-
-When multiple CLIs are selected, CLIO runs them concurrently and stores each agent's plan/result separately under `cli/<agent>/`.
-
-The **Build from prompt** panel is for non-developer setup. Describe the recurring task in natural language, choose preferred CLIs, and CLIO proposes a draft job with required tools, missing requirements, verification steps, and risk notes. Optional tools such as `agent-browser` are detected first; CLIO asks before running an allowlisted install command. You can also install the fetch toolset during setup with:
-
-```bash
-./setup.sh --with-automation-tools   # agent-browser + gh + yt-dlp
-# or individually: --with-agent-browser  --with-gh  --with-yt-dlp
-```
-
-## 15. Telegram Bot
+## 14. Telegram Bot
 
 CLIO can expose the **Chat → /query** flow through a Telegram bot. Use it to ask
 the wiki questions from a phone or a shared group without opening the web UI.
@@ -767,7 +740,7 @@ Plain-text messages in approved chats are treated as `/query <text>`.
 - Open **Settings → Telegram → Status** to see the request, dispatched,
   rejected, and error counters update in real time.
 
-## 16. Configuration Files
+## 15. Configuration Files
 
 Default settings live in:
 
@@ -799,11 +772,10 @@ Useful defaults:
 | `autoLint.enabled` | `false` | Auto Lint starts disabled. |
 | `autoLint.counter.threshold` | `10` | Ingest count that triggers a lint recommendation. |
 | `autoLint.cron.enabled` | `false` | Scheduled lint runs start disabled. |
-| `automation.enabled` | `false` | Automation scheduler starts disabled. |
 
 Prefer changing settings through the UI unless you know exactly what you are editing.
 
-## 17. QA Checklist
+## 16. QA Checklist
 
 Use this after installation, before a release, or after a large change.
 
@@ -847,7 +819,6 @@ Check:
 - a message can be sent from Chat
 - Graph tab shows empty state or current graph state
 - Build button is visible
-- Automations tab opens and shows scheduler status
 - Settings exposes Auto Ingest and Auto Lint panels
 
 Stop:

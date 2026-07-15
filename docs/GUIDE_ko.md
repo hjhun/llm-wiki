@@ -15,7 +15,6 @@ CLIO는 로컬 우선(local-first) LLM Wiki 워크벤치입니다.
 | Chat | `/ingest-loop`, `/query`, `/lint` 같은 에이전트 작업 실행 |
 | Explorer | 원본 파일, 위키 페이지, 로그, 리포트 탐색 |
 | Graph | 지식 그래프 빌드 및 업데이트 |
-| Automations | 여러 CLI로 주기 작업을 실행하고 `progress/automation/artifacts/`에서 draft-only 기록 확인 |
 | Settings | 기본 에이전트 CLI, 서버, 자동 인제스트, 자동 Lint, 언어/테마, 그래프, 비밀번호 설정 |
 
 핵심 흐름은 다음과 같습니다.
@@ -33,7 +32,7 @@ CLIO는 단순히 문서에 채팅하는 도구가 아닙니다. 중요한 결�
 
 ### 현재 구현 상태 요약
 
-현재 CLIO 앱에는 첫 실행 설정과 로그인, 한국어/영어 전환, 네이티브 `clio` CLI, `raw/chat/` 외부 캡처를 지원하는 Chat 세션, Explorer 파일 탐색과 허용된 위치의 업로드/이름 변경/삭제 동작, Cytoscape 기반 Graph 보기, 자동 인제스트, 자동 Lint, draft-only 예약 Automations, 릴리스/업데이트 스크립트, 선택적 systemd 서비스 설치가 구현되어 있습니다.
+현재 CLIO 앱에는 첫 실행 설정과 로그인, 한국어/영어 전환, 네이티브 `clio` CLI, `raw/chat/` 외부 캡처를 지원하는 Chat 세션, Explorer 파일 탐색과 허용된 위치의 업로드/이름 변경/삭제 동작, Cytoscape 기반 Graph 보기, 자동 인제스트, 자동 Lint, 릴리스/업데이트 스크립트, 선택적 systemd 서비스 설치가 구현되어 있습니다.
 
 프로젝트 스킬, 그래프 출력 형식, 자동화 템플릿, 설치 편의성은 계속 발전 중인 인터페이스입니다. 릴리스 사이에서 세부 동작이 바뀔 수 있습니다.
 
@@ -115,7 +114,7 @@ CLIO는 단순히 문서에 채팅하는 도구가 아닙니다. 중요한 결�
 
 `setup.sh`는 기본적으로 graphify 설치 또는 업그레이드를 시도합니다. 원하지 않으면 `--skip-graphify`를 사용하세요. 코딩 에이전트 CLI는 자동 감지하지만 기본적으로 자동 설치하지 않습니다. 필요하면 `--install-cli=codex,claude,agy`처럼 명시적으로 요청할 수 있습니다.
 
-자동화 fetch 작업에 필요한 선택 도구는 opt-in best-effort 설치입니다: `--with-agent-browser`(웹 페이지·브라우저 경유 Confluence), `--with-gh`(GitHub, 이후 `gh auth login` 필요), `--with-yt-dlp`(YouTube). 한 번에 모두 설치하려면 `./setup.sh --with-automation-tools`를 사용하세요. 도구가 없으면 Automations 도구 패널에 해당 설치 안내가 표시됩니다.
+외부 소스 fetch(예: `browser-capture`를 통한 웹 페이지)에 필요한 선택 도구는 opt-in best-effort 설치입니다: `--with-agent-browser`(웹 페이지·브라우저 경유 Confluence), `--with-gh`(GitHub, 이후 `gh auth login` 필요), `--with-yt-dlp`(YouTube). 한 번에 모두 설치하려면 `./setup.sh --with-automation-tools`를 사용하세요.
 
 ## 4. 설치하기
 
@@ -653,73 +652,7 @@ npm run wiki:mini-lint:check        # 중복/끊긴 링크/orphan이 있으면 e
 
 자동 인제스트도 수동 ingest-loop와 같은 드라이버를 사용합니다. 프로젝트 스킬을 우회하지 않습니다.
 
-## 14. Automations
-
-**Automations** 탭에서는 하나 이상의 코딩 에이전트 CLI를 독립 workspace에서 실행하는 주기 작업을 만들 수 있습니다.
-
-각 실행 기록은 다음 위치에 저장됩니다.
-
-```text
-progress/automation/artifacts/<job>/<run>/
-```
-
-이 경로는 예약/자동화 실행 산출물 전용입니다. 대화형 Chat에서 저장한 외부 조사 캡처는 `raw/chat/` 아래에 별도로 저장됩니다. 오래된 설치본에는 legacy `raw/automation/` 기록이 남아 있을 수 있지만, 새 실행은 `progress/automation/artifacts/`를 사용합니다.
-
-YouTube 요약, GitHub/Gerrit 패치 리뷰, 이메일 sync, custom prompt 템플릿을 사용할 수 있습니다. 외부 쓰기는 기본적으로 draft-only입니다. 즉 리뷰 댓글이나 이메일 초안은 만들 수 있지만, 자동으로 댓글을 업로드하거나 메일을 보내거나 외부 시스템 상태를 바꾸지 않습니다.
-
-여러 CLI를 선택하면 CLIO가 병렬로 실행하고 각 에이전트의 plan/result를 `cli/<agent>/` 아래에 따로 저장합니다.
-
-**Build from prompt** 패널은 개발자가 아닌 사용자를 위한 설정 흐름입니다. 원하는 주기 작업을 자연어로 적고 선호 CLI를 고르면 CLIO가 job 초안, 필요한 도구, 누락 요구사항, 검증 단계, 위험 메모를 제안합니다. `agent-browser` 같은 선택 도구는 먼저 감지하고, allowlist된 설치 명령을 실행하기 전에 사용자에게 확인을 받습니다. 설치 시점에 fetch 도구 세트를 미리 준비하려면 다음 옵션을 사용할 수 있습니다.
-
-```bash
-./setup.sh --with-automation-tools   # agent-browser + gh + yt-dlp
-# 개별 설치: --with-agent-browser  --with-gh  --with-yt-dlp
-```
-
-### 예약 신뢰성 — catch-up + 외부 워치독
-
-예약 스케줄러는 Next.js 서버 프로세스 안의 in-memory 타이머입니다. 무장한 시점부터
-발화 시점까지 그 단일 프로세스가 끊김 없이 살아 있어야만 발화합니다. WSL/데스크톱처럼
-프로세스가 항상 떠 있지 않은 환경(터미널 종료, WSL suspend, 크래시, 재시작)에서는
-예정 시각에 프로세스가 내려가 있으면 그 실행이 유실될 수 있습니다.
-
-이를 두 단계로 보완합니다.
-
-1. **Catch-up(놓친 실행 복구)**: 서버가 (재)시작될 때마다 boot 단계에서 각 job의
-   마지막으로 저장된 `nextRunAt`을 읽어, 프로세스가 죽어 있던 동안 지나간 예정 시각이
-   있으면 그 실행을 **정확히 한 번** 재생한 뒤 다음 회차를 무장합니다. 이미 실행한
-   슬롯은 `lastFiredSlot`로 중복 방지합니다. boot 시 `[automation] armed N job(s);
-   next fire …` 로그로 무장 상태를 확인할 수 있습니다.
-
-2. **외부 워치독(cron 트리거)**: 프로세스가 죽으면 HTTP 틱만으로는 되살릴 수 없으므로,
-   호스트의 cron이 1분마다 워치독 스크립트를 실행하도록 합니다. 스크립트는 서버가
-   내려가 있으면 다시 띄우고(→ boot가 catch-up 수행), 떠 있으면
-   `POST /api/automation/tick`을 호출해 무장 상태를 재조정합니다. 인증은 기존
-   `auth.cliToken`을 Bearer로 재사용합니다.
-
-```bash
-# 1분마다 자동 실행되도록 crontab에 등록(opt-in)
-./scripts/clio-automation-cron.sh install
-
-# 한 번만 직접 실행(서버 보장 + 틱) / 상태 확인 / 제거
-./scripts/clio-automation-cron.sh        # run
-./scripts/clio-automation-cron.sh status
-./scripts/clio-automation-cron.sh uninstall
-```
-
-서버가 항상 떠 있는 배포(systemd 서비스 등)라면 catch-up만으로 충분하며, 워치독은
-선택입니다. 그렇지 않은 환경에서는 워치독 등록을 권장합니다.
-
-### 타임존
-
-각 예약은 `schedule.timezone`(IANA 존, 예: `Asia/Seoul`)을 기준으로 발화합니다.
-스케줄 빌더에서 시각을 고르면 **브라우저의 타임존**이 자동으로 기록되므로, 여기서
-고른 벽시계 시각과 서버가 실제로 발화하는 순간이 서버 자신의 타임존과 무관하게
-일치합니다(미리보기의 "다음:"도 같은 존으로 계산되어 실제 발화와 일치). 존이
-비어 있거나 잘못된 값이면 호스트 로컬 시간으로 동작합니다. 분/시간 단위 주기 cron은
-타임존과 무관하게 동일한 순간에 발화합니다.
-
-## 15. 텔레그램 봇
+## 14. 텔레그램 봇
 
 CLIO의 **Chat → /query** 흐름을 텔레그램 봇으로 노출할 수 있습니다. 휴대폰이나
 공유 그룹에서 웹 UI를 열지 않고도 위키에 질문할 수 있게 됩니다.
@@ -800,7 +733,7 @@ CLIO의 **Chat → /query** 흐름을 텔레그램 봇으로 노출할 수 있�
 - **Settings → Telegram → 상태** 패널에서 수신 요청 / 처리 완료 / 거절 / 오류
   카운터가 실시간 갱신되는지 확인합니다.
 
-## 16. 설정 파일
+## 15. 설정 파일
 
 기본 설정:
 
@@ -832,11 +765,10 @@ config/local.json
 | `autoLint.enabled` | `false` | 자동 Lint 기본 비활성화 |
 | `autoLint.counter.threshold` | `10` | lint 권장을 표시하는 ingest 로그 entry 수 |
 | `autoLint.cron.enabled` | `false` | 예약 lint 실행 기본 비활성화 |
-| `automation.enabled` | `false` | 자동화 스케줄러 기본 비활성화 |
 
 가능하면 UI에서 설정을 바꾸고, 수동 편집은 필요한 경우에만 하세요.
 
-## 17. QA 체크리스트
+## 16. QA 체크리스트
 
 설치 후, 릴리스 전, 큰 변경 후에 사용하세요.
 
@@ -880,7 +812,6 @@ http://127.0.0.1:9091
 - Chat에서 메시지 전송 가능
 - Graph 탭이 empty state 또는 현재 graph state 표시
 - Build 버튼이 보임
-- Automations 탭이 열리고 scheduler 상태가 보임
 - Settings에서 자동 인제스트와 자동 Lint 패널이 보임
 
 종료:
