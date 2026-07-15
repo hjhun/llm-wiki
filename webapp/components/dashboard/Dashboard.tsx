@@ -66,17 +66,6 @@ type AutonomousStatus = {
     suggested: boolean;
     counter: { value: number; threshold: number };
   };
-  automation: {
-    enabled: boolean;
-    jobs: Array<{
-      id: string;
-      name: string;
-      enabled: boolean;
-      status: JobRunStatus;
-      nextRunAt: string | null;
-      lastRunAt: string | null;
-    }>;
-  };
 };
 
 const GRAPH_TONE: Record<DashboardData["graph"]["status"], StatusTone> = {
@@ -285,18 +274,7 @@ export default function Dashboard() {
               </Panel>
             </div>
 
-            <Panel
-              eyebrow="autonomous"
-              title={td.autonomous}
-              actions={
-                <Link
-                  href="/automations"
-                  className="text-xs text-accent hover:underline"
-                >
-                  {td.openAutomations}
-                </Link>
-              }
-            >
+            <Panel eyebrow="autonomous" title={td.autonomous}>
               <div className="flex flex-col gap-2">
                 <JobRow
                   label={td.autoIngest}
@@ -330,34 +308,6 @@ export default function Dashboard() {
                   lastRunAt={data.autonomous.autoLint.lastRunAt}
                   td={td}
                 />
-                {data.autonomous.automation.jobs.length === 0 ? (
-                  <div className="text-xs text-ink-faint">
-                    {td.automationNone}
-                  </div>
-                ) : (
-                  data.autonomous.automation.jobs.map((job) => (
-                    <JobRow
-                      key={job.id}
-                      label={job.name}
-                      enabled={job.enabled && data.autonomous.automation.enabled}
-                      status={
-                        data.autonomous.automation.enabled
-                          ? job.status
-                          : "disabled"
-                      }
-                      detail={
-                        !data.autonomous.automation.enabled
-                          ? td.automationOff
-                          : job.enabled
-                            ? null
-                            : td.disabled
-                      }
-                      nextRunAt={job.nextRunAt}
-                      lastRunAt={job.lastRunAt}
-                      td={td}
-                    />
-                  ))
-                )}
               </div>
             </Panel>
 

@@ -37,13 +37,13 @@ import type {
 } from "./types";
 
 const CLI_NAMES: CliName[] = ["codex", "claude", "gemini", "cline", "agy"];
-const DEFAULT_TABS = ["chat", "explorer", "graph", "automations", "settings"] as const;
+const DEFAULT_TABS = ["chat", "explorer", "graph", "settings"] as const;
 const SESSION_TTL_24H_SEC = 60 * 60 * 24;
 
 type SettingsTabId =
   | "agent"
   | "runtime"
-  | "automation"
+  | "autonomous"
   | "telegram"
   | "access"
   | "updates"
@@ -180,9 +180,9 @@ export default function Settings() {
           icon: Gauge,
         },
         {
-          id: "automation",
-          label: t.settings.settingsTabAutomation,
-          description: t.settings.settingsTabAutomationDesc,
+          id: "autonomous",
+          label: t.settings.settingsTabAutonomous,
+          description: t.settings.settingsTabAutonomousDesc,
           icon: Zap,
         },
         {
@@ -784,7 +784,7 @@ export default function Settings() {
                 </Panel>
               ) : null}
 
-              {activeTab === "automation" ? (
+              {activeTab === "autonomous" ? (
                 <>
                   <AutoIngestPanel
                     draft={draft.autoIngest}

@@ -296,18 +296,6 @@ export const ConfigSchema = z.object({
         query: z.number().int().min(1000).nullable().default(null),
         lint: z.number().int().min(1000).nullable().default(30 * 60 * 1000),
         graph: z.number().int().min(1000).nullable().default(30 * 60 * 1000),
-        /**
-         * Per-agent timeout for a single automation job run. Automation jobs
-         * run host CLIs in isolated workspaces, often fetching external data
-         * (web/GitHub/YouTube); a stalled network fetch would otherwise hang
-         * the job forever and pin its inFlight slot. 30 minutes mirrors lint.
-         */
-        automation: z
-          .number()
-          .int()
-          .min(1000)
-          .nullable()
-          .default(30 * 60 * 1000),
       })
       .default({
         chat: null,
@@ -317,7 +305,6 @@ export const ConfigSchema = z.object({
         query: null,
         lint: 30 * 60 * 1000,
         graph: 30 * 60 * 1000,
-        automation: 30 * 60 * 1000,
       }),
     /**
      * Settings that apply to the /ingest-loop driver. The loop repeatedly
@@ -437,7 +424,7 @@ export const ConfigSchema = z.object({
     theme: z.enum(["default", "light", "dark"]).default("default"),
     appSubtitle: z.string().max(80).default(""),
     defaultTab: z
-      .enum(["dashboard", "chat", "explorer", "graph", "automations", "settings"])
+      .enum(["dashboard", "chat", "explorer", "graph", "settings"])
       .default("chat"),
     agentEdgePanelEnabled: z.boolean().default(true),
   }),
@@ -761,69 +748,6 @@ export const ConfigSchema = z.object({
       replyMaxChars: 3500,
       allowExternalLookup: false,
     }),
-  automation: z
-    .object({
-      enabled: z.boolean().default(false),
-      maxConcurrentJobs: z.number().int().min(1).max(8).default(2),
-      defaultWorkspaceBasePath: z.string().default(""),
-      jobs: z
-        .array(
-          z.object({
-            id: z.string().min(1),
-            name: z.string().min(1).max(120),
-            enabled: z.boolean().default(false),
-            template: z
-              .enum([
-                "youtube-summary",
-                "github-gerrit-review",
-                "email-sync",
-                "custom",
-              ])
-              .default("custom"),
-            prompt: z.string().max(20_000).default(""),
-            schedule: z
-              .object({
-                mode: z.enum(["preset", "cron"]).default("preset"),
-                preset: z
-                  .enum(["hourly", "daily", "weekly", "monthly"])
-                  .default("daily"),
-                cron: z.string().default("0 9 * * *"),
-                time: z
-                  .object({
-                    hour: z.number().int().min(0).max(23).default(9),
-                    minute: z.number().int().min(0).max(59).default(0),
-                  })
-                  .default({ hour: 9, minute: 0 }),
-                dayOfWeek: z.number().int().min(0).max(6).default(1),
-                dayOfMonth: z.number().int().min(1).max(28).default(1),
-                timezone: z.string().default(""),
-              })
-              .default({
-                mode: "preset",
-                preset: "daily",
-                cron: "0 9 * * *",
-                time: { hour: 9, minute: 0 },
-                dayOfWeek: 1,
-                dayOfMonth: 1,
-                timezone: "",
-              }),
-            selectedAgents: z
-              .array(z.enum(["codex", "claude", "gemini", "cline", "agy"]))
-              .min(1)
-              .default(["codex"]),
-            workspaceBasePath: z.string().default(""),
-            externalWritePolicy: z.enum(["draft-only"]).default("draft-only"),
-            autoIngestAfterRun: z.boolean().default(false),
-          }),
-        )
-        .default([]),
-    })
-    .default({
-      enabled: false,
-      maxConcurrentJobs: 2,
-      defaultWorkspaceBasePath: "",
-      jobs: [],
-    }),
 });
 
 export type Config = z.infer<typeof ConfigSchema>;
@@ -840,7 +764,6 @@ const DEFAULT_CONFIG: Config = ConfigSchema.parse({
   auth: {},
   publicQuery: {},
   telegram: {},
-  automation: {},
 });
 
 function normalizeLegacyGraphExtraction(value: unknown): unknown {

@@ -6,7 +6,6 @@ import { lintLockExists } from "./lint-lock";
 import { loadConfig } from "./config";
 import { readRuntimeState as readAutoIngestRuntime } from "./auto-ingest/runtime-state";
 import { readRuntimeState as readAutoLintRuntime } from "./auto-lint/runtime-state";
-import { readAutomationRuntime } from "./automation/runtime-state";
 
 export type LogEntry = {
   timestamp: string;
@@ -61,19 +60,6 @@ export type AutonomousStatus = {
     suggested: boolean;
     counter: { value: number; threshold: number };
   };
-  automation: {
-    enabled: boolean;
-    jobs: AutomationJobStatus[];
-  };
-};
-
-export type AutomationJobStatus = {
-  id: string;
-  name: string;
-  enabled: boolean;
-  status: JobRunStatus;
-  nextRunAt: string | null;
-  lastRunAt: string | null;
 };
 
 export type LintCounts = {
@@ -203,25 +189,11 @@ async function latestLintReport(): Promise<string | null> {
 
 /** 자율 작업(auto-ingest / auto-lint / automation)의 런타임 상태를 모은다. */
 async function collectAutonomous(): Promise<AutonomousStatus> {
-  const [cfg, ingest, lint, automation] = await Promise.all([
+  const [cfg, ingest, lint] = await Promise.all([
     loadConfig().catch(() => null),
     readAutoIngestRuntime().catch(() => null),
     readAutoLintRuntime().catch(() => null),
-    readAutomationRuntime().catch(() => null),
   ]);
-
-  const automationCfg = cfg?.automation;
-  const jobs: AutomationJobStatus[] = (automationCfg?.jobs ?? []).map((job) => {
-    const rt = automation?.jobs?.[job.id];
-    return {
-      id: job.id,
-      name: job.name,
-      enabled: job.enabled,
-      status: (rt?.status ?? (job.enabled ? "idle" : "disabled")) as JobRunStatus,
-      nextRunAt: rt?.nextRunAt ?? null,
-      lastRunAt: rt?.lastRunAt ?? null,
-    };
-  });
 
   return {
     autoIngest: {
@@ -244,10 +216,6 @@ async function collectAutonomous(): Promise<AutonomousStatus> {
         value: lint?.counter.value ?? 0,
         threshold: lint?.counter.threshold ?? 10,
       },
-    },
-    automation: {
-      enabled: automationCfg?.enabled ?? false,
-      jobs,
     },
   };
 }

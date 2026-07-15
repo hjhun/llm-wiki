@@ -102,7 +102,7 @@ const Body = z.object({
       language: z.enum(SUPPORTED_LANGUAGES),
       theme: z.enum(["default", "light", "dark"]),
       appSubtitle: z.string().max(80).optional(),
-      defaultTab: z.enum(["chat", "explorer", "graph", "automations", "settings"]),
+      defaultTab: z.enum(["chat", "explorer", "graph", "settings"]),
       agentEdgePanelEnabled: z.boolean(),
     })
     .optional(),

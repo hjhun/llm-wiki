@@ -134,7 +134,7 @@ export type SettingsConfig = {
     language: Language;
     theme: "default" | "light" | "dark";
     appSubtitle: string;
-    defaultTab: "chat" | "explorer" | "graph" | "automations" | "settings";
+    defaultTab: "chat" | "explorer" | "graph" | "settings";
     agentEdgePanelEnabled: boolean;
   };
   auth: {

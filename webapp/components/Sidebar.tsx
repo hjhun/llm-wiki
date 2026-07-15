@@ -5,7 +5,6 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   ChevronLeft,
   ChevronRight,
-  Clock3,
   FolderTree,
   Languages,
   LayoutDashboard,
@@ -24,7 +23,7 @@ import type { LucideIcon } from "lucide-react";
 
 type Tab = {
   href: string;
-  key: "dashboard" | "chat" | "explorer" | "automations" | "settings";
+  key: "dashboard" | "chat" | "explorer" | "settings";
   icon: LucideIcon;
 };
 
@@ -32,7 +31,6 @@ const TABS: Tab[] = [
   { href: "/dashboard", key: "dashboard", icon: LayoutDashboard },
   { href: "/chat", key: "chat", icon: MessageSquareText },
   { href: "/explorer", key: "explorer", icon: FolderTree },
-  { href: "/automations", key: "automations", icon: Clock3 },
   { href: "/settings", key: "settings", icon: Settings },
 ];
 

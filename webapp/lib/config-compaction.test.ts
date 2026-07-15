@@ -14,7 +14,6 @@ const MINIMAL_VALID = {
   auth: {},
   publicQuery: {},
   telegram: {},
-  automation: {},
 };
 
 describe("cli.ingestLoop.compaction config", () => {

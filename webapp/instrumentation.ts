@@ -13,7 +13,6 @@ export async function register(): Promise<void> {
     const mod = await import("./instrumentation-node");
     await mod.bootAutoIngest();
     await mod.bootAutoLint();
-    await mod.bootAutomation();
     await mod.bootTelegramPolling();
   }
 }

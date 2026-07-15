@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
-  Clock3,
   FileText,
   FolderTree,
   LayoutDashboard,
@@ -111,11 +110,10 @@ export default function CommandPalette() {
       chat: MessageSquareText,
       explorer: FolderTree,
       graph: Network,
-      automations: Clock3,
       settings: Settings,
     };
     const nav: Item[] = (
-      ["dashboard", "chat", "explorer", "graph", "automations", "settings"] as const
+      ["dashboard", "chat", "explorer", "graph", "settings"] as const
     ).map((key) => ({
       id: `nav:${key}`,
       label: tabs[key].label,
