@@ -1,7 +1,7 @@
-# AGENTS.md / CLAUDE.md - LLM Wiki Operating Rules
+# AGENTS.md / CLAUDE.md / GEMINI.md - LLM Wiki Operating Rules
 
-> This file is synchronized with its counterpart (`AGENTS.md` or `CLAUDE.md`) so Codex, Claude, agy, cline, and other coding agents follow the same rules.
-> **The two files must always stay in sync.** If one is updated, update the other as well.
+> This file is synchronized with its counterparts (`AGENTS.md`, `CLAUDE.md`, `GEMINI.md`) so Codex, Claude, agy, gemini, cline, and other coding agents follow the same rules.
+> **All three files must always stay byte-identical.** If one is updated, update the others as well.
 
 ---
 
@@ -307,12 +307,12 @@ This repository is operated through one of the coding agent CLIs installed on th
 ## 12. Override Order
 
 1. Direct instructions from the user in the current session.
-2. This `AGENTS.md` / `CLAUDE.md` file.
+2. This `AGENTS.md` / `CLAUDE.md` / `GEMINI.md` file.
 3. Each skill's `SKILL.md` body, within that skill's scope.
 4. External/global rules such as `~/.codex` or `~/.claude/CLAUDE.md`.
 5. System defaults.
 
-If this file is updated, synchronize the counterpart file as well.
+If this file is updated, synchronize the counterpart files (`AGENTS.md`, `CLAUDE.md`, `GEMINI.md`) as well.
 
 ---
 

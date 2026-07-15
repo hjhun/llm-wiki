@@ -40,6 +40,7 @@ export type AutomationToolInventory = {
 export type AutomationAgentInvocation =
   | "codex-exec"
   | "claude-print"
+  | "gemini-prompt"
   | "agy-prompt"
   | "cline-y"
   | "unknown";
@@ -202,6 +203,7 @@ async function readAgentHelp(
   const argsByCli: Record<CliName, string[][]> = {
     codex: [["-h"], ["exec", "-h"]],
     claude: [["-h"], ["-p", "-h"]],
+    gemini: [["-h"]],
     agy: [["-h"]],
     cline: [["-h"]],
   };
@@ -286,6 +288,10 @@ function detectInvocation(
     case "claude":
       return hasAny(helpText, ['-p "', "--print", "print response"])
         ? "claude-print"
+        : "unknown";
+    case "gemini":
+      return hasAny(helpText, ["--prompt", "-p, --prompt", "yolo"])
+        ? "gemini-prompt"
         : "unknown";
     case "agy":
       return hasAny(helpText, ["--prompt", "agy --prompt"]) ? "agy-prompt" : "unknown";

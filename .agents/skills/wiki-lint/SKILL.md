@@ -88,6 +88,7 @@ Classify each item as "auto-fixable" or "manual review needed".
   - `concept` -> `Concepts`
   - `code` or `architecture` -> `Code`
   - `source` -> `Sources`
+  - `map` -> `Maps`
   - `answer` -> `Answers`
   - `comparison` or `analysis` -> `Comparisons`
   - `lint` -> `Lint Reports`

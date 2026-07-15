@@ -19,7 +19,7 @@ import ScheduleBuilder from "./ScheduleBuilder";
 import { validateFriendly, cronToFriendly } from "@/lib/automation/schedule-format";
 import { useLanguage } from "../i18n";
 
-type CliName = "codex" | "claude" | "agy" | "cline";
+type CliName = "codex" | "claude" | "gemini" | "agy" | "cline";
 type Template = "youtube-summary" | "github-gerrit-review" | "email-sync" | "custom";
 
 type AutomationJob = {
@@ -132,7 +132,7 @@ type AutomationResult = {
   agents: AutomationAgentResult[];
 };
 
-const CLI_NAMES: CliName[] = ["codex", "claude", "agy", "cline"];
+const CLI_NAMES: CliName[] = ["codex", "claude", "gemini", "cline", "agy"];
 
 // Builder dry-run (verify) result is disk-backed but the React state holding it
 // is ephemeral; persist the last verification so it survives tab navigation and

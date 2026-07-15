@@ -36,7 +36,7 @@ import { startProgressWatcher } from "@/lib/chat/progress-watcher";
 const Body = z.object({
   sessionPath: z.string().min(1).optional(),
   message: z.string().min(1).max(20000),
-  agent: z.enum(["codex", "claude", "agy", "cline"]).nullable().optional(),
+  agent: z.enum(["codex", "claude", "gemini", "cline", "agy"]).nullable().optional(),
   /**
    * "full" re-injects the entire session history into the prompt. The default
    * "slim" mode injects the full session while it fits under

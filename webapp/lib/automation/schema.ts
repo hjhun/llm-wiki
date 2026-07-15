@@ -23,7 +23,7 @@ export const AutomationJobBody = z.object({
     timezone: z.string().max(80),
   }),
   selectedAgents: z
-    .array(z.enum(["codex", "claude", "agy", "cline"]))
+    .array(z.enum(["codex", "claude", "gemini", "cline", "agy"]))
     .min(1),
   workspaceBasePath: z.string().max(2000),
   externalWritePolicy: z.enum(["draft-only"]),

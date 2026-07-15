@@ -1,6 +1,6 @@
 import type { Language } from "@/lib/i18n";
 
-export type CliName = "codex" | "claude" | "agy" | "cline";
+export type CliName = "codex" | "claude" | "gemini" | "agy" | "cline";
 
 export type CliInfo = {
   name: CliName;

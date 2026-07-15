@@ -36,7 +36,7 @@ import type {
   UpdateResult,
 } from "./types";
 
-const CLI_NAMES: CliName[] = ["codex", "claude", "agy", "cline"];
+const CLI_NAMES: CliName[] = ["codex", "claude", "gemini", "cline", "agy"];
 const DEFAULT_TABS = ["chat", "explorer", "graph", "automations", "settings"] as const;
 const SESSION_TTL_24H_SEC = 60 * 60 * 24;
 

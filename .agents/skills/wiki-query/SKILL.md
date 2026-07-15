@@ -59,9 +59,12 @@ Answer the user's question in this order.
 ### Step 1 - Narrow Candidate Pages
 1. Read all of `wiki/index.md`.
 2. Select candidate pages based on question keywords/entities/concepts.
-   - For code questions, include `wiki/code/**` pages from the `Code` category,
-     especially `overview.md`, `locations.md`, `diagrams.md`, module/API pages,
-     `architecture.md`, `testing.md`, and `debug-notes.md`.
+   - For code questions, the primary compiled code layer is the compact code
+     source cards under `wiki/sources/<project>/**` — always include them.
+     Also include any optional `wiki/code/<project>.md` analysis pages from the
+     `Code` category when they exist, plus graph context. Do not assume a
+     file-by-file `wiki/code/` tree exists; ingest only guarantees the source
+     cards.
    - Treat words like "함수", "클래스", "라인", "파일", "API", "route",
      "dependency", "의존성", "구조", "call flow", "stack trace", and
      "어디" as code-candidate signals.
@@ -89,10 +92,11 @@ Answer the user's question in this order.
    - For Code Facts graph nodes, prefer nodes and edges that carry
      `raw_path`, `source_file`, and `source_location`. Use those as navigation
      to source summaries or targeted raw spans before making final claims.
-4. For code questions, prefer `wiki/code/<project>/locations.md` and module/API
-   pages before opening raw files. If a requested symbol is not indexed, use
-   `rg` against the relevant logical `raw/...` tree and read only the matching
-   spans.
+4. For code questions, read the code source cards under
+   `wiki/sources/<project>/**` and any optional `wiki/code/<project>.md`
+   analysis page first, using graph context for locations, before opening raw
+   files. If a requested symbol is not indexed, use `rg` against the relevant
+   logical `raw/...` tree and read only the matching spans.
 5. If information is insufficient, read original files in `raw/`. **`raw/` is read-only.**
 
 ### Step 3 - Write the Answer
@@ -116,9 +120,10 @@ Answer the user's question in this order.
    scrolls/highlights the starting line, and keep the full span in the Location
    column.
 4. If the user asks for dependency or structure visualization and a relevant
-   `wiki/code/<project>/diagrams.md` exists, cite and link it. If no diagram
-   exists but enough Code Wiki evidence exists, include a small Mermaid block in
-   the answer and recommend re-running `/ingest raw/<project>` to persist it.
+   `wiki/code/<project>.md` analysis page with a diagram exists, cite and link
+   it. If none exists but enough Code Wiki evidence exists, include a small
+   Mermaid block in the answer and recommend re-running `/ingest raw/<project>`
+   to persist it.
 5. If a source is not in the wiki, explicitly say "source unknown" or withhold the answer.
 6. Always append these two lines at the end:
    - **Cited pages**: `[[wiki/sources/articles/foo]], [[wiki/concepts/bar]]` ...

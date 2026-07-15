@@ -16,12 +16,13 @@ import {
   PROJECT_ROOT,
 } from "./paths";
 
-export type CliName = "codex" | "claude" | "agy" | "cline";
+export type CliName = "codex" | "claude" | "gemini" | "agy" | "cline";
 export const CLI_NAMES: readonly CliName[] = [
   "codex",
   "claude",
-  "agy",
+  "gemini",
   "cline",
+  "agy",
 ] as const;
 
 export type CliInfo = {
@@ -54,6 +55,10 @@ const RESUME_SUPPORT: Record<
   // structured output to capture that id from, so it stays on the safe
   // fresh-process fallback until a capture path exists.
   agy: { assignsId: false, capturesId: false },
+  // gemini can assign a session id (--session-id <uuid>) but its --resume flag
+  // only takes "latest"/index, not our uuid, so there is no reliable
+  // resume-by-id path. Stay on the safe stateless fallback like agy.
+  gemini: { assignsId: false, capturesId: false },
   // cline prints a task/session id on a fresh non-interactive run and resumes
   // that task with `--id <task id>`, so it captures the id from stdout.
   cline: { assignsId: false, capturesId: true },
@@ -389,6 +394,16 @@ export function buildArgs(
             "--add-dir",
             projectRoot,
           ];
+    case "gemini":
+      // Headless mode: `-p/--prompt`. cwd is already the project root, so the
+      // workspace is implicit. `--skip-trust` avoids the interactive
+      // "trust this folder?" prompt that would otherwise hang a headless run.
+      // Non-safe runs add `--yolo` to auto-accept file writes/tools; safe
+      // (read-only query) runs keep the default approval mode. No structured
+      // output parser is wired, so stdout is treated as raw assistant text.
+      return safeMode
+        ? ["--prompt", prompt, ...sessionArgs, "--skip-trust"]
+        : ["--prompt", prompt, ...sessionArgs, "--yolo", "--skip-trust"];
     case "cline": {
       // Cline CLI 0.6 uses a positional prompt. `-p` means --plan, so never use
       // it here or ingest-loop starts in Plan mode and cannot mutate the wiki.
@@ -450,6 +465,7 @@ type SpawnPlan = {
 const AGENT_CONFIG_HOME_DIRS = [
   ".codex",
   ".claude",
+  ".gemini",
   ".cline",
   ".agy",
   ".antigravity",
@@ -459,6 +475,7 @@ const AGENT_CONFIG_HOME_DIRS = [
 const XDG_AGENT_SUBDIRS = [
   "codex",
   "claude",
+  "gemini",
   "cline",
   "agy",
   "anthropic",

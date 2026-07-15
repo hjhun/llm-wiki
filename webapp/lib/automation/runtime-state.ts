@@ -10,7 +10,7 @@ import {
 const STATE_REL = "progress/automation/state.json";
 
 const AgentResultSchema = z.object({
-  agent: z.enum(["codex", "claude", "agy", "cline"]),
+  agent: z.enum(["codex", "claude", "gemini", "cline", "agy"]),
   status: z.enum(["success", "error"]),
   workspacePath: z.string(),
   artifactPath: z.string(),

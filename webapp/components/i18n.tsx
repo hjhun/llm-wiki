@@ -217,7 +217,7 @@ export const TEXT = {
       guideFreeQuestion: "자유 질문 또는 슬래시 커맨드:",
       guideSessions: "세션 md는 sessions/<date>/에 자동 저장됩니다.",
       guideAgent:
-        "에이전트는 호스트 PC의 codex / claude / agy / cline 중 Settings에서 지정한 것을 사용합니다.",
+        "에이전트는 호스트 PC의 codex / claude / gemini / cline / agy 중 Settings에서 지정한 것을 사용합니다.",
       processing: "처리 중...",
       progressTitle: "진행 상황",
       progressWaiting: "진행 상태를 기다리는 중...",
@@ -530,7 +530,7 @@ export const TEXT = {
         "랄프 루프 budget입니다. 진행이 있는 라운드는 무제한으로 계속하고, 진행이 없는(실패) 라운드가 연속으로 이 횟수에 도달하면 루프를 중단합니다. 진행이 감지되면 카운트는 0으로 리셋됩니다.",
       resumeSessions: "워커 세션 이어가기 (claude·codex·cline)",
       resumeSessionsDesc:
-        "기본값 꺼짐. 켜면 /ingest-loop이 iteration마다 하나의 warm CLI 대화를 resume합니다(claude --session-id/--resume, codex exec resume, cline -T <task id>). 첫 iteration이 세션 id를 캡처하고 이후 iteration은 짧은 델타 프롬프트로 이어갑니다. 다만 컨텍스트가 누적되고 긴 루프에서 출력이 깨질 수 있어 기본은 꺼짐입니다 — 매 iteration 새 프로세스로 시작하고 디스크 진행 상황(progress/ingest/DASHBOARD.md + .state.json)을 다시 읽어 이어서 진행합니다. resume를 지원하지 않는 CLI(agy)는 항상 새 프로세스 방식입니다.",
+        "기본값 꺼짐. 켜면 /ingest-loop이 iteration마다 하나의 warm CLI 대화를 resume합니다(claude --session-id/--resume, codex exec resume, cline -T <task id>). 첫 iteration이 세션 id를 캡처하고 이후 iteration은 짧은 델타 프롬프트로 이어갑니다. 다만 컨텍스트가 누적되고 긴 루프에서 출력이 깨질 수 있어 기본은 꺼짐입니다 — 매 iteration 새 프로세스로 시작하고 디스크 진행 상황(progress/ingest/DASHBOARD.md + .state.json)을 다시 읽어 이어서 진행합니다. resume를 지원하지 않는 CLI(agy, gemini)는 항상 새 프로세스 방식입니다.",
       followDefaultCli: "기본 CLI 따름",
       roleMaintenanceCli: "유지보수 CLI (ingest·lint·graph)",
       roleQueryCli: "Query CLI (/query·/clio)",
@@ -910,7 +910,7 @@ export const TEXT = {
       guideFreeQuestion: "Ask freely or use a slash command:",
       guideSessions: "Session Markdown is saved automatically under sessions/<date>/.",
       guideAgent:
-        "The agent uses the host codex / claude / agy / cline selected in Settings.",
+        "The agent uses the host codex / claude / gemini / cline / agy selected in Settings.",
       processing: "Processing...",
       progressTitle: "Progress",
       progressWaiting: "Waiting for first progress update...",
@@ -1227,7 +1227,7 @@ export const TEXT = {
         "Ralph-loop budget. Productive rounds run unbounded; the loop halts only after this many consecutive no-progress (failed) rounds. The counter resets to zero whenever a round makes progress.",
       resumeSessions: "Resume worker sessions (claude·codex·cline)",
       resumeSessionsDesc:
-        "Off by default. When on, /ingest-loop keeps one warm CLI conversation across iterations (claude --session-id/--resume, codex exec resume, cline -T <task id>): iteration 1 captures the session id and later iterations resume it with a compact delta prompt. This bloats context and can corrupt output over long loops, so the default is off — each iteration starts a fresh process and re-reads on-disk progress (progress/ingest/DASHBOARD.md + .state.json) to continue where it left off. CLIs without resume support (agy) always use the fresh path.",
+        "Off by default. When on, /ingest-loop keeps one warm CLI conversation across iterations (claude --session-id/--resume, codex exec resume, cline -T <task id>): iteration 1 captures the session id and later iterations resume it with a compact delta prompt. This bloats context and can corrupt output over long loops, so the default is off — each iteration starts a fresh process and re-reads on-disk progress (progress/ingest/DASHBOARD.md + .state.json) to continue where it left off. CLIs without resume support (agy, gemini) always use the fresh path.",
       followDefaultCli: "Follow default CLI",
       roleMaintenanceCli: "Maintenance CLI (ingest·lint·graph)",
       roleQueryCli: "Query CLI (/query·/clio)",

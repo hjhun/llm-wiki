@@ -9,10 +9,10 @@ const Body = z.object({
   goal: z.string().min(1).max(20_000),
   schedulePreference: z.string().max(1000).default(""),
   selectedAgents: z
-    .array(z.enum(["codex", "claude", "agy", "cline"]))
+    .array(z.enum(["codex", "claude", "gemini", "cline", "agy"]))
     .min(1),
   analyzerAgent: z
-    .enum(["codex", "claude", "agy", "cline"])
+    .enum(["codex", "claude", "gemini", "cline", "agy"])
     .nullable()
     .default(null),
 });

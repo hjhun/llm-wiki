@@ -12,6 +12,7 @@ export const dynamic = "force-dynamic";
 const AgentPaths = z.object({
   codex: z.string().optional(),
   claude: z.string().optional(),
+  gemini: z.string().optional(),
   agy: z.string().optional(),
   cline: z.string().optional(),
 });
@@ -25,12 +26,12 @@ const Body = z.object({
     .optional(),
   agent: z
     .object({
-      default: z.enum(["codex", "claude", "agy", "cline"]).nullable(),
+      default: z.enum(["codex", "claude", "gemini", "cline", "agy"]).nullable(),
       safeMode: z.boolean(),
       paths: AgentPaths,
       roles: z.object({
-        maintenance: z.enum(["codex", "claude", "agy", "cline"]).nullable(),
-        query: z.enum(["codex", "claude", "agy", "cline"]).nullable(),
+        maintenance: z.enum(["codex", "claude", "gemini", "cline", "agy"]).nullable(),
+        query: z.enum(["codex", "claude", "gemini", "cline", "agy"]).nullable(),
       }),
     })
     .optional(),
@@ -162,6 +163,7 @@ function normalizePaths(paths: z.infer<typeof AgentPaths>) {
   return {
     codex: paths.codex?.trim() ?? "",
     claude: paths.claude?.trim() ?? "",
+    gemini: paths.gemini?.trim() ?? "",
     agy: paths.agy?.trim() ?? "",
     cline: paths.cline?.trim() ?? "",
   };

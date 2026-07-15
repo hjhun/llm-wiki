@@ -16,7 +16,7 @@ export const ConfigSchema = z.object({
   agent: z.object({
     /** 사용자가 Settings에서 고른 기본 CLI */
     default: z
-      .enum(["codex", "claude", "agy", "cline"])
+      .enum(["codex", "claude", "gemini", "cline", "agy"])
       .nullable()
       .default(null),
     /** "safe" 모드면 yolo/bypass 플래그를 떼고 호출 (대화형) */
@@ -26,6 +26,7 @@ export const ConfigSchema = z.object({
       .object({
         codex: z.string().optional(),
         claude: z.string().optional(),
+        gemini: z.string().optional(),
         agy: z.string().optional(),
         cline: z.string().optional(),
       })
@@ -42,12 +43,12 @@ export const ConfigSchema = z.object({
       .object({
         /** ingest, ingest-loop, lint, preprocess, graph */
         maintenance: z
-          .enum(["codex", "claude", "agy", "cline"])
+          .enum(["codex", "claude", "gemini", "cline", "agy"])
           .nullable()
           .default(null),
         /** /query and public /clio query */
         query: z
-          .enum(["codex", "claude", "agy", "cline"])
+          .enum(["codex", "claude", "gemini", "cline", "agy"])
           .nullable()
           .default(null),
       })
@@ -390,12 +391,14 @@ export const ConfigSchema = z.object({
                 codex: z.number().int().min(0).default(272000),
                 cline: z.number().int().min(0).default(0),
                 agy: z.number().int().min(0).default(0),
+                gemini: z.number().int().min(0).default(0),
               })
               .default({
                 claude: 200000,
                 codex: 272000,
                 cline: 0,
                 agy: 0,
+                gemini: 0,
               }),
           })
           .default({
@@ -406,6 +409,7 @@ export const ConfigSchema = z.object({
               codex: 272000,
               cline: 200000,
               agy: 0,
+              gemini: 0,
             },
           }),
       })
@@ -423,6 +427,7 @@ export const ConfigSchema = z.object({
             codex: 272000,
             cline: 0,
             agy: 0,
+            gemini: 0,
           },
         },
       }),
@@ -493,6 +498,7 @@ export const ConfigSchema = z.object({
         .default([
           ".codex",
           ".claude",
+          ".gemini",
           ".cline",
           ".agy",
           ".antigravity",
@@ -503,6 +509,7 @@ export const ConfigSchema = z.object({
           ".agy.json",
           ".config/codex",
           ".config/claude",
+          ".config/gemini",
           ".config/cline",
           ".config/agy",
           ".config/antigravity",
@@ -537,6 +544,7 @@ export const ConfigSchema = z.object({
       sandboxReadOnlyHomePaths: [
         ".codex",
         ".claude",
+        ".gemini",
         ".cline",
         ".agy",
         ".antigravity",
@@ -547,6 +555,7 @@ export const ConfigSchema = z.object({
         ".agy.json",
         ".config/codex",
         ".config/claude",
+        ".config/gemini",
         ".config/cline",
         ".config/agy",
         ".config/antigravity",
@@ -799,7 +808,7 @@ export const ConfigSchema = z.object({
                 timezone: "",
               }),
             selectedAgents: z
-              .array(z.enum(["codex", "claude", "agy", "cline"]))
+              .array(z.enum(["codex", "claude", "gemini", "cline", "agy"]))
               .min(1)
               .default(["codex"]),
             workspaceBasePath: z.string().default(""),
@@ -833,66 +842,6 @@ const DEFAULT_CONFIG: Config = ConfigSchema.parse({
   telegram: {},
   automation: {},
 });
-
-function normalizeLegacyGeminiCli(value: unknown): unknown {
-  if (Array.isArray(value)) {
-    return value.map((item) => (item === "gemini" ? "agy" : item));
-  }
-  if (value == null || typeof value !== "object") return value;
-
-  const out: Record<string, unknown> = { ...(value as Record<string, unknown>) };
-  const agent = out.agent;
-  if (agent && typeof agent === "object" && !Array.isArray(agent)) {
-    const nextAgent: Record<string, unknown> = {
-      ...(agent as Record<string, unknown>),
-    };
-    if (nextAgent.default === "gemini") nextAgent.default = "agy";
-    const paths = nextAgent.paths;
-    if (paths && typeof paths === "object" && !Array.isArray(paths)) {
-      const nextPaths: Record<string, unknown> = {
-        ...(paths as Record<string, unknown>),
-      };
-      if (nextPaths.agy == null && typeof nextPaths.gemini === "string") {
-        nextPaths.agy = nextPaths.gemini;
-      }
-      delete nextPaths.gemini;
-      nextAgent.paths = nextPaths;
-    }
-    const roles = nextAgent.roles;
-    if (roles && typeof roles === "object" && !Array.isArray(roles)) {
-      const nextRoles: Record<string, unknown> = {
-        ...(roles as Record<string, unknown>),
-      };
-      if (nextRoles.maintenance === "gemini") nextRoles.maintenance = "agy";
-      if (nextRoles.query === "gemini") nextRoles.query = "agy";
-      nextAgent.roles = nextRoles;
-    }
-    out.agent = nextAgent;
-  }
-
-  const automation = out.automation;
-  if (automation && typeof automation === "object" && !Array.isArray(automation)) {
-    const nextAutomation: Record<string, unknown> = {
-      ...(automation as Record<string, unknown>),
-    };
-    const jobs = nextAutomation.jobs;
-    if (Array.isArray(jobs)) {
-      nextAutomation.jobs = jobs.map((job) => {
-        if (!job || typeof job !== "object" || Array.isArray(job)) return job;
-        const nextJob: Record<string, unknown> = {
-          ...(job as Record<string, unknown>),
-        };
-        nextJob.selectedAgents = normalizeLegacyGeminiCli(
-          nextJob.selectedAgents,
-        );
-        return nextJob;
-      });
-    }
-    out.automation = nextAutomation;
-  }
-
-  return out;
-}
 
 function normalizeLegacyGraphExtraction(value: unknown): unknown {
   if (value == null || typeof value !== "object" || Array.isArray(value)) {
@@ -980,7 +929,7 @@ export async function loadConfig(force = false): Promise<Config> {
   }
   const local = await readJsonIfExists<Config>(CONFIG_LOCAL_PATH);
   const merged = normalizeLegacyGraphExtraction(
-    normalizeLegacyGeminiCli(deepMerge(deepMerge(DEFAULT_CONFIG, def), local)),
+    deepMerge(deepMerge(DEFAULT_CONFIG, def), local),
   );
   cached = ConfigSchema.parse(merged);
   return cached;

@@ -18,18 +18,17 @@ Code Wiki source cards, wiki-only graph updates, and Korean wiki writing.
 ## Purpose
 
 Read material newly dropped by the user into `raw/` and perform the following.
+Ingest is not a file-indexing job (see the pattern reference above): every step
+below exists to compile raw sources into the persistent, compounding wiki.
 
-0. Preserve Karpathy's core `llm-wiki.md` idea: ingest is not a file-indexing
-   job. The LLM compiles raw sources into a persistent, compounding wiki so
-   future queries read accumulated synthesis instead of re-deriving knowledge
-   from raw documents.
 1. Write `wiki/sources/<raw-relative-path>.md` source cards as provenance for
    original sources, including code files, mirroring the logical `raw/`
    directory structure instead of filing sources by ingest/source date. These
    cards are evidence anchors, **not** the finish line.
 2. Create or update related entity, concept, comparison, map, and synthesis
    pages, reusing existing pages instead of creating near-duplicates (see Step
-   2.4). A single source may legitimately touch many wiki pages.
+   2, "Reuse before creating"). A single source may legitimately touch many
+   wiki pages.
 3. If a leaf is code-heavy, keep the normal LLM Wiki ingest contract: write
    compact per-file code source cards and progress state, then integrate the
    code's durable ideas into ordinary wiki pages. The separate
@@ -328,7 +327,7 @@ When a parent directory's **last leaf completes** (all leaves under `raw/parent/
 
 2. **Extract local entities/concepts**:
    - Read each source card's frontmatter: title, topics, entities, concepts, claims
-   - Aggregate mention frequency from Step 2.4 cache (entities 3+, concepts 5+)
+   - Aggregate mention frequency from the Step 2 local-extraction cache (entities 3+, concepts 5+)
    - Call LLM (optional, for high-level synthesis):
      ```
      "Analyze these wiki/sources/{parent}/** source cards.
