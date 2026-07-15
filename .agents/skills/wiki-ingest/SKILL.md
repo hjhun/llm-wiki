@@ -1,6 +1,6 @@
 ---
 name: wiki-ingest
-description: Read new material in raw/ as leaf-directory chunks and incrementally build wiki/. Automatically detects prose, code repositories, logs, and test output; code-heavy leaves produce compact raw-mirrored source cards that wiki-graphify later graphs from wiki/. Responds to /ingest, /ingest-loop, "summarize this material", and chat + -> ingest triggers.
+description: Read new material in raw/ as leaf-directory chunks and incrementally build wiki/. Automatically detects prose, code repositories, logs, and test output; code-heavy leaves produce compact raw-mirrored source cards. Responds to /ingest, /ingest-loop, "summarize this material", and chat + -> ingest triggers.
 allowed-cli: [codex, claude, gemini, cline]
 ---
 
@@ -31,13 +31,10 @@ below exists to compile raw sources into the persistent, compounding wiki.
    wiki pages.
 3. If a leaf is code-heavy, keep the normal LLM Wiki ingest contract: write
    compact per-file code source cards and progress state, then integrate the
-   code's durable ideas into ordinary wiki pages. The separate
-   `wiki-graphify update` workflow builds the graph from compiled Markdown
-   under `wiki/`.
+   code's durable ideas into ordinary wiki pages.
 4. Refresh `wiki/sources/index.md` as a compact source catalog organized by metadata facets such as topic, entity, source kind, source date, raw path prefix, status, and recent updates.
 5. Create or update `wiki/maps/<topic>.md` associative trail pages when a source belongs to an ongoing research thread that benefits from a navigable source/concept/entity map.
 6. Keep `wiki/index.md` and `wiki/log.md` consistent.
-7. Graph synchronization is **not** performed by this skill. The webapp triggers `wiki-graphify` as separate invocations after ingest progress is detected. Ingest workers must not run graphify or write anything under `wiki/graph/`.
 
 This skill **always follows the leaf-first + merge pass** principle, and is built
 to survive interruption (OOM, SIGTERM, manual cancel) because progress is
@@ -137,9 +134,7 @@ conversation. The host webapp also slims the prompt to the last N turns
    classify leaves. Do not open many source files just to decide whether the
    input is code.
 6. If code leaves are present, create compact file-level source cards rather
-   than long-form file documentation. The backend triggers `wiki-graphify
-   update` after ingest progress, and that workflow reads only the compiled
-   Markdown under `wiki/`.
+   than long-form file documentation.
 
 ## Code Auto-Detection
 
@@ -260,8 +255,7 @@ For each sub-chunk whose `status === "pending"`:
      layer that `wiki-graphify` will later read.
    - Do **not** create mirrored `wiki/code/<project>/<relative-file>.md` pages.
    - Do **not** write `wiki/code/<project>.md` here as a required ingest output.
-     Detailed code analysis pages are optional wiki synthesis artifacts, not
-     graphify side effects.
+     Detailed code analysis pages are optional wiki synthesis artifacts.
    - Do **not** run `scripts/code-index.mjs` or `scripts/code-facts.mjs` as the
      normal path. They are legacy fallback/debug helpers only.
    - Record enough progress state for the backend to know which logical
@@ -269,9 +263,6 @@ For each sub-chunk whose `status === "pending"`:
      `source_pages_written` must include every generated code source card;
      `code_outputs` is legacy compatibility and may be omitted for new code
      ingests.
-   - A later `wiki-graphify update` reads the compiled wiki pages only and
-     produces `wiki/graph/graph.json` plus `wiki/graph/GRAPH_REPORT.md`. It must
-     not graphify `raw/` source trees.
    - If a user explicitly asks for a human-readable architecture, testing, API,
      or debug synthesis, answer from source summaries and targeted read-only
      raw evidence when needed, and optionally save that synthesis as ordinary
@@ -432,23 +423,6 @@ Only run when **every** leaf in the input scope has `status === "done"` and `mer
 5. Regenerate `DASHBOARD.md`. Release lock.
 6. **Post-merge mini-lint gate.** After the merge pass that drained `merge_pass.pending_parents`, run `node scripts/mini-lint.mjs` (deterministic, sub-second). It catches three classes of issues parallel ingest workers tend to introduce — near-duplicate concept/entity titles, broken `[[wiki/...]]` wikilinks, and orphan synthesis pages — and writes a report to `wiki/lint/post-merge-<YYYY-MM-DD>.md`. The webapp's `/ingest-loop` driver runs the same script automatically; for one-shot `/ingest` calls the skill is the trigger. Surface the one-line summary in your reply; the full LLM `wiki-lint` workflow still owns deeper checks. Return.
 
-If `graph.autoUpdateOnIngest` is `true`, graph synchronization is handled as
-separate coding-agent CLI invocations after ingest progress is detected. The
-webapp may run scoped `wiki-graphify update` between loop iterations only when
-`graph.autoUpdateStrategy` allows it (`auto` uses workload thresholds). A
-scoped update rebuilds the completed leaf's partial graph from generated wiki
-pages and then merges all valid
-`wiki/graph/parts/*.json` into the connected final `graph.json`. After the
-final merge completes, always run `wiki-graphify update` as the quality
-merge/normalization pass. Do not bundle graph work into the same merge-pass LLM
-call; each graph step must be a follow-up invocation that uses the
-`wiki-graphify` skill.
-
-When CLIO runs ingest through multi-agent orchestration, skip all scoped
-between-round graph updates. Run `wiki-graphify update` only once, after every
-leaf is done and every merge-pass parent has been drained. This prevents graph
-normalization from seeing a partial worker state and producing disconnected or
-stale graph artifacts.
 
 ## Error Handling / Resume
 
@@ -457,27 +431,22 @@ stale graph artifacts.
 - **Force re-run a leaf**: user can ask "re-ingest raw/foo/". Set that leaf's `status` back to `"pending"` and clear its `sub_chunks`; the next call processes it.
 - **`progress/ingest/.state.json` corrupted**: rename to `.state.json.bak.<ISO8601>`, re-enumerate from scratch. Warn the user in chat.
 
-## Code Wiki Graph Conventions
+## Code Wiki Conventions
 
 Code Wiki follows the root `llm-wiki.md` pattern: raw code remains immutable
 source material, and the LLM-maintained wiki accumulates summaries,
 cross-references, and answers. Source-code knowledge is represented by source
-stubs, optional `wiki/code/` analysis pages, and the wiki-only graph over those
-Markdown pages.
+stubs and optional `wiki/code/` analysis pages.
 
-Primary Code Wiki graph artifacts:
+Primary Code Wiki artifacts:
 
-- `wiki/graph/graph.json` — final connected graph across `wiki/` pages only,
-  including `wiki/code/` pages when they exist.
-- `wiki/graph/GRAPH_REPORT.md` — human-readable graph report.
 - `wiki/sources/<raw-relative-path>.md` — one compact source card per code file,
   raw-mirrored just like prose sources.
 - Optional `wiki/sources/<project>/index.md` — a lightweight project catalog
   only when it helps navigation; it does not replace file-level cards.
 
 Do not create file-by-file `wiki/code` pages.
-Detailed code synthesis is an ordinary wiki synthesis step, not a graphify
-side effect and not ad hoc file-by-file code reading during ingest.
+Detailed code synthesis is an ordinary wiki synthesis step, not ad hoc file-by-file code reading during ingest.
 
 For code locations, use logical `raw/...` paths in any saved wiki page:
 
@@ -655,5 +624,4 @@ Per merge pass (Step 3, one parent per invocation):
 
 - [wiki-query](../wiki-query/SKILL.md) — searches the wiki and reuses answers fed back by ingest/query.
 - [wiki-lint](../wiki-lint/SKILL.md) — periodic health check; catches accumulated contradictions after ingest.
-- [wiki-graphify](../wiki-graphify/SKILL.md) — called after the merge pass, by separate invocation. Mirrors the same `.state.json` pattern used here.
 - Optional: [wiki-search-qmd](../wiki-search-qmd/SKILL.md), [wiki-marp](../wiki-marp/SKILL.md), [wiki-images](../wiki-images/SKILL.md) — delegate image/scan/screenshot leaves here for text-first multimodal handling.

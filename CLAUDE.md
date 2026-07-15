@@ -9,11 +9,9 @@
 > You, the coding agent, are the **maintainer** of this wiki. The user is the curator.
 > These operating rules preserve the core `llm-wiki.md` idea (immutable raw
 > sources, persistent generated wiki, schema-driven LLM maintenance) while
-> specializing it for CLIO's web UI, resumable ingest loop, graph tooling, and
-> Code Wiki workflows.
+> specializing it for CLIO's web UI, resumable ingest loop, and Code Wiki workflows.
 > CLIO also supports a **Code Wiki** mode: source code stored under `raw/` (or
-> approved `raw/` symlinks) is summarized into Markdown under `wiki/`; graphify
-> then builds the knowledge graph from the compiled `wiki/` data only.
+> approved `raw/` symlinks) is summarized into Markdown under `wiki/`.
 
 ---
 
@@ -23,7 +21,7 @@
 - You incrementally **build and maintain** the Markdown wiki under `wiki/`.
   - Create summary pages, update entity/concept pages, fill indexes and logs, and flag contradictions.
   - Treat source summaries as provenance, not the finish line. Ingest should compile durable takeaways into the existing entity, concept, map, comparison, and synthesis pages so the wiki compounds over time.
-  - For code inputs, preserve source summaries and optional code analysis pages under `wiki/`; graphify reads those wiki pages, not raw source trees.
+  - For code inputs, preserve source summaries and optional code analysis pages under `wiki/`.
   - You handle the maintenance work: summarizing, cross-referencing, organizing, and preserving consistency.
 - The wiki should be searchable and understandable as a coherent work that another person can read.
 
@@ -37,15 +35,14 @@
 | `wiki/` | LLM | LLM may freely write/update | Main wiki body. All generated artifacts go here. |
 | `wiki/sources/` | LLM | LLM | Provenance ledger: one summary page per original `raw/` source, mirroring the logical `raw/` directory structure, plus a generated `wiki/sources/index.md` catalog for topic/entity/source-kind/date lookup. |
 | `wiki/maps/` | LLM | LLM | Optional associative trails and topic maps that connect sources, entities, concepts, answers, and open questions. |
-| `wiki/code/` | LLM | LLM | Code analysis pages synthesized from source summaries and other wiki evidence. Graphify treats these as ordinary wiki Markdown pages. |
+| `wiki/code/` | LLM | LLM | Code analysis pages synthesized from source summaries and other wiki evidence. |
 | `wiki/answers/` | LLM | LLM | Pages fed back from query answers. |
 | `wiki/lint/` | LLM | LLM | Lint reports (`<date>.md`). |
-| `wiki/graph/` | LLM (graphify) | LLM | Knowledge graph artifacts generated from `wiki/` only: `graph.json`, `GRAPH_REPORT.md`, page-title partials in `parts/`, `.state.json`. |
 | `wiki/archive/` | LLM | LLM | Old pages moved here instead of being deleted. |
 | `wiki/index.md` | LLM | LLM | Category catalog. |
 | `wiki/log.md` | LLM | append-only | Chronological operation log. |
 | `sessions/` | System | append-only | Chat session Markdown. Never edit manually. |
-| `tools/` | setup.sh | System | Project-local helper tools such as qmd. graphify uses the global install. |
+| `tools/` | setup.sh | System | Project-local helper tools such as qmd. |
 | `.agents/skills/` | Project | Change via PR | Project-local skills. **They take priority over global skills.** |
 | `webapp/`, `config/` | System | User/admin | Next.js full-stack web UI and settings. Do not touch during wiki operations (`/ingest`, `/query`, `/lint`). |
 | `cli-rs/`, `bin/` | System | User/admin | Rust `clio` CLI source and the binary `setup.sh` builds from it. Do not touch during wiki operations. |
@@ -64,12 +61,10 @@ Each operation maps to one or more project skills. If these rules conflict with 
   - Updated `wiki/sources/index.md` source catalog when source pages are added or changed
   - Optional `wiki/maps/<topic>.md` associative trail pages when a source belongs to an ongoing research thread
   - Updated `wiki/index.md` and `wiki/log.md`
-  - `wiki-graphify update` when needed
 
 ### 3.2 Query (`/query`, [`.agents/skills/wiki-query/SKILL.md`](.agents/skills/wiki-query/SKILL.md))
 - Read `wiki/index.md` first to narrow candidate pages. Use original material in `raw/` only as a fallback when the wiki is insufficient.
 - If optional `wiki-search-qmd` is active, delegate search to it.
-- If `wiki/graph/graph.json` exists, `wiki-graphify` may be used as an auxiliary graph-context tool, similar to qmd: use it for related nodes, 1-hop neighbors, communities, and cited-page clues, but still read candidate wiki/source pages before answering.
 - Unless the user explicitly requests another format, answer in Markdown. Use table, Marp slides, chart, or other formats only when requested by flag or natural language.
 - With user consent, feed the answer back into `wiki/answers/<slug>.md` and update `index.md` and `log.md`.
 
@@ -96,14 +91,12 @@ Each operation maps to one or more project skills. If these rules conflict with 
   - one compact `wiki/sources/<raw-relative-path>.md` source card per code file
   - optional `wiki/sources/<project>/index.md` project catalog when useful for navigation
   - optional `wiki/code/<project>.md` detailed project analysis synthesized from source summaries and wiki evidence
-  - `wiki/graph/graph.json` and `wiki/graph/GRAPH_REPORT.md` after `wiki-graphify update` connects wiki pages
   - updated `wiki/index.md` and appended `wiki/log.md` entries
-- Use specialized Code Wiki skills only for optional synthesis after graph/source evidence exists:
+- Use specialized Code Wiki skills only for optional synthesis after source evidence exists:
   - [`code-documentation`](.agents/skills/code-documentation/SKILL.md) for module/API/runbook docs
   - [`code-architecture`](.agents/skills/code-architecture/SKILL.md) for architecture synthesis
   - [`code-testing`](.agents/skills/code-testing/SKILL.md) for test inventory and gaps
   - [`code-debug`](.agents/skills/code-debug/SKILL.md) for logs, stack traces, and failure analysis
-- Code Wiki graph nodes should bridge back to the ordinary LLM Wiki through the per-file code source cards and wikilinks when code implements a documented concept.
 
 ### 3.6 Browser Capture (`browser-capture`, [`.agents/skills/browser-capture/SKILL.md`](.agents/skills/browser-capture/SKILL.md))
 - Input: user-approved web pages, CLIO web UI QA observations, browser screenshots, or extracted text.
@@ -189,7 +182,7 @@ its raw-mirrored provenance path stable.
 
 ### 5.1 `wiki/index.md`
 - Category catalog. Each item is one line: `- [[Page Name]] — One-line summary`.
-- Categories: `Entities`, `Concepts`, `Code`, `Sources`, `Maps`, `Answers`, `Comparisons`, `Lint Reports`, `Graph`.
+- Categories: `Entities`, `Concepts`, `Code`, `Sources`, `Maps`, `Answers`, `Comparisons`, `Lint Reports`.
 - At the final step of each ingest/query/lint merge pass, sort and deduplicate the index in bulk.
 
 ### 5.2 `wiki/log.md`
@@ -216,33 +209,29 @@ its raw-mirrored provenance path stable.
 |---|---|
 | `/preprocess [path] [description]`, `/preprocess --apply`, "clean up ads / empty files in raw" | [`wiki-preprocess`](.agents/skills/wiki-preprocess/SKILL.md) |
 | `/ingest <path|url>`, "summarize this material", `+ -> ingest` | [`wiki-ingest`](.agents/skills/wiki-ingest/SKILL.md) |
-| `/ingest <raw code path>`, `/ingest-loop <raw code path>`, "code wiki", "document this codebase", "analyze this repo/code" | [`wiki-ingest`](.agents/skills/wiki-ingest/SKILL.md), which auto-detects code leaves, writes source summaries/progress, and relies on the follow-up [`wiki-graphify`](.agents/skills/wiki-graphify/SKILL.md) update to build the code graph |
+| `/ingest <raw code path>`, `/ingest-loop <raw code path>`, "code wiki", "document this codebase", "analyze this repo/code" | [`wiki-ingest`](.agents/skills/wiki-ingest/SKILL.md), which auto-detects code leaves and writes source summaries/progress |
 | `/query <question>`, general questions | [`wiki-query`](.agents/skills/wiki-query/SKILL.md) |
 | `/lint`, "check the wiki" | [`wiki-lint`](.agents/skills/wiki-lint/SKILL.md) |
-| "build/update/query the graph" | [`wiki-graphify`](.agents/skills/wiki-graphify/SKILL.md) |
 | "capture this website", "open this page and save evidence", "test the web UI in browser" | [`browser-capture`](.agents/skills/browser-capture/SKILL.md) |
 | "add/update/audit a skill", "improve CLIO skills" | [`skill-maintenance`](.agents/skills/skill-maintenance/SKILL.md) |
 | qmd installed (default setup) | [`wiki-search-qmd`](.agents/skills/wiki-search-qmd/SKILL.md) |
 | Optional marp installed | [`wiki-marp`](.agents/skills/wiki-marp/SKILL.md) |
 | image/scan/screenshot or multimodal PDF under `raw/` (inside `/ingest`) | [`wiki-images`](.agents/skills/wiki-images/SKILL.md) |
 
-**Priority**: `.agents/skills/` (project-local) > global skills. qmd is installed by default under `tools/qmd/` when possible and falls back to a global `qmd` from `PATH`. graphify execution uses the **global `graphify` command from `PATH`**. If missing, `setup.sh` installs the official `graphifyy` package and runs `graphify install`.
+**Priority**: `.agents/skills/` (project-local) > global skills. qmd is installed by default under `tools/qmd/` when possible and falls back to a global `qmd` from `PATH`.
 
 ## 7. Shared Operation Principle - Leaf-First + Merge (Required)
 
-This applies to ingest, Code Wiki ingest, preprocess planning, and graphify. Never start by throwing the whole root into one operation.
+This applies to ingest, Code Wiki ingest, and preprocess planning. Never start by throwing the whole root into one operation.
 
 1. **Find leaf directories and direct-file pseudo-leaves**: in the target tree (`raw/`, `wiki/`), find directories with no child directories. Also treat direct files in a non-leaf directory as a pseudo-leaf so parent-level files are included; this is mandatory for Code Wiki ingest because source files, manifests, routes, and configs often live in parent directories alongside child directories. For `raw/`, follow symlinked files/directories that are themselves located under `raw/`, keep their logical `raw/...` paths in state and citations, and track visited real paths/inodes to avoid symlink loops.
 2. **Process by chunk**: group only the files in each leaf and process them once.
 3. **Preserve partial outputs**:
    - ingest: immediately save chunk-level summaries/entity pages.
-   - graphify: save wiki page-title partials to `wiki/graph/parts/<path-hash>.json`.
 4. **Merge pass as a separate step**:
    - ingest: update parent-level pages -> root synthesis page -> refresh `wiki/sources/index.md` and useful `wiki/maps/` pages -> reorder `index.md`.
-   - graphify: connect all wiki partials with node normalization and community recomputation, then finalize `wiki/graph/graph.json`.
 5. **Persist state**:
    - ingest: record chunk checklists in `sessions/<date>/<time>_ingest.md`.
-   - graphify: record last build time and hash per leaf in `wiki/graph/.state.json`.
 6. **Resumability**: if interrupted, continue from unfinished chunks next time. Skip already completed chunks.
 7. **Chunk limits**: file count and byte limits per chunk follow `config/default.json`. Tune them to the host CLI context limit.
 
@@ -331,7 +320,6 @@ Mental checklist for one ingest run:
 - [ ] Did you write `wiki/sources/<raw-relative-path>.md` for each chunk?
 - [ ] Did you append one line to `wiki/log.md` for each chunk?
 - [ ] Did you organize parent pages, `wiki/sources/index.md`, useful `wiki/maps/` pages, and `wiki/index.md` in the merge pass?
-- [ ] Optional: did you call `wiki-graphify update`?
 - [ ] Did you record progress in the session Markdown?
 
 Mental checklist for one Code Wiki run:
@@ -341,8 +329,6 @@ Mental checklist for one Code Wiki run:
 - [ ] Did you skip generated/vendor/build directories unless requested?
 - [ ] Did you write one compact `wiki/sources/<raw-relative-path>.md` source card per code file and record those pages in progress state?
 - [ ] Did you avoid file-by-file `wiki/code/` pages and long pasted source documentation?
-- [ ] Did `wiki-graphify update` run or remain clearly queued as the follow-up that creates `wiki/graph/graph.json` and `GRAPH_REPORT.md` from `wiki/` pages only?
-- [ ] Did graph nodes/source summaries connect directories/modules/APIs/tests to existing concepts where evidence supports it?
 - [ ] Did you update `wiki/index.md` under the `Code` category?
 - [ ] Did you update `wiki/sources/index.md` and any relevant `wiki/maps/` trails?
 - [ ] Did you append a `wiki/log.md` entry without editing old entries?
